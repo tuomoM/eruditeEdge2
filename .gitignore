@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+database.db
+.DS_Store
+Project.md
+Technical setup.md
