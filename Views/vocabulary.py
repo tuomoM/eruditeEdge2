@@ -1,7 +1,8 @@
 from functools import wraps
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, request, session
 
+from Services.vocabulary_ai_service import vocabulary_ai_service
 from Services.vocabulary_service import vocabulary_service
 
 
@@ -26,6 +27,24 @@ def create_vocabulary():
     if error:
         return jsonify({"error": error}), 400
     return jsonify(entry), 201
+
+
+@vocabulary_bp.route("/vocabulary/generate", methods=["POST"])
+@login_required
+def generate_vocabulary():
+    data = request.get_json(silent=True) or request.form
+    entry, error = vocabulary_ai_service.generate_entry(
+        data.get("word"),
+        current_app.config["OPENAI_API_KEY"],
+        current_app.config["OPENAI_MODEL"],
+    )
+    if error:
+        return jsonify({"error": error}), 400
+
+    values, error = vocabulary_service.validate_entry_data(entry)
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify(values)
 
 
 @vocabulary_bp.route("/vocabulary/<int:vocabulary_id>", methods=["GET"])

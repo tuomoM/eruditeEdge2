@@ -53,6 +53,9 @@ class VocabularyService:
     def get_entry(self, vocabulary_id):
         return self._vocabulary_repository.get_entry(vocabulary_id)
 
+    def validate_entry_data(self, data):
+        return self._validate_data(data)
+
     def _validate_data(self, data):
         word = self._clean_text(data.get("word"))
         definition = self._clean_text(data.get("definition"))

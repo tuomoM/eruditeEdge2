@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from app import create_app
 from db import init_db
@@ -15,6 +16,8 @@ class VocabularyTestCase(unittest.TestCase):
                 "TESTING": True,
                 "DATABASE": self.database_file.name,
                 "SECRET_KEY": "test-secret-key",
+                "OPENAI_API_KEY": "test-api-key",
+                "OPENAI_MODEL": "test-model",
             }
         )
         init_db(self.app)
@@ -44,6 +47,9 @@ class VocabularyTestCase(unittest.TestCase):
     def create_entry(self, data=None):
         return self.client.post("/vocabulary", json=data or self.valid_entry())
 
+    def generate_entry(self, word):
+        return self.client.post("/vocabulary/generate", json={"word": word})
+
     def test_create_vocabulary_requires_login(self):
         response = self.create_entry()
 
@@ -67,6 +73,57 @@ class VocabularyTestCase(unittest.TestCase):
         data["word"] = "operation'; DROP TABLE users; --"
 
         response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_generate_vocabulary_requires_login(self):
+        response = self.generate_entry("operation")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_generate_vocabulary_succeeds_when_logged_in(self):
+        self.login_user()
+        generated_entry = self.valid_entry()
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.generate_entry",
+            return_value=(generated_entry, None),
+        ) as generate_entry:
+            response = self.generate_entry("operation")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), generated_entry)
+        generate_entry.assert_called_once_with(
+            "operation",
+            "test-api-key",
+            "test-model",
+        )
+
+    def test_generate_vocabulary_rejects_sql_injection(self):
+        self.login_user()
+
+        response = self.generate_entry("operation'; DROP TABLE users; --")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_generate_vocabulary_rejects_sql_keyword(self):
+        self.login_user()
+
+        response = self.generate_entry("DROP")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_generate_vocabulary_rejects_more_than_one_word(self):
+        self.login_user()
+
+        response = self.generate_entry("two words")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_generate_vocabulary_rejects_html_tags(self):
+        self.login_user()
+
+        response = self.generate_entry("<b>word</b>")
 
         self.assertEqual(response.status_code, 400)
 
