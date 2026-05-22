@@ -31,3 +31,18 @@ CREATE TABLE vocabulary_examples (
     CHECK (example_order BETWEEN 1 AND 4),
     UNIQUE (vocabulary_id, example_order)
 );
+
+CREATE TABLE training_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE training_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    training_session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+    vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_entries(id),
+    item_order INTEGER NOT NULL,
+    UNIQUE (training_session_id, vocabulary_id),
+    UNIQUE (training_session_id, item_order)
+);

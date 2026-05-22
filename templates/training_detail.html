@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Training set</h1>
+
+<p>{{ training.vocabs | length }} vocabulary entries selected.</p>
+
+<ol>
+    {% for vocab in training.vocabs %}
+        <li>
+            <strong>{{ vocab.word }}</strong>
+            {% if vocab.context %}
+                <span class="muted">{{ vocab.context }}</span>
+            {% endif %}
+            <p>{{ vocab.definition }}</p>
+        </li>
+    {% endfor %}
+</ol>
+
+<a class="button" href="/training/select">Create another training set</a>
+{% endblock %}

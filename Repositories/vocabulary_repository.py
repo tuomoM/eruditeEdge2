@@ -82,6 +82,28 @@ class VocabularyRepository:
         ]
         return entry
 
+    def search_by_word(self, search_term):
+        rows = db.query(
+            """
+            SELECT id
+            FROM vocabulary_entries
+            WHERE word LIKE ? COLLATE NOCASE
+            ORDER BY word, context
+            """,
+            [search_term],
+        )
+        return [self.get_entry(row["id"]) for row in rows]
+
+    def list_entries(self):
+        rows = db.query(
+            """
+            SELECT id
+            FROM vocabulary_entries
+            ORDER BY word, context
+            """
+        )
+        return [self.get_entry(row["id"]) for row in rows]
+
     def _save_synonyms(self, vocabulary_id, synonyms):
         for synonym in synonyms:
             db.execute(

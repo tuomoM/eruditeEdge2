@@ -10,12 +10,11 @@ This version is almost entirely written using Open AI Codex.
 * it is possible to log on with an existing user
 * it is possible to create a vocabulary entry
 * it is possible to complete the vocabulary entry using Open AI
+* it is possible to search for a vocabulary entry using the word 
+* Rudimentary UI defined and implemented
 
 
 # to-do's
-
-* Rudimentary htlm presentation
-* Possibility to search for an vocabulary entry
 * possiblity to choose vocabs for training session, saving the session and successrate
 * Graphical look and feel
 

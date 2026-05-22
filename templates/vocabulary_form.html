@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set is_edit = entry and entry.id %}
+<h1>{% if is_edit %}Edit vocabulary{% else %}Add vocabulary{% endif %}</h1>
+
+<form method="post" id="vocabulary-form">
+    <p>
+        <label for="word">Word</label><br>
+        <input id="word" name="word" value="{{ entry.word if entry else '' }}" required>
+    </p>
+
+    {% if not is_edit %}
+        <button type="button" id="generate-button">Generate with AI</button>
+        <button type="button" id="check-ai-button">Check AI setup</button>
+        <span id="generate-status" class="muted"></span>
+    {% endif %}
+
+    <p>
+        <label for="definition">Definition</label><br>
+        <textarea id="definition" name="definition" required>{{ entry.definition if entry else '' }}</textarea>
+    </p>
+    <p>
+        <label for="context">Context</label><br>
+        <input id="context" name="context" value="{{ entry.context if entry else '' }}" placeholder="Scientific/Medical">
+    </p>
+    <p>
+        <label for="synonyms">Synonyms, comma separated</label><br>
+        <input id="synonyms" name="synonyms" value="{{ entry.synonyms | join(', ') if entry and entry.synonyms else '' }}">
+    </p>
+    <p>
+        <label for="examples">Example sentences, one per line</label><br>
+        <textarea id="examples" name="examples" required>{{ examples_text if examples_text is defined else (entry.examples | join('\n') if entry and entry.examples else '') }}</textarea>
+    </p>
+    <button type="submit">Save</button>
+    <a class="button" href="/vocabulary">Cancel</a>
+</form>
+
+{% if not is_edit %}
+<script>
+async function readJson(response) {
+    try {
+        return await response.json();
+    } catch {
+        return {error: "Server did not return JSON"};
+    }
+}
+
+document.getElementById("check-ai-button").addEventListener("click", async () => {
+    const status = document.getElementById("generate-status");
+    status.textContent = "Checking...";
+
+    try {
+        const response = await fetch("/vocabulary/generate/status");
+        const data = await readJson(response);
+        if (!response.ok) {
+            status.textContent = data.error || "AI setup check failed";
+            return;
+        }
+        status.textContent = data.openai_api_key_present
+            ? `AI key present (${data.openai_api_key_prefix}...), model: ${data.openai_model}`
+            : "OpenAI API key is missing";
+    } catch (error) {
+        status.textContent = `AI setup check failed: ${error.name}`;
+    }
+});
+
+document.getElementById("generate-button").addEventListener("click", async () => {
+    const status = document.getElementById("generate-status");
+    const word = document.getElementById("word").value;
+    status.textContent = "Generating...";
+
+    let response;
+    let data;
+    try {
+        response = await fetch("/vocabulary/generate", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({word})
+        });
+        data = await readJson(response);
+        if (!response.ok) {
+            status.textContent = data.error || "Generation failed";
+            return;
+        }
+    } catch (error) {
+        status.textContent = `Generation request failed: ${error.name}`;
+        return;
+    }
+
+    document.getElementById("definition").value = data.definition || "";
+    document.getElementById("context").value = data.context || "";
+    document.getElementById("synonyms").value = (data.synonyms || []).join(", ");
+    document.getElementById("examples").value = (data.examples || []).join("\n");
+    status.textContent = "Filled";
+});
+</script>
+{% endif %}
+{% endblock %}

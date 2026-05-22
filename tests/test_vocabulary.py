@@ -32,6 +32,15 @@ class VocabularyTestCase(unittest.TestCase):
             json={"username": "tuomo", "password": "safe-password"},
         )
 
+    def logout_user(self):
+        self.client.post("/logout", json={})
+
+    def login_second_user(self):
+        self.client.post(
+            "/register",
+            json={"username": "anna", "password": "safe-password"},
+        )
+
     def valid_entry(self):
         return {
             "word": "operation",
@@ -47,8 +56,18 @@ class VocabularyTestCase(unittest.TestCase):
     def create_entry(self, data=None):
         return self.client.post("/vocabulary", json=data or self.valid_entry())
 
+    def create_entry_with_word(self, word):
+        data = self.valid_entry()
+        data["word"] = word
+        data["definition"] = f"Definition for {word}"
+        data["examples"] = [f"{word} appears in this sentence."]
+        return self.create_entry(data)
+
     def generate_entry(self, word):
         return self.client.post("/vocabulary/generate", json={"word": word})
+
+    def search_entries(self, word):
+        return self.client.get("/vocabulary/search", query_string={"word": word})
 
     def test_create_vocabulary_requires_login(self):
         response = self.create_entry()
@@ -66,6 +85,17 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(body["context"], "Scientific/Medical")
         self.assertEqual(body["synonyms"], ["procedure", "process"])
         self.assertEqual(len(body["examples"]), 2)
+
+    def test_different_users_cannot_create_duplicate_global_word_and_context(self):
+        self.login_user()
+        first_response = self.create_entry()
+        self.logout_user()
+        self.login_second_user()
+
+        second_response = self.create_entry()
+
+        self.assertEqual(first_response.status_code, 201)
+        self.assertEqual(second_response.status_code, 400)
 
     def test_create_vocabulary_rejects_sql_injection(self):
         self.login_user()
@@ -169,12 +199,92 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["word"], "operation")
 
+    def test_view_vocabulary_shows_another_users_entry_because_vocabs_are_global(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.client.get(f"/vocabulary/{vocabulary_id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["word"], "operation")
+
     def test_view_vocabulary_does_not_allow_sql_injection(self):
         self.login_user()
 
         response = self.client.get("/vocabulary/1 OR 1=1")
 
         self.assertEqual(response.status_code, 404)
+
+    def test_search_vocabulary_requires_login(self):
+        response = self.search_entries("oper*")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_search_vocabulary_supports_wildcard_at_end(self):
+        self.login_user()
+        self.create_entry_with_word("operation")
+        self.create_entry_with_word("operate")
+        self.create_entry_with_word("cooperate")
+
+        response = self.search_entries("oper*")
+
+        self.assertEqual(response.status_code, 200)
+        words = [entry["word"] for entry in response.get_json()]
+        self.assertEqual(words, ["operate", "operation"])
+
+    def test_search_vocabulary_supports_wildcard_at_beginning(self):
+        self.login_user()
+        self.create_entry_with_word("operation")
+        self.create_entry_with_word("cooperation")
+        self.create_entry_with_word("operate")
+
+        response = self.search_entries("*tion")
+
+        self.assertEqual(response.status_code, 200)
+        words = [entry["word"] for entry in response.get_json()]
+        self.assertEqual(words, ["cooperation", "operation"])
+
+    def test_search_vocabulary_supports_wildcard_in_middle(self):
+        self.login_user()
+        self.create_entry_with_word("operation")
+        self.create_entry_with_word("opinion")
+        self.create_entry_with_word("option")
+
+        response = self.search_entries("op*ion")
+
+        self.assertEqual(response.status_code, 200)
+        words = [entry["word"] for entry in response.get_json()]
+        self.assertEqual(words, ["operation", "opinion", "option"])
+
+    def test_search_vocabulary_rejects_sql_injection(self):
+        self.login_user()
+
+        response = self.search_entries("operation'; DROP TABLE users; --")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_search_vocabulary_does_not_crash_when_nothing_is_found(self):
+        self.login_user()
+        self.create_entry_with_word("operation")
+
+        response = self.search_entries("missing*")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), [])
+
+    def test_search_vocabulary_returns_another_users_entry_because_vocabs_are_global(self):
+        self.login_user()
+        self.create_entry_with_word("operation")
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.search_entries("oper*")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([entry["word"] for entry in response.get_json()], ["operation"])
 
     def test_update_vocabulary_requires_login(self):
         response = self.client.put("/vocabulary/1", json=self.valid_entry())
@@ -197,6 +307,20 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(body["definition"], "A controlled activity")
         self.assertEqual(body["synonyms"], ["activity"])
         self.assertEqual(body["examples"], ["The operation was successful."])
+
+    def test_update_vocabulary_can_update_another_users_entry_because_vocabs_are_global(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+        self.logout_user()
+        self.login_second_user()
+        data = self.valid_entry()
+        data["definition"] = "Updated global definition"
+
+        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["definition"], "Updated global definition")
 
     def test_update_vocabulary_rejects_sql_injection(self):
         self.login_user()

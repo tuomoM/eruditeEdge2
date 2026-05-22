@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ entry.word }}</h1>
+
+{% if entry.context %}
+    <p class="muted">{{ entry.context }}</p>
+{% endif %}
+
+<h2>Definition</h2>
+<p>{{ entry.definition }}</p>
+
+{% if entry.synonyms %}
+    <h2>Synonyms</h2>
+    <p>{{ entry.synonyms | join(", ") }}</p>
+{% endif %}
+
+<h2>Examples</h2>
+<ol>
+    {% for example in entry.examples %}
+        <li>{{ example }}</li>
+    {% endfor %}
+</ol>
+
+<div class="actions">
+    <a class="button" href="/vocabulary/{{ entry.id }}/edit">Edit</a>
+    <a class="button" href="/vocabulary">Back</a>
+</div>
+{% endblock %}

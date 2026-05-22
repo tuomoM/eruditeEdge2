@@ -5,3 +5,5 @@ database.db
 .DS_Store
 Project.md
 Technical setup.md
+./agents/*
+/agents/AGENTS.md

@@ -10,6 +10,7 @@ SQL_INJECTION_PATTERN = re.compile(
     r"(--|;|/\*|\*/|\bOR\b\s+\d+\s*=\s*\d+|\bDROP\b|\bDELETE\b|\bINSERT\b|\bUPDATE\b|\bUNION\b|\bSELECT\b)",
     re.IGNORECASE,
 )
+SEARCH_PATTERN = re.compile(r"^[A-Za-z*]+$")
 
 
 class VocabularyService:
@@ -52,6 +53,18 @@ class VocabularyService:
 
     def get_entry(self, vocabulary_id):
         return self._vocabulary_repository.get_entry(vocabulary_id)
+
+    def search_by_word(self, search_value):
+        search_value = self._clean_text(search_value)
+        error = self._validate_search_value(search_value)
+        if error:
+            return None, error
+
+        search_term = search_value.replace("*", "%")
+        return self._vocabulary_repository.search_by_word(search_term), None
+
+    def list_entries(self):
+        return self._vocabulary_repository.list_entries()
 
     def validate_entry_data(self, data):
         return self._validate_data(data)
@@ -107,6 +120,15 @@ class VocabularyService:
         for value in values:
             if HTML_PATTERN.search(value) or SQL_INJECTION_PATTERN.search(value):
                 return value
+        return None
+
+    def _validate_search_value(self, search_value):
+        if not search_value:
+            return "Search word is required"
+        if HTML_PATTERN.search(search_value) or SQL_INJECTION_PATTERN.search(search_value):
+            return "HTML tags and SQL statements are not allowed"
+        if not SEARCH_PATTERN.fullmatch(search_value):
+            return "Search may only contain letters and wildcard *"
         return None
 
 

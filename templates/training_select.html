@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Select vocabulary for training</h1>
+
+{% if error %}
+    <div class="messages">{{ error }}</div>
+{% endif %}
+
+{% if entries %}
+    <form action="/training" method="post">
+        {% for entry in entries %}
+            <div class="entry">
+                <label>
+                    <input type="checkbox" name="vocabulary_ids" value="{{ entry.id }}">
+                    <strong>{{ entry.word }}</strong>
+                    {% if entry.context %}
+                        <span class="muted">{{ entry.context }}</span>
+                    {% endif %}
+                </label>
+                <p>{{ entry.definition }}</p>
+            </div>
+        {% endfor %}
+        <button type="submit">Start training</button>
+    </form>
+{% else %}
+    <p>No vocabulary entries available yet.</p>
+    <a class="button" href="/vocabulary/new">Add word</a>
+{% endif %}
+{% endblock %}
