@@ -20,8 +20,10 @@ def select_training_vocabs():
 @training_bp.route("/training", methods=["POST"])
 @login_required
 def create_training():
-    data = request.get_json(silent=True)
-    if data is not None:
+    if request.is_json:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid request"}), 400
         vocabulary_ids = data.get("vocabulary_ids")
     else:
         vocabulary_ids = request.form.getlist("vocabulary_ids")
@@ -40,7 +42,7 @@ def create_training():
         ), 400
 
     if request.is_json:
-        return jsonify(training_session), 201
+        return jsonify(training_service.get_training_quiz(training_session["id"], session["user_id"])), 201
     return redirect(f"/training/{training_session['id']}")
 
 
@@ -53,4 +55,44 @@ def view_training(training_session_id):
     )
     if not training_session:
         return redirect("/training/select")
-    return render_template("training_detail.html", training=training_session)
+    if training_session["submitted_at"] is not None:
+        result = training_service.get_training_result(
+            training_session_id,
+            session["user_id"],
+        )
+        return render_template("training_result.html", result=result)
+    return render_template(
+        "training_detail.html",
+        training=training_service.get_training_quiz(training_session_id, session["user_id"]),
+    )
+
+
+@training_bp.route("/training/<int:training_session_id>/submit", methods=["POST"])
+@login_required
+def submit_training(training_session_id):
+    if request.is_json:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid request"}), 400
+        answers = data.get("answers", {})
+    else:
+        answers = {
+            key.removeprefix("answer_"): value
+            for key, value in request.form.items()
+            if key.startswith("answer_")
+        }
+
+    result, error = training_service.submit_training_session(
+        training_session_id,
+        session["user_id"],
+        answers,
+    )
+    if error:
+        if request.is_json:
+            status_code = 404 if error == "Training session was not found" else 400
+            return jsonify({"error": error}), status_code
+        return redirect("/training/select")
+
+    if request.is_json:
+        return jsonify(result)
+    return render_template("training_result.html", result=result)

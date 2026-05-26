@@ -7,7 +7,7 @@ from Repositories.vocabulary_repository import (
 
 HTML_PATTERN = re.compile(r"<[^>]+>")
 SQL_INJECTION_PATTERN = re.compile(
-    r"(--|;|/\*|\*/|\bOR\b\s+\d+\s*=\s*\d+|\bDROP\b|\bDELETE\b|\bINSERT\b|\bUPDATE\b|\bUNION\b|\bSELECT\b)",
+    r"(--|/\*|\*/|\bOR\b\s+\d+\s*=\s*\d+|\bDROP\b|\bDELETE\b|\bINSERT\b|\bUPDATE\b|\bUNION\b|\bSELECT\b)",
     re.IGNORECASE,
 )
 SEARCH_PATTERN = re.compile(r"^[A-Za-z*]+$")

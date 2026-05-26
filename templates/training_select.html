@@ -1,30 +1,57 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Select vocabulary for training</h1>
+<div class="page-header">
+    <div>
+        <h1>Select vocabulary for training</h1>
+        <div class="result-count">{{ entries | length }} available entries</div>
+    </div>
+</div>
 
 {% if error %}
     <div class="messages">{{ error }}</div>
 {% endif %}
 
 {% if entries %}
-    <form action="/training" method="post">
+    <form action="/training" method="post" id="training-selection-form">
+        <div class="entry-list">
         {% for entry in entries %}
-            <div class="entry">
-                <label>
-                    <input type="checkbox" name="vocabulary_ids" value="{{ entry.id }}">
-                    <strong>{{ entry.word }}</strong>
-                    {% if entry.context %}
-                        <span class="muted">{{ entry.context }}</span>
-                    {% endif %}
-                </label>
-                <p>{{ entry.definition }}</p>
-            </div>
+            <label class="selectable-row">
+                <input class="training-checkbox" type="checkbox" name="vocabulary_ids" value="{{ entry.id }}">
+                <span class="entry-main">
+                    <span class="entry-heading">
+                        <strong class="entry-word">{{ entry.word }}</strong>
+                        {% if entry.context %}
+                            <span class="meta-chip">{{ entry.context }}</span>
+                        {% endif %}
+                    </span>
+                    <span class="entry-definition">{{ entry.definition }}</span>
+                </span>
+            </label>
         {% endfor %}
-        <button type="submit">Start training</button>
+        </div>
+        <div class="training-footer">
+            <span id="selected-count" class="selected-count" aria-live="polite">0 vocabulary entries selected</span>
+            <button type="submit">Start training</button>
+        </div>
     </form>
+    <script>
+    const selectedCount = document.getElementById("selected-count");
+    const checkboxes = Array.from(document.querySelectorAll(".training-checkbox"));
+
+    function updateSelectedCount() {
+        const count = checkboxes.filter((checkbox) => checkbox.checked).length;
+        const label = count === 1 ? "vocabulary entry" : "vocabulary entries";
+        selectedCount.textContent = `${count} ${label} selected`;
+    }
+
+    checkboxes.forEach((checkbox) => {
+        checkbox.addEventListener("change", updateSelectedCount);
+    });
+    updateSelectedCount();
+    </script>
 {% else %}
     <p>No vocabulary entries available yet.</p>
-    <a class="button" href="/vocabulary/new">Add word</a>
+    <a class="button button-primary" href="/vocabulary/new">Add word</a>
 {% endif %}
 {% endblock %}

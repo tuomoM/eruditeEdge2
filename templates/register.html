@@ -3,15 +3,17 @@
 {% block content %}
 <h1>Register</h1>
 <form action="/register" method="post">
-    <p>
+    <div class="field field-wide">
         <label for="username">User id</label><br>
         <input id="username" name="username" value="{{ username or '' }}" required>
-    </p>
-    <p>
+    </div>
+    <div class="field field-wide">
         <label for="password">Password</label><br>
         <input id="password" name="password" type="password" required>
-    </p>
-    <button type="submit">Create account</button>
-    <a class="button" href="/login">Log in</a>
+    </div>
+    <div class="actions">
+        <button type="submit">Create account</button>
+        <a class="button button-secondary" href="/login">Log in</a>
+    </div>
 </form>
 {% endblock %}

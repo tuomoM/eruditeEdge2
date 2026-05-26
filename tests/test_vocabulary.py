@@ -126,8 +126,28 @@ class VocabularyTestCase(unittest.TestCase):
         generate_entry.assert_called_once_with(
             "operation",
             "test-api-key",
-            "test-model",
+                "test-model",
         )
+
+    def test_generate_vocabulary_accepts_semicolons_in_generated_prose(self):
+        self.login_user()
+        generated_entry = self.valid_entry()
+        generated_entry["word"] = "stultify"
+        generated_entry["definition"] = (
+            "To cause someone to lose enthusiasm or initiative; to make ineffective."
+        )
+        generated_entry["examples"] = [
+            "The rigid process stultified the team; it left no room for judgment."
+        ]
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.generate_entry",
+            return_value=(generated_entry, None),
+        ):
+            response = self.generate_entry("stultify")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), generated_entry)
 
     def test_generate_vocabulary_rejects_sql_injection(self):
         self.login_user()

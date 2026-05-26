@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Training result</h1>
+
+<div class="score-summary">
+    <span class="score-number">{{ result.score }} / {{ result.total }}</span>
+    <span class="muted">correct definitions</span>
+</div>
+
+{% if result.incorrect_vocabs %}
+    <h2>Incorrectly defined vocabularies</h2>
+    <div class="review-list">
+        {% for vocab in result.incorrect_vocabs %}
+            <div class="review-row">
+                <strong class="entry-word">{{ vocab.word }}</strong>
+                <div class="review-grid">
+                    <span class="review-label">Correct</span>
+                    <span>{{ vocab.correct_definition }}</span>
+                    <span class="review-label">Selected</span>
+                    <span>
+                        {% if vocab.selected_definition %}
+                            {{ vocab.selected_definition }}
+                        {% else %}
+                            No answer selected
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="success-message">All answers were correct.</p>
+{% endif %}
+
+<div class="actions">
+    <a class="button button-primary" href="/training/select">Create another training set</a>
+</div>
+{% endblock %}

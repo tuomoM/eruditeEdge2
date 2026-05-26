@@ -2,83 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>eruditeEdge2</title>
-    <style>
-        body {
-            max-width: 920px;
-            margin: 32px auto;
-            padding: 0 18px;
-            font-family: Georgia, "Times New Roman", serif;
-            color: #202020;
-        }
-        nav {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            margin-bottom: 24px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid #ddd;
-        }
-        nav form {
-            margin-left: auto;
-        }
-        a {
-            color: #174c7c;
-        }
-        input, textarea {
-            width: 100%;
-            max-width: 640px;
-            box-sizing: border-box;
-            padding: 7px;
-            margin-top: 4px;
-        }
-        textarea {
-            min-height: 96px;
-        }
-        button, .button {
-            display: inline-block;
-            width: auto;
-            padding: 6px 12px;
-            margin: 4px 4px 4px 0;
-            border: 1px solid #aaa;
-            border-radius: 4px;
-            background: #f4f4f4;
-            color: #202020;
-            text-decoration: none;
-            cursor: pointer;
-            font: inherit;
-        }
-        .messages {
-            padding: 10px;
-            margin-bottom: 18px;
-            border: 1px solid #d9bd72;
-            background: #fff9e8;
-        }
-        .entry {
-            padding: 12px 0;
-            border-bottom: 1px solid #e2e2e2;
-        }
-        .muted {
-            color: #666;
-        }
-        .actions {
-            margin-top: 14px;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ed2.css') }}">
 </head>
 <body>
-    <nav>
-        <strong>eruditeEdge2</strong>
+    <nav class="site-nav">
+        <a class="brand" href="/">eD2</a>
         {% if session.user_id %}
-            <a href="/vocabulary">Vocabulary</a>
-            <a href="/vocabulary/new">Add word</a>
-            <a href="/training/select">Training</a>
-            <form action="/logout" method="post">
-                <button type="submit">Log out</button>
+            <div class="nav-links">
+                <a href="/vocabulary">Vocabulary</a>
+                <a href="/vocabulary/new">Add word</a>
+                <a href="/training/select">Training</a>
+            </div>
+            <form class="logout-form" action="/logout" method="post">
+                <button class="button-secondary" type="submit">Log out</button>
             </form>
         {% else %}
-            <a href="/login">Log in</a>
-            <a href="/register">Register</a>
+            <div class="nav-links">
+                <a href="/login">Log in</a>
+                <a href="/register">Register</a>
+            </div>
         {% endif %}
     </nav>
 

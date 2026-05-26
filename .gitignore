@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .env
 database.db
+database.before-*.db
 .DS_Store
 Project.md
 Technical setup.md

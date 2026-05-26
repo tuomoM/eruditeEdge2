@@ -9,6 +9,30 @@ SQL_KEYWORD_PATTERN = re.compile(
     r"^(DROP|DELETE|INSERT|UPDATE|UNION|SELECT|ALTER|CREATE)$",
     re.IGNORECASE,
 )
+ALLOWED_CONTEXT_LABELS = {
+    "Academic",
+    "Business",
+    "Business English",
+    "Casual",
+    "Education",
+    "Emotional",
+    "Everyday",
+    "Finance",
+    "Formal",
+    "General",
+    "Historical",
+    "Informal",
+    "Legal",
+    "Literary",
+    "Medical",
+    "Philosophy",
+    "Political",
+    "Professional",
+    "Religious",
+    "Scientific",
+    "Social",
+    "Technical",
+}
 
 
 VOCABULARY_SCHEMA = {
@@ -17,7 +41,14 @@ VOCABULARY_SCHEMA = {
     "properties": {
         "word": {"type": "string"},
         "definition": {"type": "string"},
-        "context": {"type": "string"},
+        "context": {
+            "type": "string",
+            "description": (
+                "A short usage category or register, not an example sentence. "
+                "Use 1-4 slash-separated labels such as Formal, Casual, "
+                "Medical, Philosophy, Academic, Business English, Business/Formal."
+            ),
+        },
         "synonyms": {
             "type": "array",
             "items": {"type": "string"},
@@ -55,7 +86,10 @@ class VocabularyAiService:
                 model=model,
                 instructions=(
                     "Create vocabulary entry data for the provided single word. "
-                    "Return only factual dictionary-style data. Do not include HTML."
+                    "Return only factual dictionary-style data. Do not include HTML. "
+                    "The context field must be a short usage category/register/domain, "
+                    "not a sentence. Examples: Formal, Casual, Medical, Philosophy, "
+                    "Academic, Business English, Business/Formal."
                 ),
                 input=f"Word: {word}",
                 text={
@@ -84,6 +118,7 @@ class VocabularyAiService:
             return None, "OpenAI returned invalid vocabulary data"
 
         entry["word"] = word
+        entry["context"] = self._normalize_context(entry.get("context"))
         logger.info("Vocabulary AI generation succeeded for word '%s'", word)
         return entry, None
 
@@ -92,6 +127,21 @@ class VocabularyAiService:
         if not WORD_PATTERN.fullmatch(word) or SQL_KEYWORD_PATTERN.fullmatch(word):
             return None, "Please provide one word only"
         return word, None
+
+    def _normalize_context(self, context):
+        context = (context or "").strip()
+        labels = [
+            " ".join(label.strip().split())
+            for label in context.split("/")
+            if label.strip()
+        ]
+        if (
+            1 <= len(labels) <= 4
+            and all(label in ALLOWED_CONTEXT_LABELS for label in labels)
+        ):
+            return "/".join(labels)
+        logger.info("Vocabulary AI generation replaced sentence-like context with General")
+        return "General"
 
     def _get_client(self, api_key):
         if self._client is not None:

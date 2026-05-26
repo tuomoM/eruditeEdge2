@@ -35,14 +35,42 @@ CREATE TABLE vocabulary_examples (
 CREATE TABLE training_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    submitted_at TIMESTAMP,
+    score INTEGER,
+    total INTEGER
 );
 
 CREATE TABLE training_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     training_session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
     vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_entries(id),
+    question_token TEXT NOT NULL UNIQUE,
+    word TEXT NOT NULL,
+    context TEXT,
+    definition TEXT NOT NULL,
     item_order INTEGER NOT NULL,
     UNIQUE (training_session_id, vocabulary_id),
     UNIQUE (training_session_id, item_order)
+);
+
+CREATE TABLE training_answer_options (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    training_session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+    question_token TEXT NOT NULL REFERENCES training_items(question_token) ON DELETE CASCADE,
+    option_token TEXT NOT NULL UNIQUE,
+    option_vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_entries(id),
+    option_definition TEXT NOT NULL,
+    option_order INTEGER NOT NULL,
+    UNIQUE (question_token, option_vocabulary_id),
+    UNIQUE (question_token, option_order)
+);
+
+CREATE TABLE training_incorrect_answers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    training_session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+    vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_entries(id),
+    word TEXT NOT NULL,
+    correct_definition TEXT NOT NULL,
+    selected_definition TEXT
 );

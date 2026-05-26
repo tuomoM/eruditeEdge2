@@ -5,35 +5,47 @@
 <h1>{% if is_edit %}Edit vocabulary{% else %}Add vocabulary{% endif %}</h1>
 
 <form method="post" id="vocabulary-form">
-    <p>
+    <div class="field field-wide">
         <label for="word">Word</label><br>
         <input id="word" name="word" value="{{ entry.word if entry else '' }}" required>
-    </p>
+    </div>
 
     {% if not is_edit %}
-        <button type="button" id="generate-button">Generate with AI</button>
-        <button type="button" id="check-ai-button">Check AI setup</button>
-        <span id="generate-status" class="muted"></span>
+        <div class="ai-panel">
+            <div class="ai-actions">
+                <button class="button-secondary" type="button" id="generate-button">Generate with AI</button>
+                <button class="button-secondary" type="button" id="check-ai-button">Check AI setup</button>
+            </div>
+            <span id="generate-status" class="ai-status muted" aria-live="polite"></span>
+        </div>
     {% endif %}
 
-    <p>
+    <div class="field field-wide">
         <label for="definition">Definition</label><br>
         <textarea id="definition" name="definition" required>{{ entry.definition if entry else '' }}</textarea>
-    </p>
-    <p>
-        <label for="context">Context</label><br>
-        <input id="context" name="context" value="{{ entry.context if entry else '' }}" placeholder="Scientific/Medical">
-    </p>
-    <p>
-        <label for="synonyms">Synonyms, comma separated</label><br>
-        <input id="synonyms" name="synonyms" value="{{ entry.synonyms | join(', ') if entry and entry.synonyms else '' }}">
-    </p>
-    <p>
+    </div>
+
+    <div class="form-grid">
+        <div class="field">
+            <label for="context">Context</label><br>
+            <input id="context" name="context" value="{{ entry.context if entry else '' }}" placeholder="Scientific/Medical">
+        </div>
+        <div class="field">
+            <label for="synonyms">Synonyms, comma separated</label><br>
+            <input id="synonyms" name="synonyms" value="{{ entry.synonyms | join(', ') if entry and entry.synonyms else '' }}">
+        </div>
+    </div>
+
+    <div class="field field-wide">
         <label for="examples">Example sentences, one per line</label><br>
         <textarea id="examples" name="examples" required>{{ examples_text if examples_text is defined else (entry.examples | join('\n') if entry and entry.examples else '') }}</textarea>
-    </p>
-    <button type="submit">Save</button>
-    <a class="button" href="/vocabulary">Cancel</a>
+        <div class="help-text">1-4 example sentences.</div>
+    </div>
+
+    <div class="actions">
+        <button type="submit">Save</button>
+        <a class="button button-secondary" href="/vocabulary">Cancel</a>
+    </div>
 </form>
 
 {% if not is_edit %}

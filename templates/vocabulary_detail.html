@@ -1,29 +1,38 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>{{ entry.word }}</h1>
+<div class="page-header">
+    <div>
+        <h1 class="word-title">{{ entry.word }}</h1>
+        {% if entry.context %}
+            <span class="meta-chip">{{ entry.context }}</span>
+        {% endif %}
+    </div>
+</div>
 
-{% if entry.context %}
-    <p class="muted">{{ entry.context }}</p>
-{% endif %}
-
-<h2>Definition</h2>
-<p>{{ entry.definition }}</p>
+<section class="detail-section">
+    <h2>Definition</h2>
+    <p>{{ entry.definition }}</p>
+</section>
 
 {% if entry.synonyms %}
-    <h2>Synonyms</h2>
-    <p>{{ entry.synonyms | join(", ") }}</p>
+    <section class="detail-section">
+        <h2>Synonyms</h2>
+        <p>{{ entry.synonyms | join(", ") }}</p>
+    </section>
 {% endif %}
 
-<h2>Examples</h2>
-<ol>
-    {% for example in entry.examples %}
-        <li>{{ example }}</li>
-    {% endfor %}
-</ol>
+<section class="detail-section">
+    <h2>Examples</h2>
+    <ol>
+        {% for example in entry.examples %}
+            <li>{{ example }}</li>
+        {% endfor %}
+    </ol>
+</section>
 
 <div class="actions">
-    <a class="button" href="/vocabulary/{{ entry.id }}/edit">Edit</a>
-    <a class="button" href="/vocabulary">Back</a>
+    <a class="button button-primary" href="/vocabulary/{{ entry.id }}/edit">Edit</a>
+    <a class="button button-secondary" href="/vocabulary">Back</a>
 </div>
 {% endblock %}

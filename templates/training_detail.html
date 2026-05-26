@@ -3,19 +3,36 @@
 {% block content %}
 <h1>Training set</h1>
 
-<p>{{ training.vocabs | length }} vocabulary entries selected.</p>
+<p class="result-count">{{ training.questions | length }} vocabulary entries selected.</p>
 
-<ol>
-    {% for vocab in training.vocabs %}
-        <li>
-            <strong>{{ vocab.word }}</strong>
-            {% if vocab.context %}
-                <span class="muted">{{ vocab.context }}</span>
-            {% endif %}
-            <p>{{ vocab.definition }}</p>
-        </li>
+<form action="/training/{{ training.id }}/submit" method="post">
+    {% for question in training.questions %}
+        {% set vocab = question.vocab %}
+        <fieldset class="question-row">
+            <legend>
+                <strong class="entry-word">{{ vocab.word }}</strong>
+                {% if vocab.context %}
+                    <span class="meta-chip">{{ vocab.context }}</span>
+                {% endif %}
+            </legend>
+
+            {% for option in question.options %}
+                <label class="option-row">
+                    <input
+                        type="radio"
+                        name="answer_{{ question.token }}"
+                        value="{{ option.token }}"
+                        required
+                    >
+                    <span>{{ option.definition }}</span>
+                </label>
+            {% endfor %}
+        </fieldset>
     {% endfor %}
-</ol>
 
-<a class="button" href="/training/select">Create another training set</a>
+    <div class="actions">
+        <button type="submit">Submit training</button>
+        <a class="button button-secondary" href="/training/select">Create another training set</a>
+    </div>
+</form>
 {% endblock %}

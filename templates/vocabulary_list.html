@@ -1,29 +1,40 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Vocabulary</h1>
+<div class="page-header">
+    <div>
+        <h1>Vocabulary</h1>
+        <div class="result-count">{{ entries | length }} entries</div>
+    </div>
+</div>
 
-<form action="/vocabulary" method="get">
-    <p>
+<form class="toolbar" action="/vocabulary" method="get">
+    <div class="field">
         <label for="word">Search by word</label><br>
         <input id="word" name="word" value="{{ search_word }}" placeholder="oper*, *tion, op*ion">
-    </p>
+    </div>
     <button type="submit">Search</button>
-    <a class="button" href="/vocabulary">Show all</a>
-    <a class="button" href="/vocabulary/new">Add word</a>
+    <a class="button button-secondary" href="/vocabulary">Show all</a>
+    <a class="button button-primary" href="/vocabulary/new">Add word</a>
 </form>
 
 {% if entries %}
+    <div class="entry-list">
     {% for entry in entries %}
-        <div class="entry">
-            <h2><a href="/vocabulary/{{ entry.id }}/page">{{ entry.word }}</a></h2>
-            {% if entry.context %}
-                <p class="muted">{{ entry.context }}</p>
-            {% endif %}
-            <p>{{ entry.definition }}</p>
-            <a href="/vocabulary/{{ entry.id }}/edit">Edit</a>
+        <div class="entry-row">
+            <div class="entry-main">
+                <div class="entry-heading">
+                    <a class="entry-word" href="/vocabulary/{{ entry.id }}/page">{{ entry.word }}</a>
+                    {% if entry.context %}
+                        <span class="meta-chip">{{ entry.context }}</span>
+                    {% endif %}
+                </div>
+                <p class="entry-definition">{{ entry.definition }}</p>
+            </div>
+            <a class="entry-action" href="/vocabulary/{{ entry.id }}/edit">Edit</a>
         </div>
     {% endfor %}
+    </div>
 {% else %}
     <p>No vocabulary entries found.</p>
 {% endif %}
