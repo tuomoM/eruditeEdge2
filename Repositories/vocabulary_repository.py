@@ -104,6 +104,48 @@ class VocabularyRepository:
         )
         return [self.get_entry(row["id"]) for row in rows]
 
+    def delete_entries_by_user(self, user_id):
+        connection = db.get_connection()
+        try:
+            connection.execute(
+                """
+                DELETE FROM training_sessions
+                WHERE id IN (
+                    SELECT training_items.training_session_id
+                    FROM training_items
+                    JOIN vocabulary_entries
+                        ON vocabulary_entries.id = training_items.vocabulary_id
+                    WHERE vocabulary_entries.created_by = ?
+
+                    UNION
+
+                    SELECT training_answer_options.training_session_id
+                    FROM training_answer_options
+                    JOIN vocabulary_entries
+                        ON vocabulary_entries.id = training_answer_options.option_vocabulary_id
+                    WHERE vocabulary_entries.created_by = ?
+
+                    UNION
+
+                    SELECT training_incorrect_answers.training_session_id
+                    FROM training_incorrect_answers
+                    JOIN vocabulary_entries
+                        ON vocabulary_entries.id = training_incorrect_answers.vocabulary_id
+                    WHERE vocabulary_entries.created_by = ?
+                )
+                """,
+                [user_id, user_id, user_id],
+            )
+            cursor = connection.execute(
+                "DELETE FROM vocabulary_entries WHERE created_by = ?",
+                [user_id],
+            )
+            connection.commit()
+            return cursor.rowcount
+        except Exception:
+            connection.rollback()
+            raise
+
     def _save_synonyms(self, vocabulary_id, synonyms):
         for synonym in synonyms:
             db.execute(

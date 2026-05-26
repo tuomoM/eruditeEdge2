@@ -2,6 +2,8 @@ CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    account_category TEXT NOT NULL DEFAULT 'basic'
+        CHECK (account_category IN ('basic', 'trusted', 'admin')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

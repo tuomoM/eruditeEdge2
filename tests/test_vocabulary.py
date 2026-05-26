@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import db
 from app import create_app
 from db import init_db
 
@@ -31,6 +32,7 @@ class VocabularyTestCase(unittest.TestCase):
             "/register",
             json={"username": "tuomo", "password": "safe-password"},
         )
+        self.set_user_category("tuomo", "trusted")
 
     def logout_user(self):
         self.client.post("/logout", json={})
@@ -40,6 +42,26 @@ class VocabularyTestCase(unittest.TestCase):
             "/register",
             json={"username": "anna", "password": "safe-password"},
         )
+
+    def login_existing_second_user(self):
+        self.client.post(
+            "/login",
+            json={"username": "anna", "password": "safe-password"},
+        )
+
+    def make_user_trusted(self, username):
+        self.set_user_category(username, "trusted")
+
+    def set_user_category(self, username, account_category):
+        with self.app.app_context():
+            db.execute(
+                """
+                UPDATE users
+                SET account_category = ?
+                WHERE username = ?
+                """,
+                [account_category, username],
+            )
 
     def valid_entry(self):
         return {
@@ -91,6 +113,9 @@ class VocabularyTestCase(unittest.TestCase):
         first_response = self.create_entry()
         self.logout_user()
         self.login_second_user()
+        self.make_user_trusted("anna")
+        self.logout_user()
+        self.login_existing_second_user()
 
         second_response = self.create_entry()
 
@@ -176,6 +201,55 @@ class VocabularyTestCase(unittest.TestCase):
         response = self.generate_entry("<b>word</b>")
 
         self.assertEqual(response.status_code, 400)
+
+    def test_basic_user_cannot_create_vocabulary(self):
+        self.login_user()
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.create_entry()
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Trusted account is required")
+
+    def test_basic_user_cannot_open_new_vocabulary_page(self):
+        self.login_user()
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.client.get("/vocabulary/new", follow_redirects=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Trusted account is required", response.data)
+
+    def test_basic_user_cannot_generate_vocabulary_with_ai(self):
+        self.login_user()
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.generate_entry("operation")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Trusted account is required")
+
+    def test_stale_trusted_session_cannot_create_vocabulary_after_demoted_in_database(self):
+        self.login_user()
+        self.set_user_category("tuomo", "basic")
+
+        response = self.create_entry()
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Trusted account is required")
+
+    def test_basic_user_cannot_check_ai_status(self):
+        self.login_user()
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.client.get("/vocabulary/generate/status")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Trusted account is required")
 
     def test_create_vocabulary_rejects_html_tags(self):
         self.login_user()
@@ -334,6 +408,9 @@ class VocabularyTestCase(unittest.TestCase):
         vocabulary_id = create_response.get_json()["id"]
         self.logout_user()
         self.login_second_user()
+        self.make_user_trusted("anna")
+        self.logout_user()
+        self.login_existing_second_user()
         data = self.valid_entry()
         data["definition"] = "Updated global definition"
 
@@ -341,6 +418,35 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["definition"], "Updated global definition")
+
+    def test_basic_user_cannot_update_vocabulary(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+        self.logout_user()
+        self.login_second_user()
+        data = self.valid_entry()
+        data["definition"] = "Updated global definition"
+
+        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Trusted account is required")
+
+    def test_basic_user_cannot_open_edit_vocabulary_page(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.client.get(
+            f"/vocabulary/{vocabulary_id}/edit",
+            follow_redirects=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Trusted account is required", response.data)
 
     def test_update_vocabulary_rejects_sql_injection(self):
         self.login_user()

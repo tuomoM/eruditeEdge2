@@ -84,8 +84,17 @@ Open the app at `http://127.0.0.1:5001`.
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
+8. Create a new admin user:
+
+```bash
+flask --app app create-admin
+```
+
+The command prompts for a user id and password. When the new admin is created, all existing admin users are moved to the `trusted` category.
+
 If you already have an older local `database.db`, back it up before applying schema changes. Existing training schema upgrades can be applied with:
 
 ```bash
 sqlite3 database.db ".read migrations/001_training_quiz.sql"
+sqlite3 database.db ".read migrations/002_user_account_categories.sql"
 ```

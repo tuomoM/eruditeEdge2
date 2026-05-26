@@ -2,6 +2,7 @@ from functools import wraps
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session
 
+from Services.user_service import ACCOUNT_CATEGORY_ADMIN, ACCOUNT_CATEGORY_TRUSTED, user_service
 from Services.vocabulary_ai_service import vocabulary_ai_service
 from Services.vocabulary_service import vocabulary_service
 
@@ -24,6 +25,46 @@ def page_login_required(route_function):
     def wrapper(*args, **kwargs):
         if "user_id" not in session:
             return redirect("/login")
+        return route_function(*args, **kwargs)
+
+    return wrapper
+
+
+def can_manage_vocabulary():
+    user_id = session.get("user_id")
+    if not user_id:
+        return False
+    user = user_service.get_user(user_id)
+    if not user:
+        return False
+    session["username"] = user["username"]
+    session["account_category"] = user["account_category"]
+    return user["account_category"] in {
+        ACCOUNT_CATEGORY_ADMIN,
+        ACCOUNT_CATEGORY_TRUSTED,
+    }
+
+
+def vocabulary_manager_required(route_function):
+    @wraps(route_function)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return jsonify({"error": "Login required"}), 401
+        if not can_manage_vocabulary():
+            return jsonify({"error": "Trusted account is required"}), 403
+        return route_function(*args, **kwargs)
+
+    return wrapper
+
+
+def page_vocabulary_manager_required(route_function):
+    @wraps(route_function)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect("/login")
+        if not can_manage_vocabulary():
+            flash("Trusted account is required")
+            return redirect("/vocabulary")
         return route_function(*args, **kwargs)
 
     return wrapper
@@ -60,7 +101,7 @@ def vocabulary_list():
 
 
 @vocabulary_bp.route("/vocabulary/new", methods=["GET", "POST"])
-@page_login_required
+@page_vocabulary_manager_required
 def new_vocabulary():
     if request.method == "GET":
         return render_template("vocabulary_form.html", entry=None)
@@ -80,7 +121,7 @@ def new_vocabulary():
 
 
 @vocabulary_bp.route("/vocabulary", methods=["POST"])
-@login_required
+@vocabulary_manager_required
 def create_vocabulary():
     data = request.get_json(silent=True) or request.form
     entry, error = vocabulary_service.create_entry(data, session["user_id"])
@@ -90,7 +131,7 @@ def create_vocabulary():
 
 
 @vocabulary_bp.route("/vocabulary/generate", methods=["POST"])
-@login_required
+@vocabulary_manager_required
 def generate_vocabulary():
     data = request.get_json(silent=True) or request.form
     entry, error = vocabulary_ai_service.generate_entry(
@@ -108,7 +149,7 @@ def generate_vocabulary():
 
 
 @vocabulary_bp.route("/vocabulary/generate/status", methods=["GET"])
-@login_required
+@vocabulary_manager_required
 def generate_vocabulary_status():
     api_key = current_app.config["OPENAI_API_KEY"]
     return jsonify(
@@ -149,7 +190,7 @@ def vocabulary_page(vocabulary_id):
 
 
 @vocabulary_bp.route("/vocabulary/<int:vocabulary_id>/edit", methods=["GET", "POST"])
-@page_login_required
+@page_vocabulary_manager_required
 def edit_vocabulary(vocabulary_id):
     entry = vocabulary_service.get_entry(vocabulary_id)
     if not entry:
@@ -180,7 +221,7 @@ def edit_vocabulary(vocabulary_id):
 
 
 @vocabulary_bp.route("/vocabulary/<int:vocabulary_id>", methods=["PUT"])
-@login_required
+@vocabulary_manager_required
 def update_vocabulary(vocabulary_id):
     data = request.get_json(silent=True) or request.form
     entry, error = vocabulary_service.update_entry(vocabulary_id, data)

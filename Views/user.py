@@ -21,9 +21,17 @@ def register():
 
     session["user_id"] = user_id
     session["username"] = data.get("username").strip()
+    user = user_service.get_user(user_id)
+    session["account_category"] = user["account_category"]
     if not request.is_json:
         return redirect("/vocabulary")
-    return jsonify({"id": user_id, "username": session["username"]}), 201
+    return jsonify(
+        {
+            "id": user_id,
+            "username": session["username"],
+            "account_category": session["account_category"],
+        }
+    ), 201
 
 
 @user_bp.route("/login", methods=["GET", "POST"])
@@ -41,9 +49,17 @@ def login():
 
     session["user_id"] = user_id
     session["username"] = data.get("username").strip()
+    user = user_service.get_user(user_id)
+    session["account_category"] = user["account_category"]
     if not request.is_json:
         return redirect("/vocabulary")
-    return jsonify({"id": user_id, "username": session["username"]})
+    return jsonify(
+        {
+            "id": user_id,
+            "username": session["username"],
+            "account_category": session["account_category"],
+        }
+    )
 
 
 @user_bp.route("/logout", methods=["POST"])

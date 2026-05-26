@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Admin</h1>
+        <div class="result-count">{{ users | length }} users</div>
+    </div>
+</div>
+
+<div class="entry-list">
+    {% for user in users %}
+        <div class="entry-row">
+            <div class="entry-main">
+                <div class="entry-heading">
+                    <strong class="entry-word">{{ user.username }}</strong>
+                    <span class="meta-chip">{{ user.account_category }}</span>
+                </div>
+                <p class="entry-definition">
+                    {{ user.vocabulary_count }} vocabulary entries
+                </p>
+            </div>
+            <div class="actions">
+                {% if user.account_category != "admin" %}
+                    {% if user.account_category == "basic" %}
+                        <form action="/admin/users/{{ user.id }}/category" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="account_category" value="trusted">
+                            <button type="submit">Make trusted</button>
+                        </form>
+                    {% elif user.account_category == "trusted" %}
+                        <form action="/admin/users/{{ user.id }}/category" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="account_category" value="basic">
+                            <button class="button-secondary" type="submit">Make basic</button>
+                        </form>
+                    {% endif %}
+                {% endif %}
+                <form action="/admin/users/{{ user.id }}/vocabs/delete" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="button-secondary" type="submit">Remove vocabs</button>
+                </form>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

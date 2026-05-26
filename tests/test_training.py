@@ -42,6 +42,15 @@ class TrainingTestCase(unittest.TestCase):
             "/register",
             json={"username": "tuomo", "password": "safe-password"},
         )
+        with self.app.app_context():
+            db.execute(
+                """
+                UPDATE users
+                SET account_category = ?
+                WHERE username = ?
+                """,
+                ["trusted", "tuomo"],
+            )
 
     def logout_user(self):
         self.client.post("/logout", json={})

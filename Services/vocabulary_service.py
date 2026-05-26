@@ -66,6 +66,9 @@ class VocabularyService:
     def list_entries(self):
         return self._vocabulary_repository.list_entries()
 
+    def delete_entries_by_user(self, user_id):
+        return self._vocabulary_repository.delete_entries_by_user(user_id)
+
     def validate_entry_data(self, data):
         return self._validate_data(data)
 

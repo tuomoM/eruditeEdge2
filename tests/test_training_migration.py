@@ -3,6 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 
+import db
 from app import create_app
 
 
@@ -87,8 +88,12 @@ class TrainingMigrationTestCase(unittest.TestCase):
     def _run_training_migration(self):
         connection = sqlite3.connect(self.database_file.name)
         try:
-            with open("migrations/001_training_quiz.sql", encoding="utf-8") as migration:
-                connection.executescript(migration.read())
+            for migration_path in [
+                "migrations/001_training_quiz.sql",
+                "migrations/002_user_account_categories.sql",
+            ]:
+                with open(migration_path, encoding="utf-8") as migration:
+                    connection.executescript(migration.read())
             connection.commit()
         finally:
             connection.close()
@@ -98,6 +103,15 @@ class TrainingMigrationTestCase(unittest.TestCase):
             "/register",
             json={"username": "tuomo", "password": "safe-password"},
         )
+        with self.app.app_context():
+            db.execute(
+                """
+                UPDATE users
+                SET account_category = ?
+                WHERE username = ?
+                """,
+                ["trusted", "tuomo"],
+            )
 
     def _create_vocab(self, word):
         response = self.client.post(
@@ -185,8 +199,12 @@ class TrainingMigrationLegacySessionTestCase(unittest.TestCase):
     def _run_training_migration(self):
         connection = sqlite3.connect(self.database_file.name)
         try:
-            with open("migrations/001_training_quiz.sql", encoding="utf-8") as migration:
-                connection.executescript(migration.read())
+            for migration_path in [
+                "migrations/001_training_quiz.sql",
+                "migrations/002_user_account_categories.sql",
+            ]:
+                with open(migration_path, encoding="utf-8") as migration:
+                    connection.executescript(migration.read())
             connection.commit()
         finally:
             connection.close()

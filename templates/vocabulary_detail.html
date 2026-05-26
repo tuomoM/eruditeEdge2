@@ -32,7 +32,9 @@
 </section>
 
 <div class="actions">
-    <a class="button button-primary" href="/vocabulary/{{ entry.id }}/edit">Edit</a>
+    {% if session.account_category in ["trusted", "admin"] %}
+        <a class="button button-primary" href="/vocabulary/{{ entry.id }}/edit">Edit</a>
+    {% endif %}
     <a class="button button-secondary" href="/vocabulary">Back</a>
 </div>
 {% endblock %}

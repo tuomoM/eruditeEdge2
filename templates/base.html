@@ -12,8 +12,13 @@
         {% if session.user_id %}
             <div class="nav-links">
                 <a href="/vocabulary">Vocabulary</a>
-                <a href="/vocabulary/new">Add word</a>
+                {% if session.account_category in ["trusted", "admin"] %}
+                    <a href="/vocabulary/new">Add word</a>
+                {% endif %}
                 <a href="/training/select">Training</a>
+                {% if session.account_category == "admin" %}
+                    <a href="/admin">Admin</a>
+                {% endif %}
             </div>
             <form class="logout-form" action="/logout" method="post">
                 <button class="button-secondary" type="submit">Log out</button>
