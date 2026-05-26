@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import db
 from app import create_app
+from csrf import CSRF_SESSION_KEY
 from db import init_db
 
 
@@ -19,6 +20,7 @@ class VocabularyTestCase(unittest.TestCase):
                 "SECRET_KEY": "test-secret-key",
                 "OPENAI_API_KEY": "test-api-key",
                 "OPENAI_MODEL": "test-model",
+                "TRUSTED_AI_DAILY_QUOTA": 2,
             }
         )
         init_db(self.app)
@@ -63,6 +65,26 @@ class VocabularyTestCase(unittest.TestCase):
                 [account_category, username],
             )
 
+    def csrf_headers(self):
+        with self.client.session_transaction() as session:
+            session[CSRF_SESSION_KEY] = "test-csrf-token"
+        return {"X-CSRF-Token": "test-csrf-token"}
+
+    def ai_generation_count(self, username):
+        with self.app.app_context():
+            rows = db.query(
+                """
+                SELECT ai_generation_usage.generation_count
+                FROM ai_generation_usage
+                JOIN users ON users.id = ai_generation_usage.user_id
+                WHERE users.username = ? AND generation_date = DATE('now')
+                """,
+                [username],
+            )
+        if not rows:
+            return 0
+        return rows[0]["generation_count"]
+
     def valid_entry(self):
         return {
             "word": "operation",
@@ -85,8 +107,13 @@ class VocabularyTestCase(unittest.TestCase):
         data["examples"] = [f"{word} appears in this sentence."]
         return self.create_entry(data)
 
-    def generate_entry(self, word):
-        return self.client.post("/vocabulary/generate", json={"word": word})
+    def generate_entry(self, word, include_csrf=True):
+        headers = self.csrf_headers() if include_csrf else {}
+        return self.client.post(
+            "/vocabulary/generate",
+            json={"word": word},
+            headers=headers,
+        )
 
     def search_entries(self, word):
         return self.client.get("/vocabulary/search", query_string={"word": word})
@@ -135,6 +162,28 @@ class VocabularyTestCase(unittest.TestCase):
         response = self.generate_entry("operation")
 
         self.assertEqual(response.status_code, 401)
+
+    def test_generate_vocabulary_rejects_missing_csrf_token(self):
+        self.login_user()
+
+        response = self.generate_entry("operation", include_csrf=False)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
+
+    def test_generate_vocabulary_rejects_invalid_csrf_token(self):
+        self.login_user()
+        with self.client.session_transaction() as session:
+            session[CSRF_SESSION_KEY] = "valid-token"
+
+        response = self.client.post(
+            "/vocabulary/generate",
+            json={"word": "operation"},
+            headers={"X-CSRF-Token": "wrong-token"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
 
     def test_generate_vocabulary_succeeds_when_logged_in(self):
         self.login_user()
@@ -201,6 +250,90 @@ class VocabularyTestCase(unittest.TestCase):
         response = self.generate_entry("<b>word</b>")
 
         self.assertEqual(response.status_code, 400)
+
+    def test_trusted_user_cannot_generate_more_than_daily_quota(self):
+        self.login_user()
+        generated_entry = self.valid_entry()
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.generate_entry",
+            return_value=(generated_entry, None),
+        ) as generate_entry:
+            first_response = self.generate_entry("first")
+            second_response = self.generate_entry("second")
+            third_response = self.generate_entry("third")
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(third_response.status_code, 429)
+        self.assertEqual(
+            third_response.get_json()["error"],
+            "Daily AI generation quota reached (2)",
+        )
+        self.assertEqual(generate_entry.call_count, 2)
+
+    def test_admin_user_has_unlimited_ai_generation_quota(self):
+        self.login_user()
+        self.set_user_category("tuomo", "admin")
+        generated_entry = self.valid_entry()
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.generate_entry",
+            return_value=(generated_entry, None),
+        ) as generate_entry:
+            responses = [
+                self.generate_entry("first"),
+                self.generate_entry("second"),
+                self.generate_entry("third"),
+            ]
+
+        self.assertEqual([response.status_code for response in responses], [200, 200, 200])
+        self.assertEqual(generate_entry.call_count, 3)
+
+    def test_invalid_ai_generation_request_does_not_use_daily_quota(self):
+        self.login_user()
+        invalid_response = self.generate_entry("two words")
+        generated_entry = self.valid_entry()
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.generate_entry",
+            return_value=(generated_entry, None),
+        ) as generate_entry:
+            first_response = self.generate_entry("first")
+            second_response = self.generate_entry("second")
+
+        self.assertEqual(invalid_response.status_code, 400)
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(generate_entry.call_count, 2)
+
+    def test_failed_ai_generation_does_not_use_daily_quota(self):
+        self.login_user()
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.generate_entry",
+            return_value=(None, "OpenAI request failed: TimeoutError"),
+        ) as generate_entry:
+            failed_response = self.generate_entry("first")
+
+        self.assertEqual(failed_response.status_code, 400)
+        self.assertEqual(generate_entry.call_count, 1)
+        self.assertEqual(self.ai_generation_count("tuomo"), 0)
+
+    def test_invalid_generated_entry_does_not_use_daily_quota(self):
+        self.login_user()
+        generated_entry = self.valid_entry()
+        generated_entry["definition"] = "<b>unsafe</b>"
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.generate_entry",
+            return_value=(generated_entry, None),
+        ) as generate_entry:
+            failed_response = self.generate_entry("first")
+
+        self.assertEqual(failed_response.status_code, 400)
+        self.assertEqual(generate_entry.call_count, 1)
+        self.assertEqual(self.ai_generation_count("tuomo"), 0)
 
     def test_basic_user_cannot_create_vocabulary(self):
         self.login_user()

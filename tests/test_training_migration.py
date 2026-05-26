@@ -91,6 +91,7 @@ class TrainingMigrationTestCase(unittest.TestCase):
             for migration_path in [
                 "migrations/001_training_quiz.sql",
                 "migrations/002_user_account_categories.sql",
+                "migrations/003_ai_generation_usage.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())
@@ -202,6 +203,7 @@ class TrainingMigrationLegacySessionTestCase(unittest.TestCase):
             for migration_path in [
                 "migrations/001_training_quiz.sql",
                 "migrations/002_user_account_categories.sql",
+                "migrations/003_ai_generation_usage.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())

@@ -2,6 +2,8 @@ from functools import wraps
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session
 
+from csrf import csrf_required
+from Services.ai_quota_service import ai_quota_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, ACCOUNT_CATEGORY_TRUSTED, user_service
 from Services.vocabulary_ai_service import vocabulary_ai_service
 from Services.vocabulary_service import vocabulary_service
@@ -132,18 +134,37 @@ def create_vocabulary():
 
 @vocabulary_bp.route("/vocabulary/generate", methods=["POST"])
 @vocabulary_manager_required
+@csrf_required
 def generate_vocabulary():
     data = request.get_json(silent=True) or request.form
+    word, error = vocabulary_ai_service.validate_word(data.get("word"))
+    if error:
+        return jsonify({"error": error}), 400
+
+    api_key = current_app.config["OPENAI_API_KEY"]
+    if not api_key:
+        return jsonify({"error": "OpenAI API key is missing"}), 400
+
+    user = user_service.get_user(session["user_id"])
+    allowed, error = ai_quota_service.record_generation_if_allowed(
+        user,
+        current_app.config["TRUSTED_AI_DAILY_QUOTA"],
+    )
+    if not allowed:
+        return jsonify({"error": error}), 429
+
     entry, error = vocabulary_ai_service.generate_entry(
-        data.get("word"),
-        current_app.config["OPENAI_API_KEY"],
+        word,
+        api_key,
         current_app.config["OPENAI_MODEL"],
     )
     if error:
+        ai_quota_service.refund_generation(user)
         return jsonify({"error": error}), 400
 
     values, error = vocabulary_service.validate_entry_data(entry)
     if error:
+        ai_quota_service.refund_generation(user)
         return jsonify({"error": error}), 400
     return jsonify(values)
 

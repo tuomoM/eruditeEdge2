@@ -1,8 +1,9 @@
 from functools import wraps
 
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, session
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session
 
 from csrf import validate_csrf_token
+from Services.ai_quota_service import ai_quota_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_service import vocabulary_service
 
@@ -72,6 +73,13 @@ def admin_page():
     if error:
         flash(error)
         return redirect("/vocabulary")
+    usage_by_user = ai_quota_service.usage_by_user()
+    trusted_quota = current_app.config["TRUSTED_AI_DAILY_QUOTA"]
+    for user in users:
+        user["ai_generation_count"] = usage_by_user.get(user["id"], 0)
+        user["ai_generation_quota"] = (
+            None if user["account_category"] == ACCOUNT_CATEGORY_ADMIN else trusted_quota
+        )
     return render_template("admin.html", users=users)
 
 
@@ -127,4 +135,27 @@ def delete_user_vocabs(user_id):
             }
         )
     flash(f"Removed {deleted_count} vocabulary entries by {target_user['username']}.")
+    return redirect("/admin")
+
+
+@admin_bp.route("/admin/users/<int:user_id>/ai-quota/reset", methods=["POST"])
+@admin_required
+@csrf_required
+def reset_user_ai_quota(user_id):
+    target_user = user_service.get_user(user_id)
+    if not target_user:
+        if request.is_json:
+            return jsonify({"error": "User was not found"}), 404
+        flash("User was not found")
+        return redirect("/admin")
+
+    ai_quota_service.reset_user_usage(user_id)
+    if request.is_json:
+        return jsonify(
+            {
+                "user_id": user_id,
+                "ai_generation_count": 0,
+            }
+        )
+    flash(f"Reset AI quota for {target_user['username']}.")
     return redirect("/admin")

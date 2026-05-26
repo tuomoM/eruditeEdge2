@@ -19,6 +19,14 @@
                 <p class="entry-definition">
                     {{ user.vocabulary_count }} vocabulary entries
                 </p>
+                <p class="entry-definition">
+                    AI generations today:
+                    {% if user.ai_generation_quota is none %}
+                        {{ user.ai_generation_count }} / unlimited
+                    {% else %}
+                        {{ user.ai_generation_count }} / {{ user.ai_generation_quota }}
+                    {% endif %}
+                </p>
             </div>
             <div class="actions">
                 {% if user.account_category != "admin" %}
@@ -39,6 +47,10 @@
                 <form action="/admin/users/{{ user.id }}/vocabs/delete" method="post">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button class="button-secondary" type="submit">Remove vocabs</button>
+                </form>
+                <form action="/admin/users/{{ user.id }}/ai-quota/reset" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="button-secondary" type="submit">Reset AI quota</button>
                 </form>
             </div>
         </div>

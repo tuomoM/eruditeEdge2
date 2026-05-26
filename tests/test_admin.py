@@ -83,6 +83,31 @@ class AdminTestCase(unittest.TestCase):
             )
         return {row["username"]: row["account_category"] for row in rows}
 
+    def set_ai_generation_count(self, user_id, generation_count):
+        with self.app.app_context():
+            db.execute(
+                """
+                INSERT INTO ai_generation_usage
+                    (user_id, generation_date, generation_count)
+                VALUES (?, DATE('now'), ?)
+                """,
+                [user_id, generation_count],
+            )
+
+    def ai_generation_count(self, user_id):
+        with self.app.app_context():
+            rows = db.query(
+                """
+                SELECT generation_count
+                FROM ai_generation_usage
+                WHERE user_id = ? AND generation_date = DATE('now')
+                """,
+                [user_id],
+            )
+        if not rows:
+            return 0
+        return rows[0]["generation_count"]
+
     def test_admin_page_requires_admin(self):
         self.register("anna")
 
@@ -90,6 +115,21 @@ class AdminTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Admin account is required", response.data)
+
+    def test_admin_page_shows_ai_generation_quota_usage(self):
+        self.create_admin("tuomo")
+        user_response = self.register("anna")
+        user_id = user_response.get_json()["id"]
+        self.set_ai_generation_count(user_id, 7)
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"AI generations today:", response.data)
+        self.assertIn(b"7 / 20", response.data)
+        self.assertIn(b"0 / unlimited", response.data)
 
     def test_admin_can_promote_basic_user_to_trusted(self):
         self.create_admin("tuomo")
@@ -293,6 +333,41 @@ class AdminTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
+
+    def test_admin_can_reset_user_ai_generation_quota(self):
+        self.create_admin("tuomo")
+        target_response = self.register("anna")
+        target_user_id = target_response.get_json()["id"]
+        self.set_ai_generation_count(target_user_id, 12)
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post(
+            f"/admin/users/{target_user_id}/ai-quota/reset",
+            json={},
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["ai_generation_count"], 0)
+        self.assertEqual(self.ai_generation_count(target_user_id), 0)
+
+    def test_admin_reset_ai_generation_quota_rejects_missing_csrf_token(self):
+        self.create_admin("tuomo")
+        target_response = self.register("anna")
+        target_user_id = target_response.get_json()["id"]
+        self.set_ai_generation_count(target_user_id, 12)
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post(
+            f"/admin/users/{target_user_id}/ai-quota/reset",
+            json={},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
+        self.assertEqual(self.ai_generation_count(target_user_id), 12)
 
 
 if __name__ == "__main__":

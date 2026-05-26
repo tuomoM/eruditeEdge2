@@ -14,13 +14,16 @@ This version is almost entirely written using Open AI Codex.
 * Rudimentary UI defined and implemented
 * possiblity to choose vocabs for training session, saving the session and successrate
 * Graphical look and feel
+* Handling for user levels
+* Admin cockpit with possiblity to remove user and users vocabs
 
 
 # to-do's
 * Final look and feel + eruditeEdge 2 logos etc
-* Handling for user levels
-* Admin cockpit with possiblity to remove user and users vocabs
 * Hardening for internet use
+* Possibility to create issues / improvement ideas
+* CAPTCHA
+* google and apple login options
 
 
 # installation
@@ -52,6 +55,7 @@ Edit `.env` and set at least:
 SECRET_KEY=replace-with-a-local-secret
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-4.1-mini
+TRUSTED_AI_DAILY_QUOTA=20
 ```
 
 `OPENAI_API_KEY` is only needed for AI vocabulary generation. The rest of the app works without it.

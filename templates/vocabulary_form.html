@@ -80,6 +80,7 @@ document.getElementById("check-ai-button").addEventListener("click", async () =>
 document.getElementById("generate-button").addEventListener("click", async () => {
     const status = document.getElementById("generate-status");
     const word = document.getElementById("word").value;
+    const csrfToken = "{{ csrf_token() }}";
     status.textContent = "Generating...";
 
     let response;
@@ -87,7 +88,10 @@ document.getElementById("generate-button").addEventListener("click", async () =>
     try {
         response = await fetch("/vocabulary/generate", {
             method: "POST",
-            headers: {"Content-Type": "application/json"},
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-Token": csrfToken
+            },
             body: JSON.stringify({word})
         });
         data = await readJson(response);

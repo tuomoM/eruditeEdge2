@@ -122,6 +122,9 @@ class VocabularyAiService:
         logger.info("Vocabulary AI generation succeeded for word '%s'", word)
         return entry, None
 
+    def validate_word(self, word):
+        return self._validate_word(word)
+
     def _validate_word(self, word):
         word = (word or "").strip()
         if not WORD_PATTERN.fullmatch(word) or SQL_KEYWORD_PATTERN.fullmatch(word):
