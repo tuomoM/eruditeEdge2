@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
 
 import db
 from app import create_app
@@ -30,9 +31,15 @@ class VocabularyTestCase(unittest.TestCase):
         os.unlink(self.database_file.name)
 
     def login_user(self):
+        invite_code = self.create_invite_code()
         self.client.post(
             "/register",
-            json={"username": "tuomo", "password": "safe-password"},
+            json={
+                "username": "tuomo",
+                "password": "safe-password",
+                "invite_code": invite_code,
+            },
+            headers=self.csrf_headers(),
         )
         self.set_user_category("tuomo", "trusted")
 
@@ -40,9 +47,15 @@ class VocabularyTestCase(unittest.TestCase):
         self.client.post("/logout", json={})
 
     def login_second_user(self):
+        invite_code = self.create_invite_code()
         self.client.post(
             "/register",
-            json={"username": "anna", "password": "safe-password"},
+            json={
+                "username": "anna",
+                "password": "safe-password",
+                "invite_code": invite_code,
+            },
+            headers=self.csrf_headers(),
         )
 
     def login_existing_second_user(self):
@@ -64,6 +77,35 @@ class VocabularyTestCase(unittest.TestCase):
                 """,
                 [account_category, username],
             )
+
+    def invite_creator_id(self):
+        with self.app.app_context():
+            rows = db.query("SELECT id FROM users ORDER BY id LIMIT 1")
+            if rows:
+                return rows[0]["id"]
+            cursor = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["invite_issuer", "not-used", "admin"],
+            )
+            return cursor.lastrowid
+
+    def create_invite_code(self):
+        creator_id = self.invite_creator_id()
+        expires_at = datetime.now(timezone.utc) + timedelta(days=5)
+        with self.app.app_context():
+            count = db.query("SELECT COUNT(*) AS count FROM invite_codes")[0]["count"]
+            code = f"test-invite-code-{count + 1}"
+            db.execute(
+                """
+                INSERT INTO invite_codes (code, created_by, expires_at)
+                VALUES (?, ?, ?)
+                """,
+                [code, creator_id, expires_at.isoformat()],
+            )
+        return code
 
     def csrf_headers(self):
         with self.client.session_transaction() as session:

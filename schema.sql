@@ -85,3 +85,13 @@ CREATE TABLE ai_generation_usage (
         CHECK (generation_count >= 0),
     UNIQUE (user_id, generation_date)
 );
+
+CREATE TABLE invite_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL UNIQUE,
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TEXT NOT NULL,
+    used_by INTEGER REFERENCES users(id),
+    used_at TEXT
+);

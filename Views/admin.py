@@ -4,6 +4,7 @@ from flask import Blueprint, current_app, flash, jsonify, redirect, render_templ
 
 from csrf import validate_csrf_token
 from Services.ai_quota_service import ai_quota_service
+from Services.invite_code_service import invite_code_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_service import vocabulary_service
 
@@ -69,7 +70,12 @@ def page_admin_required(route_function):
 @admin_bp.route("/admin", methods=["GET"])
 @page_admin_required
 def admin_page():
+    acting_user = current_user()
     users, error = user_service.list_users(session["user_id"])
+    if error:
+        flash(error)
+        return redirect("/vocabulary")
+    invite_codes, error = invite_code_service.list_invite_codes(acting_user)
     if error:
         flash(error)
         return redirect("/vocabulary")
@@ -80,7 +86,7 @@ def admin_page():
         user["ai_generation_quota"] = (
             None if user["account_category"] == ACCOUNT_CATEGORY_ADMIN else trusted_quota
         )
-    return render_template("admin.html", users=users)
+    return render_template("admin.html", users=users, invite_codes=invite_codes)
 
 
 @admin_bp.route("/admin/users/<int:user_id>/category", methods=["POST"])
@@ -158,4 +164,21 @@ def reset_user_ai_quota(user_id):
             }
         )
     flash(f"Reset AI quota for {target_user['username']}.")
+    return redirect("/admin")
+
+
+@admin_bp.route("/admin/invite-codes", methods=["POST"])
+@admin_required
+@csrf_required
+def create_invite_code():
+    invite_code, error = invite_code_service.create_invite_code(current_user())
+    if error:
+        if request.is_json:
+            return jsonify({"error": error}), 403
+        flash(error)
+        return redirect("/admin")
+
+    if request.is_json:
+        return jsonify(invite_code), 201
+    flash(f"Created invite code {invite_code['code']}.")
     return redirect("/admin")

@@ -1,21 +1,62 @@
 from sqlite3 import IntegrityError
+from datetime import datetime, timezone
 
 import db
 
 
 class UserRepository:
-    def create_user(self, username, password_hash, account_category="basic"):
+    def create_user_with_invite_code(
+        self,
+        username,
+        password_hash,
+        invite_code,
+        account_category="basic",
+    ):
+        now = datetime.now(timezone.utc).isoformat()
+        connection = db.get_connection()
         try:
-            cursor = db.execute(
+            invite_rows = connection.execute(
+                """
+                SELECT id
+                FROM invite_codes
+                WHERE code = ?
+                    AND used_by IS NULL
+                    AND expires_at > ?
+                """,
+                [invite_code, now],
+            ).fetchall()
+            if not invite_rows:
+                connection.rollback()
+                return None, "Invite code is invalid or expired"
+
+            cursor = connection.execute(
                 """
                 INSERT INTO users (username, password_hash, account_category)
                 VALUES (?, ?, ?)
                 """,
                 [username, password_hash, account_category],
             )
-            return cursor.lastrowid
+            user_id = cursor.lastrowid
+            cursor = connection.execute(
+                """
+                UPDATE invite_codes
+                SET used_by = ?, used_at = ?
+                WHERE id = ? AND used_by IS NULL
+                """,
+                [user_id, now, invite_rows[0]["id"]],
+            )
+            if cursor.rowcount == 0:
+                connection.rollback()
+                return None, "Invite code is invalid or expired"
+
+            connection.commit()
+            return user_id, None
         except IntegrityError:
-            return None
+            connection.rollback()
+            return None, "User id already exists"
+        except Exception:
+            connection.rollback()
+            raise
 
     def find_by_username(self, username):
         result = db.query(

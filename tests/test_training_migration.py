@@ -2,9 +2,11 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 
 import db
 from app import create_app
+from csrf import CSRF_SESSION_KEY
 
 
 OLD_TRAINING_SCHEMA = """
@@ -92,6 +94,8 @@ class TrainingMigrationTestCase(unittest.TestCase):
                 "migrations/001_training_quiz.sql",
                 "migrations/002_user_account_categories.sql",
                 "migrations/003_ai_generation_usage.sql",
+                "migrations/004_invite_codes.sql",
+                "migrations/005_invite_code_usage.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())
@@ -100,9 +104,33 @@ class TrainingMigrationTestCase(unittest.TestCase):
             connection.close()
 
     def _login_user(self):
+        with self.app.app_context():
+            cursor = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["invite_issuer", "not-used", "admin"],
+            )
+            db.execute(
+                """
+                INSERT INTO invite_codes (code, created_by, expires_at)
+                VALUES (?, ?, ?)
+                """,
+                [
+                    "migration-test-invite",
+                    cursor.lastrowid,
+                    (datetime.now(timezone.utc) + timedelta(days=5)).isoformat(),
+                ],
+            )
         self.client.post(
             "/register",
-            json={"username": "tuomo", "password": "safe-password"},
+            json={
+                "username": "tuomo",
+                "password": "safe-password",
+                "invite_code": "migration-test-invite",
+            },
+            headers=self.registration_csrf_headers(),
         )
         with self.app.app_context():
             db.execute(
@@ -113,6 +141,11 @@ class TrainingMigrationTestCase(unittest.TestCase):
                 """,
                 ["trusted", "tuomo"],
             )
+
+    def registration_csrf_headers(self):
+        with self.client.session_transaction() as session:
+            session[CSRF_SESSION_KEY] = "test-registration-csrf-token"
+        return {"X-CSRF-Token": "test-registration-csrf-token"}
 
     def _create_vocab(self, word):
         response = self.client.post(
@@ -204,6 +237,8 @@ class TrainingMigrationLegacySessionTestCase(unittest.TestCase):
                 "migrations/001_training_quiz.sql",
                 "migrations/002_user_account_categories.sql",
                 "migrations/003_ai_generation_usage.sql",
+                "migrations/004_invite_codes.sql",
+                "migrations/005_invite_code_usage.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())

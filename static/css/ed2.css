@@ -173,6 +173,18 @@ button[type="submit"]:hover {
     background: var(--color-surface);
 }
 
+.button-small {
+    min-height: 30px;
+    padding: 4px 10px;
+    margin-bottom: 0;
+    font-size: 0.9rem;
+}
+
+.copy-status {
+    min-width: 48px;
+    font-size: 0.9rem;
+}
+
 .messages,
 .status-line {
     padding: 10px 12px;

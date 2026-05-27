@@ -8,6 +8,44 @@
     </div>
 </div>
 
+<section class="admin-section">
+    <div class="section-heading">
+        <h2>Invite codes</h2>
+        <form action="/admin/invite-codes" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit">Generate invite code</button>
+        </form>
+    </div>
+    <div class="entry-list">
+        {% for invite_code in invite_codes %}
+            <div class="entry-row">
+                <div class="entry-main">
+                    <div class="entry-heading">
+                        <strong class="entry-word">{{ invite_code.code }}</strong>
+                        <button
+                            class="button-secondary button-small copy-code-button"
+                            type="button"
+                            data-code="{{ invite_code.code }}"
+                        >
+                            Copy
+                        </button>
+                        <span class="copy-status muted" aria-live="polite"></span>
+                    </div>
+                    <p class="entry-definition">
+                        Valid until {{ invite_code.expires_at }}.
+                        Created by {{ invite_code.created_by_username }}.
+                        {% if invite_code.used_by_username %}
+                            Used by {{ invite_code.used_by_username }}.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        {% else %}
+            <p class="muted">No invite codes yet.</p>
+        {% endfor %}
+    </div>
+</section>
+
 <div class="entry-list">
     {% for user in users %}
         <div class="entry-row">
@@ -56,4 +94,35 @@
         </div>
     {% endfor %}
 </div>
+
+<script>
+document.querySelectorAll(".copy-code-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+        const code = button.dataset.code;
+        const status = button.parentElement.querySelector(".copy-status");
+
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(code);
+            } else {
+                const input = document.createElement("textarea");
+                input.value = code;
+                input.setAttribute("readonly", "");
+                input.style.position = "fixed";
+                input.style.opacity = "0";
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand("copy");
+                document.body.removeChild(input);
+            }
+            status.textContent = "Copied";
+            window.setTimeout(() => {
+                status.textContent = "";
+            }, 1800);
+        } catch (error) {
+            status.textContent = "Copy failed";
+        }
+    });
+});
+</script>
 {% endblock %}

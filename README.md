@@ -101,4 +101,7 @@ If you already have an older local `database.db`, back it up before applying sch
 ```bash
 sqlite3 database.db ".read migrations/001_training_quiz.sql"
 sqlite3 database.db ".read migrations/002_user_account_categories.sql"
+sqlite3 database.db ".read migrations/003_ai_generation_usage.sql"
+sqlite3 database.db ".read migrations/004_invite_codes.sql"
+sqlite3 database.db ".read migrations/005_invite_code_usage.sql"
 ```

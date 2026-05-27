@@ -43,25 +43,29 @@ class UserService:
             return "Password must be at least 4 characters"
         return None
 
-    def register(self, username, password):
+    def register(self, username, password, invite_code=None):
         username = (username or "").strip()
+        invite_code = (invite_code or "").strip()
         username_error = self.validate_username(username)
         if username_error:
             return None, username_error
+
+        if not invite_code:
+            return None, "Invite code is required"
 
         password_error = self.validate_password(username, password)
         if password_error:
             return None, password_error
 
-        if self._user_repository.user_exists(username):
-            return None, "User id already exists"
-
         password_hash = generate_password_hash(password)
-        user_id = self._user_repository.create_user(
+        user_id, error = self._user_repository.create_user_with_invite_code(
             username,
             password_hash,
+            invite_code,
             ACCOUNT_CATEGORY_BASIC,
         )
+        if error:
+            return None, error
         if user_id is None:
             return None, "User id already exists"
         return user_id, None

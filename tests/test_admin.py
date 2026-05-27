@@ -1,9 +1,11 @@
 import os
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 
 import db
 from app import create_app
+from csrf import CSRF_SESSION_KEY
 from db import init_db
 
 
@@ -25,9 +27,15 @@ class AdminTestCase(unittest.TestCase):
         os.unlink(self.database_file.name)
 
     def register(self, username):
+        invite_code = self.create_invite_code()
         return self.client.post(
             "/register",
-            json={"username": username, "password": "safe-password"},
+            json={
+                "username": username,
+                "password": "safe-password",
+                "invite_code": invite_code,
+            },
+            headers=self.registration_csrf_headers(),
         )
 
     def create_admin(self, username="tuomo"):
@@ -48,6 +56,34 @@ class AdminTestCase(unittest.TestCase):
             "/login",
             json={"username": username, "password": "safe-password"},
         )
+
+    def registration_csrf_headers(self):
+        with self.client.session_transaction() as session:
+            session[CSRF_SESSION_KEY] = "test-registration-csrf-token"
+        return {"X-CSRF-Token": "test-registration-csrf-token"}
+
+    def invite_creator_id(self):
+        with self.app.app_context():
+            rows = db.query("SELECT id FROM users ORDER BY id LIMIT 1")
+            if rows:
+                return rows[0]["id"]
+            self.create_admin("invite_issuer")
+            return db.query("SELECT id FROM users WHERE username = ?", ["invite_issuer"])[0]["id"]
+
+    def create_invite_code(self):
+        expires_at = datetime.now(timezone.utc) + timedelta(days=5)
+        creator_id = self.invite_creator_id()
+        with self.app.app_context():
+            count = db.query("SELECT COUNT(*) AS count FROM invite_codes")[0]["count"]
+            code = f"test-invite-code-{count + 1}"
+            db.execute(
+                """
+                INSERT INTO invite_codes (code, created_by, expires_at)
+                VALUES (?, ?, ?)
+                """,
+                [code, creator_id, expires_at.isoformat()],
+            )
+        return code
 
     def logout(self):
         self.client.post("/logout", json={})
@@ -108,6 +144,17 @@ class AdminTestCase(unittest.TestCase):
             return 0
         return rows[0]["generation_count"]
 
+    def invite_codes(self):
+        with self.app.app_context():
+            rows = db.query(
+                """
+                SELECT code, created_by, expires_at
+                FROM invite_codes
+                ORDER BY id
+                """
+            )
+        return [dict(row) for row in rows]
+
     def test_admin_page_requires_admin(self):
         self.register("anna")
 
@@ -130,6 +177,62 @@ class AdminTestCase(unittest.TestCase):
         self.assertIn(b"AI generations today:", response.data)
         self.assertIn(b"7 / 20", response.data)
         self.assertIn(b"0 / unlimited", response.data)
+
+    def test_admin_page_shows_invite_codes(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        self.client.post(
+            "/admin/invite-codes",
+            json={},
+            headers=self.csrf_headers(),
+        )
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Invite codes", response.data)
+        self.assertIn(self.invite_codes()[0]["code"].encode(), response.data)
+
+    def test_admin_can_generate_invite_code_valid_for_five_days(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post(
+            "/admin/invite-codes",
+            json={},
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 201)
+        body = response.get_json()
+        self.assertGreaterEqual(len(body["code"]), 24)
+        expires_at = datetime.fromisoformat(body["expires_at"])
+        expected_expiry = datetime.now(timezone.utc) + timedelta(days=5)
+        self.assertLess(abs(expires_at - expected_expiry), timedelta(seconds=5))
+        self.assertEqual(self.invite_codes()[0]["code"], body["code"])
+
+    def test_basic_user_cannot_generate_invite_code(self):
+        self.register("anna")
+        invite_code_count = len(self.invite_codes())
+
+        response = self.client.post("/admin/invite-codes", json={})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Admin account is required")
+        self.assertEqual(len(self.invite_codes()), invite_code_count)
+
+    def test_admin_generate_invite_code_rejects_missing_csrf_token(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post("/admin/invite-codes", json={})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
+        self.assertEqual(self.invite_codes(), [])
 
     def test_admin_can_promote_basic_user_to_trusted(self):
         self.create_admin("tuomo")
