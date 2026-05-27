@@ -16,14 +16,15 @@ This version is almost entirely written using Open AI Codex.
 * Graphical look and feel
 * Handling for user levels
 * Admin cockpit with possiblity to remove user and users vocabs
+* google login option
+* invite code functionality
 
 
 # to-do's
 * Final look and feel + eruditeEdge 2 logos etc
 * Hardening for internet use
 * Possibility to create issues / improvement ideas
-* CAPTCHA
-* google and apple login options
+
 
 
 # installation
@@ -56,6 +57,8 @@ SECRET_KEY=replace-with-a-local-secret
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-4.1-mini
 TRUSTED_AI_DAILY_QUOTA=20
+GOOGLE_CLIENT_ID=your-google-oauth-client-id
+GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
 ```
 
 `OPENAI_API_KEY` is only needed for AI vocabulary generation. The rest of the app works without it.
@@ -104,4 +107,5 @@ sqlite3 database.db ".read migrations/002_user_account_categories.sql"
 sqlite3 database.db ".read migrations/003_ai_generation_usage.sql"
 sqlite3 database.db ".read migrations/004_invite_codes.sql"
 sqlite3 database.db ".read migrations/005_invite_code_usage.sql"
+sqlite3 database.db ".read migrations/006_google_registration.sql"
 ```

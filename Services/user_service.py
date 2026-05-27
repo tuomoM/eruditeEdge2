@@ -1,4 +1,5 @@
 import re
+import secrets
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -6,6 +7,7 @@ from Repositories.user_repository import user_repository as default_user_reposit
 
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
+USERNAME_CHARACTER_PATTERN = re.compile(r"[^A-Za-z0-9_]+")
 ACCOUNT_CATEGORY_BASIC = "basic"
 ACCOUNT_CATEGORY_TRUSTED = "trusted"
 ACCOUNT_CATEGORY_ADMIN = "admin"
@@ -70,6 +72,33 @@ class UserService:
             return None, "User id already exists"
         return user_id, None
 
+    def register_google_user(self, google_user, invite_code):
+        invite_code = (invite_code or "").strip()
+        if not invite_code:
+            return None, "Invite code is required"
+
+        google_sub = (google_user.get("sub") or "").strip()
+        google_email = (google_user.get("email") or "").strip().lower()
+        if not google_sub or not google_email or not google_user.get("email_verified"):
+            return None, "Google account email could not be verified"
+
+        if self._user_repository.find_by_google_sub(google_sub):
+            return None, "Google account is already registered"
+
+        username = self._username_from_google_email(google_email)
+        password_hash = generate_password_hash(secrets.token_urlsafe(32))
+        user_id, error = self._user_repository.create_user_with_invite_code(
+            username,
+            password_hash,
+            invite_code,
+            ACCOUNT_CATEGORY_BASIC,
+            google_sub,
+            google_email,
+        )
+        if error:
+            return None, error
+        return user_id, None
+
     def login(self, username, password):
         username = (username or "").strip()
         username_error = self.validate_username(username)
@@ -82,6 +111,24 @@ class UserService:
         if user and check_password_hash(user["password_hash"], password):
             return user["id"], None
         return None, "Incorrect user id or password"
+
+    def login_google_user(self, google_user):
+        google_sub = (google_user.get("sub") or "").strip()
+        google_email = (google_user.get("email") or "").strip().lower()
+        if not google_sub or not google_email or not google_user.get("email_verified"):
+            return None, "Google account email could not be verified"
+
+        user = self._user_repository.find_by_google_sub(google_sub)
+        if not user:
+            return None, "Google account is not registered"
+        return user["id"], None
+
+    def _username_from_google_email(self, email):
+        local_part = email.split("@", 1)[0]
+        username = USERNAME_CHARACTER_PATTERN.sub("_", local_part).strip("_")
+        if len(username) < 2:
+            username = f"user_{username}"
+        return username[:40]
 
     def get_user(self, user_id):
         return self._user_repository.find_by_id(user_id)

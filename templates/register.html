@@ -2,6 +2,19 @@
 
 {% block content %}
 <h1>Register</h1>
+{% if google_registration_enabled %}
+    <form action="/register/google" method="post" class="google-register-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field field-wide">
+            <label for="google_invite_code">Invite code</label><br>
+            <input id="google_invite_code" name="invite_code" value="{{ invite_code or '' }}" required>
+        </div>
+        <div class="actions">
+            <button type="submit">Register with Google</button>
+        </div>
+    </form>
+{% endif %}
+
 <form action="/register" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="field field-wide">

@@ -96,6 +96,7 @@ class TrainingMigrationTestCase(unittest.TestCase):
                 "migrations/003_ai_generation_usage.sql",
                 "migrations/004_invite_codes.sql",
                 "migrations/005_invite_code_usage.sql",
+                "migrations/006_google_registration.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())
@@ -239,6 +240,7 @@ class TrainingMigrationLegacySessionTestCase(unittest.TestCase):
                 "migrations/003_ai_generation_usage.sql",
                 "migrations/004_invite_codes.sql",
                 "migrations/005_invite_code_usage.sql",
+                "migrations/006_google_registration.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())

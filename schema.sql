@@ -4,6 +4,8 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     account_category TEXT NOT NULL DEFAULT 'basic'
         CHECK (account_category IN ('basic', 'trusted', 'admin')),
+    google_sub TEXT UNIQUE,
+    google_email TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

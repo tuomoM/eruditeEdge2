@@ -2,6 +2,15 @@
 
 {% block content %}
 <h1>Log in</h1>
+{% if google_login_enabled %}
+    <form action="/login/google" method="post" class="google-login-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="actions">
+            <button type="submit">Log in with Google</button>
+        </div>
+    </form>
+{% endif %}
+
 <form action="/login" method="post">
     <div class="field field-wide">
         <label for="username">User id</label><br>

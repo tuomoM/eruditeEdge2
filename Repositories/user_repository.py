@@ -11,6 +11,8 @@ class UserRepository:
         password_hash,
         invite_code,
         account_category="basic",
+        google_sub=None,
+        google_email=None,
     ):
         now = datetime.now(timezone.utc).isoformat()
         connection = db.get_connection()
@@ -31,10 +33,17 @@ class UserRepository:
 
             cursor = connection.execute(
                 """
-                INSERT INTO users (username, password_hash, account_category)
-                VALUES (?, ?, ?)
+                INSERT INTO users
+                    (
+                        username,
+                        password_hash,
+                        account_category,
+                        google_sub,
+                        google_email
+                    )
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                [username, password_hash, account_category],
+                [username, password_hash, account_category, google_sub, google_email],
             )
             user_id = cursor.lastrowid
             cursor = connection.execute(
@@ -79,6 +88,19 @@ class UserRepository:
             WHERE id = ?
             """,
             [user_id],
+        )
+        if result:
+            return result[0]
+        return None
+
+    def find_by_google_sub(self, google_sub):
+        result = db.query(
+            """
+            SELECT id, username, password_hash, account_category, google_sub, google_email
+            FROM users
+            WHERE google_sub = ?
+            """,
+            [google_sub],
         )
         if result:
             return result[0]
