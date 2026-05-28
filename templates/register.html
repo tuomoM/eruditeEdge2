@@ -10,7 +10,10 @@
             <input id="google_invite_code" name="invite_code" value="{{ invite_code or '' }}" required>
         </div>
         <div class="actions">
-            <button type="submit">Register with Google</button>
+            <button class="google-auth-button" type="submit">
+                <span class="google-mark" aria-hidden="true">G</span>
+                Register with Google
+            </button>
         </div>
     </form>
 {% endif %}
@@ -30,7 +33,7 @@
         <input id="invite_code" name="invite_code" value="{{ invite_code or '' }}" required>
     </div>
     <div class="actions">
-        <button type="submit">Create account</button>
+        <button class="button-primary" type="submit">Create account</button>
         <a class="button button-secondary" href="/login">Log in</a>
     </div>
 </form>

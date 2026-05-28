@@ -43,6 +43,7 @@ class InviteCodeRepository:
                 FROM invite_codes
                 JOIN users ON users.id = invite_codes.created_by
                 LEFT JOIN users AS used_users ON used_users.id = invite_codes.used_by
+                WHERE invite_codes.used_by IS NULL
                 ORDER BY invite_codes.created_at DESC, invite_codes.id DESC
                 """
             )

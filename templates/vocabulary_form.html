@@ -7,14 +7,17 @@
 <form method="post" id="vocabulary-form">
     <div class="field field-wide">
         <label for="word">Word</label><br>
-        <input id="word" name="word" value="{{ entry.word if entry else '' }}" required>
+        <input id="word" name="word" value="{{ entry.word if entry else (prefill_word if prefill_word is defined else '') }}" required>
     </div>
 
     {% if not is_edit %}
         <div class="ai-panel">
             <div class="ai-actions">
-                <button class="button-secondary" type="button" id="generate-button">Generate with AI</button>
-                <button class="button-secondary" type="button" id="check-ai-button">Check AI setup</button>
+                <button class="ai-generate-button" type="button" id="generate-button">
+                    <span class="ai-sparkle" aria-hidden="true">✦</span>
+                    Generate with AI
+                </button>
+                <button class="ai-check-button button-secondary" type="button" id="check-ai-button">Check AI setup</button>
             </div>
             <span id="generate-status" class="ai-status muted" aria-live="polite"></span>
         </div>
@@ -43,7 +46,7 @@
     </div>
 
     <div class="actions">
-        <button type="submit">Save</button>
+        <button class="button-primary" type="submit">Save</button>
         <a class="button button-secondary" href="/vocabulary">Cancel</a>
     </div>
 </form>
@@ -78,10 +81,13 @@ document.getElementById("check-ai-button").addEventListener("click", async () =>
 });
 
 document.getElementById("generate-button").addEventListener("click", async () => {
+    const generateButton = document.getElementById("generate-button");
     const status = document.getElementById("generate-status");
     const word = document.getElementById("word").value;
     const csrfToken = "{{ csrf_token() }}";
     status.textContent = "Generating...";
+    generateButton.disabled = true;
+    generateButton.setAttribute("aria-busy", "true");
 
     let response;
     let data;
@@ -97,10 +103,14 @@ document.getElementById("generate-button").addEventListener("click", async () =>
         data = await readJson(response);
         if (!response.ok) {
             status.textContent = data.error || "Generation failed";
+            generateButton.disabled = false;
+            generateButton.removeAttribute("aria-busy");
             return;
         }
     } catch (error) {
         status.textContent = `Generation request failed: ${error.name}`;
+        generateButton.disabled = false;
+        generateButton.removeAttribute("aria-busy");
         return;
     }
 
@@ -109,6 +119,8 @@ document.getElementById("generate-button").addEventListener("click", async () =>
     document.getElementById("synonyms").value = (data.synonyms || []).join(", ");
     document.getElementById("examples").value = (data.examples || []).join("\n");
     status.textContent = "Filled";
+    generateButton.disabled = false;
+    generateButton.removeAttribute("aria-busy");
 });
 </script>
 {% endif %}

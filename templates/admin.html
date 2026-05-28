@@ -13,7 +13,7 @@
         <h2>Invite codes</h2>
         <form action="/admin/invite-codes" method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit">Generate invite code</button>
+            <button class="button-primary" type="submit">Generate invite code</button>
         </form>
     </div>
     <div class="entry-list">
@@ -64,7 +64,7 @@
                 <div class="actions">
                     <form action="/admin/access-requests/{{ access_request.id }}/delete" method="post">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="button-secondary" type="submit">Delete</button>
+                        <button class="button-danger button-compact" type="submit">Delete</button>
                     </form>
                 </div>
             </div>
@@ -100,23 +100,23 @@
                         <form action="/admin/users/{{ user.id }}/category" method="post">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="account_category" value="trusted">
-                            <button type="submit">Make trusted</button>
+                            <button class="button-primary button-compact" type="submit">Make trusted</button>
                         </form>
                     {% elif user.account_category == "trusted" %}
                         <form action="/admin/users/{{ user.id }}/category" method="post">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="account_category" value="basic">
-                            <button class="button-secondary" type="submit">Make basic</button>
+                            <button class="button-secondary button-compact" type="submit">Make basic</button>
                         </form>
                     {% endif %}
                 {% endif %}
                 <form action="/admin/users/{{ user.id }}/vocabs/delete" method="post">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="button-secondary" type="submit">Remove vocabs</button>
+                    <button class="button-danger button-compact" type="submit">Remove vocabs</button>
                 </form>
                 <form action="/admin/users/{{ user.id }}/ai-quota/reset" method="post">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="button-secondary" type="submit">Reset AI quota</button>
+                    <button class="button-secondary button-compact" type="submit">Reset AI quota</button>
                 </form>
             </div>
         </div>

@@ -8,3 +8,5 @@ Project.md
 Technical setup.md
 ./agents/*
 /agents/AGENTS.md
+security-report.json
+security_audit.json

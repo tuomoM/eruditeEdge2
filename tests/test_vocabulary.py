@@ -397,6 +397,27 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Trusted account is required", response.data)
 
+    def test_search_page_add_word_link_passes_search_word(self):
+        self.login_user()
+        self.logout_user()
+        self.client.post(
+            "/login",
+            json={"username": "tuomo", "password": "safe-password"},
+        )
+
+        response = self.client.get("/vocabulary", query_string={"word": "stultify"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'href="/vocabulary/new?word=stultify"', response.data)
+
+    def test_new_vocabulary_page_prefills_word_from_search_query(self):
+        self.login_user()
+
+        response = self.client.get("/vocabulary/new", query_string={"word": "stultify"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'id="word" name="word" value="stultify"', response.data)
+
     def test_basic_user_cannot_generate_vocabulary_with_ai(self):
         self.login_user()
         self.logout_user()

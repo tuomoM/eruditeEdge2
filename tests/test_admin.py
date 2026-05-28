@@ -194,6 +194,29 @@ class AdminTestCase(unittest.TestCase):
         self.assertIn(b"Invite codes", response.data)
         self.assertIn(self.invite_codes()[0]["code"].encode(), response.data)
 
+    def test_admin_page_hides_used_invite_codes(self):
+        self.create_admin("tuomo")
+        used_code = self.create_invite_code()
+        unused_code = self.create_invite_code()
+        self.logout()
+        self.client.post(
+            "/register",
+            json={
+                "username": "anna",
+                "password": "safe-password",
+                "invite_code": used_code,
+            },
+            headers=self.registration_csrf_headers(),
+        )
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(used_code.encode(), response.data)
+        self.assertIn(unused_code.encode(), response.data)
+
     def test_admin_can_generate_invite_code_valid_for_five_days(self):
         self.create_admin("tuomo")
         self.logout()

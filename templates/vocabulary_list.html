@@ -8,16 +8,25 @@
     </div>
 </div>
 
-<form class="toolbar" action="/vocabulary" method="get">
-    <div class="field">
-        <label for="word">Search by word</label><br>
-        <input id="word" name="word" value="{{ search_word }}" placeholder="oper*, *tion, op*ion">
+<form class="toolbar vocabulary-toolbar" action="/vocabulary" method="get">
+    <div class="toolbar-search">
+        <label class="toolbar-label" for="word">Search by word</label>
+        <div class="toolbar-search-row">
+            <input id="word" name="word" value="{{ search_word }}" placeholder="oper*, *tion, op*ion">
+            <button class="button-primary" type="submit">Search</button>
+        </div>
     </div>
-    <button type="submit">Search</button>
-    <a class="button button-secondary" href="/vocabulary">Show all</a>
-    {% if session.account_category in ["trusted", "admin"] %}
-        <a class="button button-primary" href="/vocabulary/new">Add word</a>
-    {% endif %}
+    <div class="toolbar-actions">
+        <a class="button button-subtle" href="/vocabulary">Show all</a>
+        {% if session.account_category in ["trusted", "admin"] %}
+            <a
+                class="button button-secondary"
+                href="/vocabulary/new{% if search_word %}?word={{ search_word | urlencode }}{% endif %}"
+            >
+                Add word
+            </a>
+        {% endif %}
+    </div>
 </form>
 
 {% if entries %}

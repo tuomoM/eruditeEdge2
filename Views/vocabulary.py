@@ -106,7 +106,11 @@ def vocabulary_list():
 @page_vocabulary_manager_required
 def new_vocabulary():
     if request.method == "GET":
-        return render_template("vocabulary_form.html", entry=None)
+        return render_template(
+            "vocabulary_form.html",
+            entry=None,
+            prefill_word=request.args.get("word", "").strip(),
+        )
 
     entry, error = vocabulary_service.create_entry(
         form_to_entry_data(request.form),
