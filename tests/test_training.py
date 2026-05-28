@@ -288,6 +288,20 @@ class TrainingTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"2 vocabulary entries selected.", response.data)
 
+    def test_training_selection_preselects_latest_training_vocabs(self):
+        self.login_user()
+        vocabulary_ids = self.create_sample_vocabs()
+        self.create_training(vocabulary_ids[:1])
+        self.create_training([vocabulary_ids[2], vocabulary_ids[4]])
+
+        response = self.client.get("/training/select")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotRegex(html, rf'value="{vocabulary_ids[0]}"[^>]*checked')
+        self.assertRegex(html, rf'value="{vocabulary_ids[2]}"[^>]*checked')
+        self.assertRegex(html, rf'value="{vocabulary_ids[4]}"[^>]*checked')
+
     def test_five_vocabs_can_be_chosen_for_training(self):
         self.login_user()
         vocabulary_ids = self.create_sample_vocabs()

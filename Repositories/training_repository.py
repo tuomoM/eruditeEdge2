@@ -132,6 +132,36 @@ class TrainingRepository:
         ]
         return session
 
+    def get_latest_training_vocabulary_ids(self, user_id):
+        rows = db.query(
+            """
+            SELECT id
+            FROM training_sessions
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            [user_id],
+        )
+        if not rows:
+            return []
+
+        training_session_id = rows[0]["id"]
+        return [
+            row["vocabulary_id"]
+            for row in db.query(
+                """
+                SELECT training_items.vocabulary_id
+                FROM training_items
+                JOIN vocabulary_entries
+                    ON vocabulary_entries.id = training_items.vocabulary_id
+                WHERE training_items.training_session_id = ?
+                ORDER BY training_items.item_order
+                """,
+                [training_session_id],
+            )
+        ]
+
     def save_training_result(self, training_session_id, score, total, incorrect_vocabs):
         connection = db.get_connection()
         try:

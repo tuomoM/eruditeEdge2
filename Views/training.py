@@ -14,6 +14,9 @@ def select_training_vocabs():
     return render_template(
         "training_select.html",
         entries=vocabulary_service.list_entries(),
+        selected_vocabulary_ids=set(
+            training_service.get_latest_training_vocabulary_ids(session["user_id"])
+        ),
     )
 
 
@@ -39,6 +42,11 @@ def create_training():
             "training_select.html",
             entries=vocabulary_service.list_entries(),
             error=error,
+            selected_vocabulary_ids={
+                int(vocabulary_id)
+                for vocabulary_id in vocabulary_ids
+                if isinstance(vocabulary_id, str) and vocabulary_id.isdigit()
+            },
         ), 400
 
     if request.is_json:

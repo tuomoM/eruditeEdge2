@@ -112,6 +112,9 @@ class TrainingService:
     def get_training_result(self, training_session_id, user_id):
         return self._training_repository.get_training_result(training_session_id, user_id)
 
+    def get_latest_training_vocabulary_ids(self, user_id):
+        return self._training_repository.get_latest_training_vocabulary_ids(user_id)
+
     def _build_questions(self, training_session):
         vocabs_by_id = {
             vocab["vocabulary_id"]: vocab

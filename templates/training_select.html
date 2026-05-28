@@ -17,7 +17,13 @@
         <div class="entry-list">
         {% for entry in entries %}
             <label class="selectable-row">
-                <input class="training-checkbox" type="checkbox" name="vocabulary_ids" value="{{ entry.id }}">
+                <input
+                    class="training-checkbox"
+                    type="checkbox"
+                    name="vocabulary_ids"
+                    value="{{ entry.id }}"
+                    {% if entry.id in selected_vocabulary_ids %}checked{% endif %}
+                >
                 <span class="entry-main">
                     <span class="entry-heading">
                         <strong class="entry-word">{{ entry.word }}</strong>
