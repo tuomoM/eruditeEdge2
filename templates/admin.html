@@ -46,6 +46,34 @@
     </div>
 </section>
 
+<section class="admin-section">
+    <div class="section-heading">
+        <h2>Access requests</h2>
+    </div>
+    <div class="entry-list">
+        {% for access_request in access_requests %}
+            <div class="entry-row">
+                <div class="entry-main">
+                    <div class="entry-heading">
+                        <strong class="entry-word">{{ access_request.name }}</strong>
+                        <span class="meta-chip">{{ access_request.email }}</span>
+                    </div>
+                    <p class="entry-definition">{{ access_request.message }}</p>
+                    <p class="entry-definition muted">Requested {{ access_request.created_at }}</p>
+                </div>
+                <div class="actions">
+                    <form action="/admin/access-requests/{{ access_request.id }}/delete" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="button-secondary" type="submit">Delete</button>
+                    </form>
+                </div>
+            </div>
+        {% else %}
+            <p class="muted">No access requests.</p>
+        {% endfor %}
+    </div>
+</section>
+
 <div class="entry-list">
     {% for user in users %}
         <div class="entry-row">

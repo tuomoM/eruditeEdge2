@@ -3,6 +3,7 @@ from functools import wraps
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session
 
 from csrf import validate_csrf_token
+from Services.access_request_service import access_request_service
 from Services.ai_quota_service import ai_quota_service
 from Services.invite_code_service import invite_code_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
@@ -79,6 +80,10 @@ def admin_page():
     if error:
         flash(error)
         return redirect("/vocabulary")
+    access_requests, error = access_request_service.list_access_requests(acting_user)
+    if error:
+        flash(error)
+        return redirect("/vocabulary")
     usage_by_user = ai_quota_service.usage_by_user()
     trusted_quota = current_app.config["TRUSTED_AI_DAILY_QUOTA"]
     for user in users:
@@ -86,7 +91,12 @@ def admin_page():
         user["ai_generation_quota"] = (
             None if user["account_category"] == ACCOUNT_CATEGORY_ADMIN else trusted_quota
         )
-    return render_template("admin.html", users=users, invite_codes=invite_codes)
+    return render_template(
+        "admin.html",
+        users=users,
+        invite_codes=invite_codes,
+        access_requests=access_requests,
+    )
 
 
 @admin_bp.route("/admin/users/<int:user_id>/category", methods=["POST"])
@@ -181,4 +191,25 @@ def create_invite_code():
     if request.is_json:
         return jsonify(invite_code), 201
     flash(f"Created invite code {invite_code['code']}.")
+    return redirect("/admin")
+
+
+@admin_bp.route("/admin/access-requests/<int:access_request_id>/delete", methods=["POST"])
+@admin_required
+@csrf_required
+def delete_access_request(access_request_id):
+    deleted, error = access_request_service.delete_access_request(
+        current_user(),
+        access_request_id,
+    )
+    if error:
+        status_code = 404 if error == "Access request was not found" else 403
+        if request.is_json:
+            return jsonify({"error": error}), status_code
+        flash(error)
+        return redirect("/admin")
+
+    if request.is_json:
+        return jsonify({"id": access_request_id, "deleted": deleted})
+    flash("Deleted access request.")
     return redirect("/admin")

@@ -97,3 +97,12 @@ CREATE TABLE invite_codes (
     used_by INTEGER REFERENCES users(id),
     used_at TEXT
 );
+
+CREATE TABLE access_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    message TEXT NOT NULL,
+    ip_address TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

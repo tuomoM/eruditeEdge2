@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Request access</h1>
+        <div class="result-count">Tell the admin who you are.</div>
+    </div>
+</div>
+
+<form class="form-panel" action="/access-request" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="honeypot-field" aria-hidden="true">
+        <label for="website">Website</label>
+        <input id="website" name="website" tabindex="-1" autocomplete="off">
+    </div>
+
+    <div class="field">
+        <label for="name">Name</label>
+        <input id="name" name="name" value="{{ name }}" required maxlength="100">
+    </div>
+
+    <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" value="{{ email }}" required maxlength="256">
+    </div>
+
+    <div class="field">
+        <label for="message">Free text</label>
+        <textarea id="message" name="message" rows="6" required maxlength="1000">{{ message }}</textarea>
+    </div>
+
+    <div class="actions">
+        <button type="submit">Send request</button>
+        <a class="button-secondary" href="/login">Cancel</a>
+    </div>
+</form>
+{% endblock %}

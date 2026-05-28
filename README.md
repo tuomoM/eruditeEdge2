@@ -18,6 +18,7 @@ This version is almost entirely written using Open AI Codex.
 * Admin cockpit with possiblity to remove user and users vocabs
 * google login option
 * invite code functionality
+* ability for a user candidate to ask for invite code
 
 
 # to-do's
@@ -108,4 +109,7 @@ sqlite3 database.db ".read migrations/003_ai_generation_usage.sql"
 sqlite3 database.db ".read migrations/004_invite_codes.sql"
 sqlite3 database.db ".read migrations/005_invite_code_usage.sql"
 sqlite3 database.db ".read migrations/006_google_registration.sql"
+sqlite3 database.db ".read migrations/007_access_requests.sql"
+sqlite3 database.db ".read migrations/008_access_request_guardrails.sql"
+sqlite3 database.db ".read migrations/009_access_request_unique_email.sql"
 ```

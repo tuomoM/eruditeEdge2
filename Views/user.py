@@ -1,6 +1,7 @@
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 
 from csrf import validate_csrf_token
+from Services.access_request_service import access_request_service
 from Services.google_oauth_service import google_oauth_service
 from Services.user_service import user_service
 
@@ -37,6 +38,15 @@ def login_template(username=""):
         "login.html",
         username=username,
         google_login_enabled=google_registration_enabled(),
+    )
+
+
+def access_request_template(name="", email="", message=""):
+    return render_template(
+        "access_request.html",
+        name=name,
+        email=email,
+        message=message,
     )
 
 
@@ -83,6 +93,43 @@ def register():
             "account_category": session["account_category"],
         }
     ), 201
+
+
+@user_bp.route("/access-request", methods=["GET", "POST"])
+def access_request():
+    if request.method == "GET":
+        return access_request_template()
+
+    data = request.get_json(silent=True) or request.form
+    csrf_error = validate_csrf_token()
+    if csrf_error:
+        if request.is_json:
+            return csrf_error
+        flash("Invalid CSRF token")
+        return access_request_template(
+            name=data.get("name", ""),
+            email=data.get("email", ""),
+            message=data.get("message", ""),
+        ), 400
+
+    created_request, error = access_request_service.create_access_request(
+        data,
+        request.remote_addr,
+    )
+    if error:
+        if request.is_json:
+            return jsonify({"error": error}), 400
+        flash(error)
+        return access_request_template(
+            name=data.get("name", ""),
+            email=data.get("email", ""),
+            message=data.get("message", ""),
+        ), 400
+
+    if request.is_json:
+        return jsonify(created_request), 201
+    flash("Access request sent.")
+    return redirect("/login")
 
 
 @user_bp.route("/register/google", methods=["POST"])

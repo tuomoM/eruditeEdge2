@@ -235,6 +235,14 @@ button[type="submit"]:hover {
     margin-bottom: var(--space-lg);
 }
 
+.honeypot-field {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
 .field-wide {
     max-width: 760px;
 }
