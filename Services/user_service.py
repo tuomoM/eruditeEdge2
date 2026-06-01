@@ -164,6 +164,9 @@ class UserService:
 
     def create_admin(self, username, password):
         username = (username or "").strip()
+        if self._user_repository.admin_exists():
+            return None, "Admin user already exists"
+
         username_error = self.validate_username(username)
         if username_error:
             return None, username_error
@@ -183,6 +186,35 @@ class UserService:
         if user_id is None:
             return None, "User id already exists"
         return self._user_repository.find_by_id(user_id), None
+
+    def rotate_admin(self, current_admin_username, current_admin_password, new_admin_username):
+        current_admin_username = (current_admin_username or "").strip()
+        new_admin_username = (new_admin_username or "").strip()
+        if current_admin_username == new_admin_username:
+            return None, "New admin must be a different user"
+
+        current_admin = self._user_repository.find_by_username(current_admin_username)
+        if (
+            not current_admin
+            or current_admin["account_category"] != ACCOUNT_CATEGORY_ADMIN
+            or not current_admin_password
+            or not check_password_hash(current_admin["password_hash"], current_admin_password)
+        ):
+            return None, "Admin credentials are invalid"
+
+        new_admin = self._user_repository.find_by_username(new_admin_username)
+        if not new_admin:
+            return None, "Trusted user was not found"
+        if new_admin["account_category"] != ACCOUNT_CATEGORY_TRUSTED:
+            return None, "New admin must be a trusted user"
+
+        rotated = self._user_repository.rotate_admin(
+            current_admin["id"],
+            new_admin["id"],
+        )
+        if not rotated:
+            return None, "Admin rotation failed"
+        return self._user_repository.find_by_id(new_admin["id"]), None
 
 
 user_service = UserService()

@@ -9,6 +9,7 @@ from app import create_app
 from csrf import CSRF_SESSION_KEY
 from db import init_db
 from Services.user_service import user_service
+from werkzeug.security import generate_password_hash
 
 
 class AuthTestCase(unittest.TestCase):
@@ -66,6 +67,16 @@ class AuthTestCase(unittest.TestCase):
             row["username"]: row["account_category"]
             for row in rows
         }
+
+    def create_trusted_user_directly(self, username):
+        with self.app.app_context():
+            db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                [username, generate_password_hash("safe-password"), "trusted"],
+            )
 
     def invite_creator_id(self):
         with self.app.app_context():
@@ -712,9 +723,9 @@ class AuthTestCase(unittest.TestCase):
 
         self.assertEqual(rows[0]["account_category"], "basic")
 
-    def test_create_admin_command_creates_new_admin_and_demotes_existing_admins(self):
+    def test_create_admin_command_aborts_when_admin_already_exists(self):
         runner = self.app.test_cli_runner()
-        runner.invoke(
+        first_result = runner.invoke(
             args=[
                 "create-admin",
                 "--username",
@@ -735,28 +746,19 @@ class AuthTestCase(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(result.exit_code, 0)
-        self.assertIn("Created admin user 'mika'", result.output)
+        self.assertEqual(first_result.exit_code, 0)
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Admin user already exists", result.output)
         self.assertEqual(
             self.user_categories(),
             {
                 "anna": "basic",
-                "mika": "admin",
-                "tuomo": "trusted",
+                "tuomo": "admin",
             },
         )
 
-    def test_create_admin_command_rejects_existing_username_without_demoting_admins(self):
+    def test_create_admin_command_aborts_before_replacing_existing_admin(self):
         runner = self.app.test_cli_runner()
-        runner.invoke(
-            args=[
-                "create-admin",
-                "--username",
-                "tuomo",
-                "--password",
-                "safe-password",
-            ]
-        )
         self.register("anna", "safe-password")
 
         result = runner.invoke(
@@ -770,10 +772,128 @@ class AuthTestCase(unittest.TestCase):
         )
 
         self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Admin user already exists", result.output)
         self.assertEqual(
             self.user_categories(),
             {
                 "anna": "basic",
+                "invite_issuer": "admin",
+            },
+        )
+
+    def test_rotate_admin_command_requires_env_allowance(self):
+        runner = self.app.test_cli_runner()
+
+        result = runner.invoke(args=["rotate-admin"])
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Admin rotation is not allowed", result.output)
+
+    def test_rotate_admin_command_rotates_admin_to_trusted_user(self):
+        self.app.config["ROTATE_ADMIN_ALLOWED"] = "YES"
+        runner = self.app.test_cli_runner()
+        runner.invoke(
+            args=[
+                "create-admin",
+                "--username",
+                "tuomo",
+                "--password",
+                "safe-password",
+            ]
+        )
+        self.create_trusted_user_directly("anna")
+
+        result = runner.invoke(
+            args=["rotate-admin"],
+            input="tuomo\nsafe-password\nanna\ny\n",
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Rotated admin role to 'anna'.", result.output)
+        self.assertEqual(
+            self.user_categories(),
+            {
+                "anna": "admin",
+                "tuomo": "trusted",
+            },
+        )
+
+    def test_rotate_admin_command_accepts_yes_confirmation(self):
+        self.app.config["ROTATE_ADMIN_ALLOWED"] = "YES"
+        runner = self.app.test_cli_runner()
+        runner.invoke(
+            args=[
+                "create-admin",
+                "--username",
+                "tuomo",
+                "--password",
+                "safe-password",
+            ]
+        )
+        self.create_trusted_user_directly("anna")
+
+        result = runner.invoke(
+            args=["rotate-admin"],
+            input="tuomo\nsafe-password\nanna\nYES\n",
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(self.user_categories()["anna"], "admin")
+
+    def test_rotate_admin_command_rejects_wrong_admin_password(self):
+        self.app.config["ROTATE_ADMIN_ALLOWED"] = "YES"
+        runner = self.app.test_cli_runner()
+        runner.invoke(
+            args=[
+                "create-admin",
+                "--username",
+                "tuomo",
+                "--password",
+                "safe-password",
+            ]
+        )
+        self.create_trusted_user_directly("anna")
+
+        result = runner.invoke(
+            args=["rotate-admin"],
+            input="tuomo\nwrong-password\nanna\ny\n",
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Admin credentials are invalid", result.output)
+        self.assertEqual(
+            self.user_categories(),
+            {
+                "anna": "trusted",
+                "tuomo": "admin",
+            },
+        )
+
+    def test_rotate_admin_command_aborts_without_confirmation(self):
+        self.app.config["ROTATE_ADMIN_ALLOWED"] = "YES"
+        runner = self.app.test_cli_runner()
+        runner.invoke(
+            args=[
+                "create-admin",
+                "--username",
+                "tuomo",
+                "--password",
+                "safe-password",
+            ]
+        )
+        self.create_trusted_user_directly("anna")
+
+        result = runner.invoke(
+            args=["rotate-admin"],
+            input="tuomo\nsafe-password\nanna\nn\n",
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Admin rotation aborted.", result.output)
+        self.assertEqual(
+            self.user_categories(),
+            {
+                "anna": "trusted",
                 "tuomo": "admin",
             },
         )

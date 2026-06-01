@@ -113,6 +113,17 @@ class UserRepository:
         result = db.query("SELECT COUNT(*) AS count FROM users")
         return result[0]["count"]
 
+    def admin_exists(self):
+        result = db.query(
+            """
+            SELECT 1
+            FROM users
+            WHERE account_category = 'admin'
+            LIMIT 1
+            """
+        )
+        return bool(result)
+
     def list_users(self):
         return [
             dict(row)
@@ -143,6 +154,34 @@ class UserRepository:
             [account_category, user_id],
         )
         return cursor.rowcount > 0
+
+    def rotate_admin(self, current_admin_id, new_admin_id):
+        connection = db.get_connection()
+        try:
+            current_cursor = connection.execute(
+                """
+                UPDATE users
+                SET account_category = 'trusted'
+                WHERE id = ? AND account_category = 'admin'
+                """,
+                [current_admin_id],
+            )
+            new_cursor = connection.execute(
+                """
+                UPDATE users
+                SET account_category = 'admin'
+                WHERE id = ? AND account_category = 'trusted'
+                """,
+                [new_admin_id],
+            )
+            if current_cursor.rowcount != 1 or new_cursor.rowcount != 1:
+                connection.rollback()
+                return False
+            connection.commit()
+            return True
+        except Exception:
+            connection.rollback()
+            raise
 
     def replace_admins_with_new_admin(self, username, password_hash):
         connection = db.get_connection()
