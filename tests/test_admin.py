@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -13,11 +14,14 @@ class AdminTestCase(unittest.TestCase):
     def setUp(self):
         self.database_file = tempfile.NamedTemporaryFile(delete=False)
         self.database_file.close()
+        self.security_report_file = tempfile.NamedTemporaryFile(delete=False)
+        self.security_report_file.close()
         self.app = create_app(
             {
                 "TESTING": True,
                 "DATABASE": self.database_file.name,
                 "SECRET_KEY": "test-secret-key",
+                "SECURITY_REPORT_PATH": self.security_report_file.name,
             }
         )
         init_db(self.app)
@@ -25,6 +29,8 @@ class AdminTestCase(unittest.TestCase):
 
     def tearDown(self):
         os.unlink(self.database_file.name)
+        if os.path.exists(self.security_report_file.name):
+            os.unlink(self.security_report_file.name)
 
     def register(self, username):
         invite_code = self.create_invite_code()
@@ -155,6 +161,10 @@ class AdminTestCase(unittest.TestCase):
             )
         return [dict(row) for row in rows]
 
+    def write_security_report(self, report):
+        with open(self.security_report_file.name, "w", encoding="utf-8") as report_file:
+            json.dump(report, report_file)
+
     def test_admin_page_requires_admin(self):
         self.register("anna")
 
@@ -193,6 +203,71 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Invite codes", response.data)
         self.assertIn(self.invite_codes()[0]["code"].encode(), response.data)
+
+    def test_admin_page_shows_clean_dependency_security_report(self):
+        self.write_security_report(
+            {
+                "dependencies": [
+                    {"name": "flask", "version": "3.1.3", "vulns": []},
+                    {"name": "werkzeug", "version": "3.1.8", "vulns": []},
+                ],
+                "fixes": [],
+            }
+        )
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Dependency security report", response.data)
+        self.assertIn(b"Last run", response.data)
+        self.assertIn(b"2 dependencies checked.", response.data)
+        self.assertIn(b"0 vulnerabilities found.", response.data)
+        self.assertIn(b"No dependency vulnerabilities", response.data)
+
+    def test_admin_page_shows_dependency_vulnerabilities(self):
+        self.write_security_report(
+            {
+                "dependencies": [
+                    {
+                        "name": "example-package",
+                        "version": "1.0.0",
+                        "vulns": [
+                            {
+                                "id": "PYSEC-2026-1",
+                                "description": "Unsafe example dependency",
+                                "fix_versions": ["1.0.1"],
+                            }
+                        ],
+                    },
+                ],
+                "fixes": [],
+            }
+        )
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"example-package", response.data)
+        self.assertIn(b"PYSEC-2026-1", response.data)
+        self.assertIn(b"Unsafe example dependency", response.data)
+        self.assertIn(b"Fix: 1.0.1", response.data)
+
+    def test_admin_page_handles_missing_dependency_security_report(self):
+        os.unlink(self.security_report_file.name)
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Security report has not been generated yet.", response.data)
 
     def test_admin_page_hides_used_invite_codes(self):
         self.create_admin("tuomo")

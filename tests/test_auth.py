@@ -135,6 +135,13 @@ class AuthTestCase(unittest.TestCase):
         self.assertIn(b"Create account", response.data)
         self.assertIn(b"Request invite code", response.data)
 
+    def test_base_template_includes_browser_tab_icon(self):
+        response = self.client.get("/account")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'rel="icon"', response.data)
+        self.assertIn(b"EE%20icon.png", response.data)
+
     def test_account_page_for_logged_in_user_shows_logout(self):
         self.register("tuomo", "safe-password")
 

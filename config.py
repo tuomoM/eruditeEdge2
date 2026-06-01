@@ -33,6 +33,10 @@ def _default_database_path():
 
 
 DATABASE = _default_database_path()
+SECURITY_REPORT_PATH = (
+    os.environ.get("SECURITY_REPORT_PATH")
+    or os.path.join(BASE_DIR, "security-report.json")
+)
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")

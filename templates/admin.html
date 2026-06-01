@@ -74,6 +74,54 @@
     </div>
 </section>
 
+<section class="admin-section">
+    <div class="section-heading">
+        <h2>Dependency security report</h2>
+    </div>
+    <div class="security-report-summary">
+        {% if security_report.last_run_at %}
+            <p class="entry-definition">Last run {{ security_report.last_run_at }}</p>
+        {% else %}
+            <p class="entry-definition">{{ security_report.message }}</p>
+        {% endif %}
+        <p class="entry-definition">
+            {{ security_report.dependency_count }} dependencies checked.
+            {{ security_report.vulnerability_count }} vulnerabilities found.
+        </p>
+    </div>
+    <div class="entry-list">
+        {% for dependency in security_report.vulnerable_dependencies %}
+            <div class="entry-row security-report-row">
+                <div class="entry-main">
+                    <div class="entry-heading">
+                        <strong class="entry-word">{{ dependency.name }}</strong>
+                        <span class="meta-chip">{{ dependency.version }}</span>
+                    </div>
+                    {% for vulnerability in dependency.vulnerabilities %}
+                        <div class="security-vulnerability">
+                            <div class="security-vulnerability-heading">
+                                <strong>{{ vulnerability.id }}</strong>
+                                {% if vulnerability.fix_versions %}
+                                    <span class="meta-chip">
+                                        Fix: {{ vulnerability.fix_versions | join(", ") }}
+                                    </span>
+                                {% endif %}
+                            </div>
+                            {% if vulnerability.description %}
+                                <p class="entry-definition">{{ vulnerability.description }}</p>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% else %}
+            {% if security_report.status == "ok" %}
+                <p class="muted">No dependency vulnerabilities in the latest report.</p>
+            {% endif %}
+        {% endfor %}
+    </div>
+</section>
+
 <div class="entry-list">
     {% for user in users %}
         <div class="entry-row">

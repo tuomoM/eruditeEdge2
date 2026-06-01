@@ -59,6 +59,7 @@ Edit `.env` and set at least:
 ```text
 SECRET_KEY=replace-with-a-local-secret
 DATABASE=
+SECURITY_REPORT_PATH=
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-4.1-mini
 TRUSTED_AI_DAILY_QUOTA=20
@@ -68,6 +69,7 @@ GOOGLE_REDIRECT_SCHEME=
 ```
 
 `OPENAI_API_KEY` is only needed for AI vocabulary generation. The rest of the app works without it. Leave `DATABASE` empty for local development unless you want to store `database.db` somewhere else.
+Leave `SECURITY_REPORT_PATH` empty to read `security-report.json` from the project root. The app only displays this file; generate it outside the app, for example with a daily cron job.
 Google OAuth callback URLs use HTTPS automatically outside localhost. Set `GOOGLE_REDIRECT_SCHEME=http` only for a local OAuth test client that explicitly needs HTTP callbacks.
 
 4. Initialize the database:

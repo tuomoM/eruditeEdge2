@@ -6,6 +6,7 @@ from csrf import validate_csrf_token
 from Services.access_request_service import access_request_service
 from Services.ai_quota_service import ai_quota_service
 from Services.invite_code_service import invite_code_service
+from Services.security_report_service import security_report_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_service import vocabulary_service
 
@@ -84,6 +85,9 @@ def admin_page():
     if error:
         flash(error)
         return redirect("/vocabulary")
+    security_report = security_report_service.read_report(
+        current_app.config["SECURITY_REPORT_PATH"],
+    )
     usage_by_user = ai_quota_service.usage_by_user()
     trusted_quota = current_app.config["TRUSTED_AI_DAILY_QUOTA"]
     for user in users:
@@ -96,6 +100,7 @@ def admin_page():
         users=users,
         invite_codes=invite_codes,
         access_requests=access_requests,
+        security_report=security_report,
     )
 
 
