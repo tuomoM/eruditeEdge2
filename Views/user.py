@@ -20,12 +20,33 @@ def google_registration_enabled():
     )
 
 
+def google_redirect_scheme():
+    configured_scheme = current_app.config.get("GOOGLE_REDIRECT_SCHEME")
+    if configured_scheme:
+        return configured_scheme
+
+    local_hosts = {"127.0.0.1", "localhost", "[::1]"}
+    host = request.host.partition(":")[0].lower()
+    if host in local_hosts:
+        return request.scheme
+
+    return "https"
+
+
 def google_redirect_uri():
-    return url_for("user.register_google_callback", _external=True)
+    return url_for(
+        "user.register_google_callback",
+        _external=True,
+        _scheme=google_redirect_scheme(),
+    )
 
 
 def google_login_redirect_uri():
-    return url_for("user.login_google_callback", _external=True)
+    return url_for(
+        "user.login_google_callback",
+        _external=True,
+        _scheme=google_redirect_scheme(),
+    )
 
 
 def login_template(username=""):

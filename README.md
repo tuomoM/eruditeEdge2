@@ -4,6 +4,9 @@
 eruditeEdge2 is a version of eruditeEdge planned to fullfil and actual need and to be run not on rapserry, but likely on a dedicated domain.
 This version is almost entirely written using Open AI Codex.
 
+# Project website
+ [eruditeEdge](https://erudite-edge.com)
+
 # Features
 
 * it is possible to register a user
@@ -22,8 +25,8 @@ This version is almost entirely written using Open AI Codex.
 
 
 # to-do's
-* Final look and feel + eruditeEdge 2 logos etc
-* Hardening for internet use
+* Possiblity to delete invite codes for admin
+* Possibility to delete users by admin
 * Possibility to create issues / improvement ideas
 
 
@@ -61,9 +64,11 @@ OPENAI_MODEL=gpt-4.1-mini
 TRUSTED_AI_DAILY_QUOTA=20
 GOOGLE_CLIENT_ID=your-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+GOOGLE_REDIRECT_SCHEME=
 ```
 
 `OPENAI_API_KEY` is only needed for AI vocabulary generation. The rest of the app works without it. Leave `DATABASE` empty for local development unless you want to store `database.db` somewhere else.
+Google OAuth callback URLs use HTTPS automatically outside localhost. Set `GOOGLE_REDIRECT_SCHEME=http` only for a local OAuth test client that explicitly needs HTTP callbacks.
 
 4. Initialize the database:
 

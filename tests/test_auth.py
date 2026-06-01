@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
 
 import db
@@ -49,8 +50,11 @@ class AuthTestCase(unittest.TestCase):
             json={"username": username, "password": password},
         )
 
-    def registration_csrf_headers(self):
-        with self.client.session_transaction() as session:
+    def registration_csrf_headers(self, base_url=None):
+        session_kwargs = {}
+        if base_url:
+            session_kwargs["base_url"] = base_url
+        with self.client.session_transaction(**session_kwargs) as session:
             session[CSRF_SESSION_KEY] = "test-registration-csrf-token"
         return {"X-CSRF-Token": "test-registration-csrf-token"}
 
@@ -319,6 +323,24 @@ class AuthTestCase(unittest.TestCase):
         self.assertIn("https://accounts.google.com/o/oauth2/v2/auth", authorization_url)
         self.assertIn("client_id=google-client-id", authorization_url)
 
+    def test_google_registration_callback_uri_uses_https_for_public_hosts(self):
+        invite_code = self.create_invite_code("google-start-https-code")
+        base_url = "http://erudite-edge.example"
+
+        response = self.client.post(
+            "/register/google",
+            json={"invite_code": invite_code},
+            headers=self.registration_csrf_headers(base_url),
+            base_url=base_url,
+        )
+
+        authorization_url = response.get_json()["authorization_url"]
+        query = parse_qs(urlparse(authorization_url).query)
+        self.assertEqual(
+            query["redirect_uri"][0],
+            "https://erudite-edge.example/register/google/callback",
+        )
+
     def test_google_registration_callback_creates_user_with_invite_code(self):
         invite_code = self.create_invite_code("google-callback-code")
         start_response = self.client.post(
@@ -540,6 +562,23 @@ class AuthTestCase(unittest.TestCase):
         authorization_url = response.get_json()["authorization_url"]
         self.assertIn("https://accounts.google.com/o/oauth2/v2/auth", authorization_url)
         self.assertIn("client_id=google-client-id", authorization_url)
+
+    def test_google_login_callback_uri_uses_https_for_public_hosts(self):
+        base_url = "http://erudite-edge.example"
+
+        response = self.client.post(
+            "/login/google",
+            json={},
+            headers=self.registration_csrf_headers(base_url),
+            base_url=base_url,
+        )
+
+        authorization_url = response.get_json()["authorization_url"]
+        query = parse_qs(urlparse(authorization_url).query)
+        self.assertEqual(
+            query["redirect_uri"][0],
+            "https://erudite-edge.example/login/google/callback",
+        )
 
     def test_google_login_callback_logs_in_existing_google_user(self):
         self.create_google_user("google-sub-login-success", "login.success@example.com")
