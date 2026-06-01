@@ -55,6 +55,7 @@ Edit `.env` and set at least:
 
 ```text
 SECRET_KEY=replace-with-a-local-secret
+DATABASE=
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-4.1-mini
 TRUSTED_AI_DAILY_QUOTA=20
@@ -62,7 +63,7 @@ GOOGLE_CLIENT_ID=your-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
 ```
 
-`OPENAI_API_KEY` is only needed for AI vocabulary generation. The rest of the app works without it.
+`OPENAI_API_KEY` is only needed for AI vocabulary generation. The rest of the app works without it. Leave `DATABASE` empty for local development unless you want to store `database.db` somewhere else.
 
 4. Initialize the database:
 
@@ -86,13 +87,27 @@ flask --app app run --port 5001
 
 Open the app at `http://127.0.0.1:5001`.
 
-7. Run tests:
+7. Check the active database path:
+
+```bash
+flask --app app check-database
+```
+
+On Railway, attach a persistent volume. If `DATABASE` is not set, the app uses `RAILWAY_VOLUME_MOUNT_PATH/database.db` automatically. You can also set `DATABASE` explicitly, for example:
+
+```text
+DATABASE=/app/data/database.db
+```
+
+The `check-database` command fails on Railway if no persistent database path is configured.
+
+8. Run tests:
 
 ```bash
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-8. Create a new admin user:
+9. Create a new admin user:
 
 ```bash
 flask --app app create-admin

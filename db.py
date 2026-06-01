@@ -1,10 +1,22 @@
+import os
 import sqlite3
 from flask import current_app, g
 
 
+def _ensure_database_directory(database_path):
+    if database_path == ":memory:":
+        return
+
+    parent_directory = os.path.dirname(database_path)
+    if parent_directory:
+        os.makedirs(parent_directory, exist_ok=True)
+
+
 def get_connection():
     if "db" not in g:
-        g.db = sqlite3.connect(current_app.config["DATABASE"])
+        database_path = current_app.config["DATABASE"]
+        _ensure_database_directory(database_path)
+        g.db = sqlite3.connect(database_path)
         g.db.execute("PRAGMA foreign_keys = ON")
         g.db.row_factory = sqlite3.Row
     return g.db

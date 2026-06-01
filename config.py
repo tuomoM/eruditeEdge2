@@ -20,7 +20,19 @@ def _load_env_file():
 
 _load_env_file()
 
-DATABASE = os.environ.get("DATABASE", os.path.join(BASE_DIR, "database.db"))
+
+def _default_database_path():
+    if os.environ.get("DATABASE"):
+        return os.environ["DATABASE"]
+
+    railway_volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    if railway_volume_path:
+        return os.path.join(railway_volume_path, "database.db")
+
+    return os.path.join(BASE_DIR, "database.db")
+
+
+DATABASE = _default_database_path()
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")

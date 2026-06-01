@@ -1,3 +1,5 @@
+import os
+
 import click
 from flask import current_app
 from flask.cli import with_appcontext
@@ -10,6 +12,7 @@ def register_cli_commands(app):
     app.cli.add_command(create_admin)
     app.cli.add_command(rotate_admin)
     app.cli.add_command(init_database)
+    app.cli.add_command(check_database)
 
 
 @click.command("create-admin")
@@ -58,3 +61,36 @@ def rotate_admin():
 def init_database():
     init_db(current_app)
     click.echo("Initialized the database.")
+
+
+@click.command("check-database")
+@with_appcontext
+def check_database():
+    click.echo(f"Database: {current_app.config['DATABASE']}")
+
+    if os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"):
+        click.echo(f"Railway volume: {os.environ['RAILWAY_VOLUME_MOUNT_PATH']}")
+        return
+
+    if os.environ.get("DATABASE"):
+        click.echo("Database path is set explicitly.")
+        return
+
+    if _is_railway_environment():
+        raise click.ClickException(
+            "Railway deployment has no persistent database path. "
+            "Attach a Railway volume or set DATABASE to a persistent path."
+        )
+
+    click.echo("No Railway volume detected; using the local database path.")
+
+
+def _is_railway_environment():
+    return any(
+        os.environ.get(key)
+        for key in (
+            "RAILWAY_ENVIRONMENT",
+            "RAILWAY_PROJECT_ID",
+            "RAILWAY_SERVICE_ID",
+        )
+    )
