@@ -188,7 +188,7 @@ class AccessRequestTestCase(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.get_json()["error"], "Access request was rejected")
+        self.assertEqual(response.get_json()["error"], "Invite code request was rejected")
         self.assertEqual(self.access_requests(), [])
 
     def test_access_request_rejects_duplicate_active_email(self):
@@ -205,7 +205,7 @@ class AccessRequestTestCase(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.get_json()["error"], "Email already has an active access request")
+        self.assertEqual(response.get_json()["error"], "Email already has an active invite code request")
         self.assertEqual(len(self.access_requests()), 1)
 
     def test_access_request_email_is_unique_at_database_layer(self):
@@ -280,7 +280,7 @@ class AccessRequestTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.get_json()["error"],
-            "Too many access requests from this IP address today",
+            "Too many invite code requests from this IP address today",
         )
         self.assertEqual(len(self.access_requests()), 3)
 
@@ -292,7 +292,7 @@ class AccessRequestTestCase(unittest.TestCase):
         response = self.client.get("/admin")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Access requests", response.data)
+        self.assertIn(b"Invite code requests", response.data)
         self.assertIn(b"Ada Lovelace", response.data)
         self.assertIn(b"ada@example.com", response.data)
         self.assertIn(b"I would like to practice vocabulary", response.data)

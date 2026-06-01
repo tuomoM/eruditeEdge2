@@ -111,6 +111,25 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.get_json()["username"], "tuomo")
 
+    def test_account_page_for_anonymous_user_shows_login_and_create_account(self):
+        response = self.client.get("/account")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Log in or create an account", response.data)
+        self.assertIn(b"Log in with Google", response.data)
+        self.assertIn(b"Create account", response.data)
+        self.assertIn(b"Request invite code", response.data)
+
+    def test_account_page_for_logged_in_user_shows_logout(self):
+        self.register("tuomo", "safe-password")
+
+        response = self.client.get("/account")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"You are logged on as tuomo.", response.data)
+        self.assertIn(b"Log out", response.data)
+        self.assertNotIn(b"Create account", response.data)
+
     def test_user_creation_requires_invite_code(self):
         response = self.client.post(
             "/register",

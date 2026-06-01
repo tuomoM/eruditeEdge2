@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% if session.user_id %}
+    <div class="account-layout account-layout-single">
+        <section class="account-section">
+            <h1>Account</h1>
+            <p class="account-note">You are logged on as {{ session.username }}.</p>
+            <form action="/logout" method="post">
+                <button class="button-primary" type="submit">Log out</button>
+            </form>
+        </section>
+    </div>
+{% else %}
+    <div class="account-header">
+        <h1>Log in or create an account</h1>
+    </div>
+
+    <div class="account-layout">
+        <section class="account-section">
+            <h2>Log in</h2>
+            <form id="account-login-form" action="/login" method="post">
+                <div class="field">
+                    <label for="login_username">User id</label>
+                    <input id="login_username" name="username" value="{{ login_username or '' }}" required>
+                </div>
+                <div class="field">
+                    <label for="login_password">Password</label>
+                    <input id="login_password" name="password" type="password" required>
+                </div>
+            </form>
+
+            <div class="actions account-actions">
+                <button class="button-primary" type="submit" form="account-login-form">Log in</button>
+                {% if google_login_enabled %}
+                    <form action="/login/google" method="post" class="inline-form google-login-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="google-auth-button" type="submit">
+                            <span class="google-mark" aria-hidden="true">G</span>
+                            Log in with Google
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="account-section">
+            <h2>Create account</h2>
+            <p class="account-note">Invite code is required for new accounts.</p>
+            <form id="account-register-form" action="/register" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="field">
+                    <label for="register_username">User id</label>
+                    <input id="register_username" name="username" value="{{ register_username or '' }}" required>
+                </div>
+                <div class="field">
+                    <label for="register_password">Password</label>
+                    <input id="register_password" name="password" type="password" required>
+                </div>
+                <div class="field">
+                    <label for="register_invite_code">Invite code</label>
+                    <input id="register_invite_code" name="invite_code" value="{{ invite_code or '' }}" required>
+                </div>
+            </form>
+
+            <div class="actions account-actions">
+                <button class="button-primary" type="submit" form="account-register-form">Create account</button>
+                <a class="button button-secondary" href="/access-request">Request invite code</a>
+            </div>
+
+            {% if google_registration_enabled %}
+                <div class="account-divider">or</div>
+                <form action="/register/google" method="post" class="google-register-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="field">
+                        <label for="google_invite_code">Invite code for Google registration</label>
+                        <input id="google_invite_code" name="invite_code" value="{{ invite_code or '' }}" required>
+                    </div>
+                    <button class="google-auth-button" type="submit">
+                        <span class="google-mark" aria-hidden="true">G</span>
+                        Register with Google
+                    </button>
+                </form>
+            {% endif %}
+        </section>
+    </div>
+{% endif %}
+{% endblock %}

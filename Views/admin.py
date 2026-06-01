@@ -203,7 +203,7 @@ def delete_access_request(access_request_id):
         access_request_id,
     )
     if error:
-        status_code = 404 if error == "Access request was not found" else 403
+        status_code = 404 if error == "Invite code request was not found" else 403
         if request.is_json:
             return jsonify({"error": error}), status_code
         flash(error)
@@ -211,5 +211,5 @@ def delete_access_request(access_request_id):
 
     if request.is_json:
         return jsonify({"id": access_request_id, "deleted": deleted})
-    flash("Deleted access request.")
+    flash("Deleted invite code request.")
     return redirect("/admin")

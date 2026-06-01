@@ -7,30 +7,32 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ed2.css') }}">
 </head>
 <body>
-    <nav class="site-nav">
-        <a class="brand" href="/">eD2</a>
-        {% if session.user_id %}
-            <div class="nav-links">
-                <a href="/vocabulary">Vocabulary</a>
-                {% if session.account_category in ["trusted", "admin"] %}
-                    <a href="/vocabulary/new">Add word</a>
-                {% endif %}
-                <a href="/training/select">Training</a>
-                {% if session.account_category == "admin" %}
-                    <a href="/admin">Admin</a>
-                {% endif %}
-            </div>
-            <form class="logout-form" action="/logout" method="post">
-                <button class="button-subtle" type="submit">Log out</button>
-            </form>
-        {% else %}
-            <div class="nav-links">
-                <a href="/login">Log in</a>
-                <a href="/register">Register</a>
-                <a href="/access-request">Request access</a>
-            </div>
-        {% endif %}
-    </nav>
+    <header class="site-header">
+        <div class="site-header-main">
+            <a class="brand" href="/">eruditeEdge</a>
+            <a class="account-icon-button" href="/account" aria-label="Account">
+                <span class="account-icon-head" aria-hidden="true"></span>
+                <span class="account-icon-body" aria-hidden="true"></span>
+            </a>
+        </div>
+
+        <nav class="site-nav" aria-label="Main navigation">
+            {% if session.user_id %}
+                <div class="nav-links">
+                    <a href="/vocabulary">Vocabulary</a>
+                    {% if session.account_category in ["trusted", "admin"] %}
+                        <a href="/vocabulary/new">Add word</a>
+                    {% endif %}
+                    <a href="/training/select">Training</a>
+                    {% if session.account_category == "admin" %}
+                        <a href="/admin">Admin</a>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="nav-links"></div>
+            {% endif %}
+        </nav>
+    </header>
 
     {% with messages = get_flashed_messages() %}
         {% if messages %}

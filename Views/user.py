@@ -10,12 +10,7 @@ user_bp = Blueprint("user", __name__)
 
 
 def registration_template(username="", invite_code=""):
-    return render_template(
-        "register.html",
-        username=username,
-        invite_code=invite_code,
-        google_registration_enabled=google_registration_enabled(),
-    )
+    return account_template(register_username=username, invite_code=invite_code)
 
 
 def google_registration_enabled():
@@ -34,10 +29,17 @@ def google_login_redirect_uri():
 
 
 def login_template(username=""):
+    return account_template(login_username=username)
+
+
+def account_template(login_username="", register_username="", invite_code=""):
     return render_template(
-        "login.html",
-        username=username,
+        "account.html",
+        login_username=login_username,
+        register_username=register_username,
+        invite_code=invite_code,
         google_login_enabled=google_registration_enabled(),
+        google_registration_enabled=google_registration_enabled(),
     )
 
 
@@ -48,6 +50,11 @@ def access_request_template(name="", email="", message=""):
         email=email,
         message=message,
     )
+
+
+@user_bp.route("/account", methods=["GET"])
+def account():
+    return account_template()
 
 
 @user_bp.route("/register", methods=["GET", "POST"])
@@ -128,7 +135,7 @@ def access_request():
 
     if request.is_json:
         return jsonify(created_request), 201
-    flash("Access request sent.")
+    flash("Invite code request sent.")
     return redirect("/login")
 
 

@@ -35,9 +35,9 @@ class AccessRequestService:
             ACCESS_REQUEST_DAILY_IP_LIMIT,
         )
         if error == ACCESS_REQUEST_DUPLICATE_EMAIL:
-            return None, "Email already has an active access request"
+            return None, "Email already has an active invite code request"
         if error == ACCESS_REQUEST_IP_LIMIT_EXCEEDED:
-            return None, "Too many access requests from this IP address today"
+            return None, "Too many invite code requests from this IP address today"
         return self._access_request_repository.get_access_request(access_request_id), None
 
     def list_access_requests(self, acting_user):
@@ -49,7 +49,7 @@ class AccessRequestService:
         if not acting_user or acting_user["account_category"] != ACCOUNT_CATEGORY_ADMIN:
             return False, "Admin account is required"
         if not self._access_request_repository.delete_access_request(access_request_id):
-            return False, "Access request was not found"
+            return False, "Invite code request was not found"
         return True, None
 
     def _validate_data(self, data):
@@ -60,7 +60,7 @@ class AccessRequestService:
         fields = [name, email, message]
 
         if honeypot:
-            return None, "Access request was rejected"
+            return None, "Invite code request was rejected"
         if any(HTML_PATTERN.search(field) or SQL_INJECTION_PATTERN.search(field) for field in fields):
             return None, "HTML tags and SQL statements are not allowed"
         if not name:

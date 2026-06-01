@@ -2,19 +2,8 @@
 
 {% block content %}
 <h1>Log in</h1>
-{% if google_login_enabled %}
-    <form action="/login/google" method="post" class="google-login-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="actions">
-            <button class="google-auth-button" type="submit">
-                <span class="google-mark" aria-hidden="true">G</span>
-                Log in with Google
-            </button>
-        </div>
-    </form>
-{% endif %}
 
-<form action="/login" method="post">
+<form id="password-login-form" action="/login" method="post">
     <div class="field field-wide">
         <label for="username">User id</label><br>
         <input id="username" name="username" value="{{ username or '' }}" required>
@@ -23,9 +12,19 @@
         <label for="password">Password</label><br>
         <input id="password" name="password" type="password" required>
     </div>
-    <div class="actions">
-        <button class="button-primary" type="submit">Log in</button>
-        <a class="button button-secondary" href="/register">Register</a>
-    </div>
 </form>
+
+<div class="actions">
+    <button class="button-primary" type="submit" form="password-login-form">Log in</button>
+    {% if google_login_enabled %}
+        <form action="/login/google" method="post" class="inline-form google-login-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="google-auth-button" type="submit">
+                <span class="google-mark" aria-hidden="true">G</span>
+                Log in with Google
+            </button>
+        </form>
+    {% endif %}
+    <a class="button button-secondary" href="/register">Register</a>
+</div>
 {% endblock %}
