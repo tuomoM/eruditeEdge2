@@ -59,6 +59,7 @@ Edit `.env` and set at least:
 ```text
 SECRET_KEY=replace-with-a-local-secret
 DATABASE=
+SECURITY_REPORT_DIR=
 SECURITY_REPORT_PATH=
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-4.1-mini
@@ -69,7 +70,7 @@ GOOGLE_REDIRECT_SCHEME=
 ```
 
 `OPENAI_API_KEY` is only needed for AI vocabulary generation. The rest of the app works without it. Leave `DATABASE` empty for local development unless you want to store `database.db` somewhere else.
-Leave `SECURITY_REPORT_PATH` empty to read `security-report.json` from the project root. The app only displays this file; generate it outside the app, for example with a daily cron job.
+Leave `SECURITY_REPORT_DIR` and `SECURITY_REPORT_PATH` empty to read `security-report.json` from the project root. Set `SECURITY_REPORT_DIR` to a persistent directory to read and write `security-report.json` from that location, for example the same directory as the production database. Set `SECURITY_REPORT_PATH` only when you need to point at an exact report file path. Admin users can generate the report from the admin page.
 Google OAuth callback URLs use HTTPS automatically outside localhost. Set `GOOGLE_REDIRECT_SCHEME=http` only for a local OAuth test client that explicitly needs HTTP callbacks.
 
 4. Initialize the database:
@@ -100,10 +101,11 @@ Open the app at `http://127.0.0.1:5001`.
 flask --app app check-database
 ```
 
-On Railway, attach a persistent volume. If `DATABASE` is not set, the app uses `RAILWAY_VOLUME_MOUNT_PATH/database.db` automatically. You can also set `DATABASE` explicitly, for example:
+In production, point persistent files at `./data`. The `./app` directory is not persistent, so do not store the database or security report there. If `DATABASE` is not set and `RAILWAY_VOLUME_MOUNT_PATH` exists, the app uses `RAILWAY_VOLUME_MOUNT_PATH/database.db` automatically. You can also set paths explicitly, for example:
 
 ```text
-DATABASE=/app/data/database.db
+DATABASE=./data/database.db
+SECURITY_REPORT_DIR=./data
 ```
 
 The `check-database` command fails on Railway if no persistent database path is configured.

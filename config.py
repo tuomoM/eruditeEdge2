@@ -32,11 +32,19 @@ def _default_database_path():
     return os.path.join(BASE_DIR, "database.db")
 
 
+def _default_security_report_path():
+    if os.environ.get("SECURITY_REPORT_PATH"):
+        return os.environ["SECURITY_REPORT_PATH"]
+
+    security_report_dir = os.environ.get("SECURITY_REPORT_DIR")
+    if security_report_dir:
+        return os.path.join(security_report_dir, "security-report.json")
+
+    return os.path.join(BASE_DIR, "security-report.json")
+
+
 DATABASE = _default_database_path()
-SECURITY_REPORT_PATH = (
-    os.environ.get("SECURITY_REPORT_PATH")
-    or os.path.join(BASE_DIR, "security-report.json")
-)
+SECURITY_REPORT_PATH = _default_security_report_path()
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")

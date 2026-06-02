@@ -2,6 +2,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 
 import db
@@ -226,6 +227,66 @@ class AdminTestCase(unittest.TestCase):
         self.assertIn(b"2 dependencies checked.", response.data)
         self.assertIn(b"0 vulnerabilities found.", response.data)
         self.assertIn(b"No dependency vulnerabilities", response.data)
+
+    def test_admin_page_shows_run_security_audit_button(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"/admin/security-report/run", response.data)
+        self.assertIn(b"Run security audit", response.data)
+
+    def test_admin_can_run_security_audit(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        with patch(
+            "Views.admin.security_report_service.generate_report",
+            return_value=(True, None),
+        ) as generate_report:
+            response = self.client.post(
+                "/admin/security-report/run",
+                headers=self.csrf_headers(),
+                follow_redirects=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Generated dependency security report.", response.data)
+        generate_report.assert_called_once_with(
+            self.security_report_file.name,
+            self.app.root_path,
+        )
+
+    def test_admin_run_security_audit_rejects_missing_csrf_token(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post("/admin/security-report/run")
+
+        self.assertEqual(response.status_code, 302)
+        with patch(
+            "Views.admin.security_report_service.generate_report",
+            return_value=(True, None),
+        ) as generate_report:
+            self.client.post("/admin/security-report/run")
+        generate_report.assert_not_called()
+
+    def test_non_admin_cannot_run_security_audit(self):
+        self.create_admin("tuomo")
+        self.register("anna")
+
+        response = self.client.post(
+            "/admin/security-report/run",
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Admin account is required")
 
     def test_admin_page_shows_dependency_vulnerabilities(self):
         self.write_security_report(

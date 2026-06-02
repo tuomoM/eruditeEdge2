@@ -1,9 +1,41 @@
 import json
 import os
+import subprocess
+import sys
 from datetime import datetime, timezone
 
 
 class SecurityReportService:
+    def generate_report(self, report_path, working_directory):
+        report_directory = os.path.dirname(report_path)
+        if report_directory:
+            os.makedirs(report_directory, exist_ok=True)
+
+        command = [
+            sys.executable,
+            "-m",
+            "pip_audit",
+            "--format",
+            "json",
+            "--output",
+            report_path,
+            "--progress-spinner",
+            "off",
+        ]
+        result = subprocess.run(
+            command,
+            cwd=working_directory,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if os.path.exists(report_path) and result.returncode in {0, 1}:
+            return True, None
+
+        error = (result.stderr or result.stdout or "Security audit failed").strip()
+        return False, error
+
     def read_report(self, report_path):
         if not os.path.exists(report_path):
             return self._empty_report("Security report has not been generated yet.")

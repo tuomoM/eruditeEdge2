@@ -199,6 +199,26 @@ def create_invite_code():
     return redirect("/admin")
 
 
+@admin_bp.route("/admin/security-report/run", methods=["POST"])
+@admin_required
+@csrf_required
+def run_security_report():
+    generated, error = security_report_service.generate_report(
+        current_app.config["SECURITY_REPORT_PATH"],
+        current_app.root_path,
+    )
+    if error:
+        if request.is_json:
+            return jsonify({"error": error}), 500
+        flash(error)
+        return redirect("/admin")
+
+    if request.is_json:
+        return jsonify({"generated": generated})
+    flash("Generated dependency security report.")
+    return redirect("/admin")
+
+
 @admin_bp.route("/admin/access-requests/<int:access_request_id>/delete", methods=["POST"])
 @admin_required
 @csrf_required
