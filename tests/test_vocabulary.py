@@ -419,6 +419,48 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'href="/vocabulary/new?word=stultify"', response.data)
 
+    def test_vocabulary_page_marks_own_entries_without_usernames(self):
+        self.login_user()
+        self.create_entry_with_word("firstword")
+        self.logout_user()
+        self.login_second_user()
+        self.make_user_trusted("anna")
+        self.create_entry_with_word("secondword")
+
+        response = self.client.get("/vocabulary")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertRegex(html, r'data-owned="false"[\s\S]*firstword')
+        self.assertRegex(html, r'data-owned="true"[\s\S]*secondword')
+        self.assertNotIn("tuomo", html)
+        self.assertNotIn("anna", html)
+
+    def test_vocabulary_page_marks_own_entries_when_session_user_id_is_string(self):
+        self.login_user()
+        self.create_entry_with_word("firstword")
+        with self.client.session_transaction() as session:
+            session["user_id"] = str(session["user_id"])
+
+        response = self.client.get("/vocabulary")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'data-filter-toggle', response.data)
+        self.assertIn(b'data-owned="true"', response.data)
+
+    def test_vocabulary_page_hides_ownership_filter_when_user_has_no_own_entries(self):
+        self.login_user()
+        self.create_entry_with_word("firstword")
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.client.get("/vocabulary")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"firstword", response.data)
+        self.assertNotIn(b'data-filter-toggle', response.data)
+        self.assertNotIn(b"Own</button>", response.data)
+
     def test_new_vocabulary_page_prefills_word_from_search_query(self):
         self.login_user()
 

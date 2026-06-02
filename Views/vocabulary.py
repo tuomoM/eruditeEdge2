@@ -47,6 +47,17 @@ def can_manage_vocabulary():
     }
 
 
+def entries_with_ownership(entries, user_id):
+    current_user_id = str(user_id)
+    owned_entries = []
+    for entry in entries:
+        owned_entry = dict(entry)
+        owned_entry["owned"] = str(owned_entry.get("created_by")) == current_user_id
+        owned_entry.pop("created_by", None)
+        owned_entries.append(owned_entry)
+    return owned_entries
+
+
 def is_admin():
     user_id = session.get("user_id")
     if not user_id:
@@ -121,7 +132,7 @@ def vocabulary_list():
         entries = vocabulary_service.list_entries()
     return render_template(
         "vocabulary_list.html",
-        entries=entries,
+        entries=entries_with_ownership(entries, session["user_id"]),
         search_word=search_word,
     )
 

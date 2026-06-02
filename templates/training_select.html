@@ -4,8 +4,22 @@
 <div class="page-header">
     <div>
         <h1>Select vocabulary for training</h1>
-        <div class="result-count">{{ entries | length }} available entries</div>
+        <div
+            class="result-count"
+            data-filter-count
+            data-total-count="{{ entries | length }}"
+            data-count-singular="available entry"
+            data-count-plural="available entries"
+        >
+            {{ entries | length }} available entries
+        </div>
     </div>
+    {% if entries | selectattr("owned") | list %}
+        <div class="filter-toggle" data-filter-toggle role="group" aria-label="Vocabulary ownership filter">
+            <button type="button" class="filter-toggle-button is-active" data-filter-value="all" aria-pressed="true">All</button>
+            <button type="button" class="filter-toggle-button" data-filter-value="own" aria-pressed="false">Own</button>
+        </div>
+    {% endif %}
 </div>
 
 {% if error %}
@@ -14,9 +28,9 @@
 
 {% if entries %}
     <form action="/training" method="post" id="training-selection-form">
-        <div class="entry-list">
+        <div class="entry-list" data-filter-list>
         {% for entry in entries %}
-            <label class="selectable-row">
+            <label class="selectable-row" data-owned="{{ 'true' if entry.owned else 'false' }}">
                 <input
                     class="training-checkbox"
                     type="checkbox"
@@ -36,6 +50,7 @@
             </label>
         {% endfor %}
         </div>
+        <p class="filter-empty-message" data-filter-empty hidden>No own vocabulary entries available.</p>
         <div class="training-footer">
             <span id="selected-count" class="selected-count" aria-live="polite">0 vocabulary entries selected</span>
             <button class="button-primary" type="submit">Start training</button>
@@ -56,6 +71,7 @@
     });
     updateSelectedCount();
     </script>
+    <script src="{{ url_for('static', filename='js/vocabulary_filter.js') }}"></script>
 {% else %}
     <p>No vocabulary entries available yet.</p>
     <a class="button button-primary" href="/vocabulary/new">Add word</a>

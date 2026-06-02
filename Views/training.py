@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, sessio
 
 from Services.training_service import training_service
 from Services.vocabulary_service import vocabulary_service
-from Views.vocabulary import login_required, page_login_required
+from Views.vocabulary import entries_with_ownership, login_required, page_login_required
 
 
 training_bp = Blueprint("training", __name__)
@@ -13,7 +13,7 @@ training_bp = Blueprint("training", __name__)
 def select_training_vocabs():
     return render_template(
         "training_select.html",
-        entries=vocabulary_service.list_entries(),
+        entries=entries_with_ownership(vocabulary_service.list_entries(), session["user_id"]),
         selected_vocabulary_ids=set(
             training_service.get_latest_training_vocabulary_ids(session["user_id"])
         ),
@@ -40,7 +40,7 @@ def create_training():
             return jsonify({"error": error}), 400
         return render_template(
             "training_select.html",
-            entries=vocabulary_service.list_entries(),
+            entries=entries_with_ownership(vocabulary_service.list_entries(), session["user_id"]),
             error=error,
             selected_vocabulary_ids={
                 int(vocabulary_id)

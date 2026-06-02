@@ -302,6 +302,56 @@ class TrainingTestCase(unittest.TestCase):
         self.assertRegex(html, rf'value="{vocabulary_ids[2]}"[^>]*checked')
         self.assertRegex(html, rf'value="{vocabulary_ids[4]}"[^>]*checked')
 
+    def test_training_selection_marks_own_entries_without_usernames(self):
+        self.login_user()
+        self.client.post("/vocabulary", json=self.valid_entry("firstword"))
+        self.logout_user()
+        self.login_second_user()
+        with self.app.app_context():
+            db.execute(
+                """
+                UPDATE users
+                SET account_category = ?
+                WHERE username = ?
+                """,
+                ["trusted", "anna"],
+            )
+        self.client.post("/vocabulary", json=self.valid_entry("secondword"))
+
+        response = self.client.get("/training/select")
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertRegex(html, r'data-owned="false"[\s\S]*firstword')
+        self.assertRegex(html, r'data-owned="true"[\s\S]*secondword')
+        self.assertNotIn("tuomo", html)
+        self.assertNotIn("anna", html)
+
+    def test_training_selection_marks_own_entries_when_session_user_id_is_string(self):
+        self.login_user()
+        self.client.post("/vocabulary", json=self.valid_entry("firstword"))
+        with self.client.session_transaction() as session:
+            session["user_id"] = str(session["user_id"])
+
+        response = self.client.get("/training/select")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'data-filter-toggle', response.data)
+        self.assertIn(b'data-owned="true"', response.data)
+
+    def test_training_selection_hides_ownership_filter_when_user_has_no_own_entries(self):
+        self.login_user()
+        self.client.post("/vocabulary", json=self.valid_entry("firstword"))
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.client.get("/training/select")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"firstword", response.data)
+        self.assertNotIn(b'data-filter-toggle', response.data)
+        self.assertNotIn(b"Own</button>", response.data)
+
     def test_five_vocabs_can_be_chosen_for_training(self):
         self.login_user()
         vocabulary_ids = self.create_sample_vocabs()

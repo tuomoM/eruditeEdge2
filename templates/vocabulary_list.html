@@ -4,8 +4,22 @@
 <div class="page-header">
     <div>
         <h1>Vocabulary</h1>
-        <div class="result-count">{{ entries | length }} entries</div>
+        <div
+            class="result-count"
+            data-filter-count
+            data-total-count="{{ entries | length }}"
+            data-count-singular="entry"
+            data-count-plural="entries"
+        >
+            {{ entries | length }} entries
+        </div>
     </div>
+    {% if entries | selectattr("owned") | list %}
+        <div class="filter-toggle" data-filter-toggle role="group" aria-label="Vocabulary ownership filter">
+            <button type="button" class="filter-toggle-button is-active" data-filter-value="all" aria-pressed="true">All</button>
+            <button type="button" class="filter-toggle-button" data-filter-value="own" aria-pressed="false">Own</button>
+        </div>
+    {% endif %}
 </div>
 
 <form class="toolbar vocabulary-toolbar" action="/vocabulary" method="get">
@@ -30,9 +44,9 @@
 </form>
 
 {% if entries %}
-    <div class="entry-list">
+    <div class="entry-list" data-filter-list>
     {% for entry in entries %}
-        <div class="entry-row">
+        <div class="entry-row" data-owned="{{ 'true' if entry.owned else 'false' }}">
             <div class="entry-main">
                 <div class="entry-heading">
                     <a class="entry-word" href="/vocabulary/{{ entry.id }}/page">{{ entry.word }}</a>
@@ -48,6 +62,8 @@
         </div>
     {% endfor %}
     </div>
+    <p class="filter-empty-message" data-filter-empty hidden>No own vocabulary entries found.</p>
+    <script src="{{ url_for('static', filename='js/vocabulary_filter.js') }}"></script>
 {% else %}
     <p>No vocabulary entries found.</p>
 {% endif %}
