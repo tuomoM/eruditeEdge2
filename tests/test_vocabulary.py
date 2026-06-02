@@ -191,14 +191,15 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(first_response.status_code, 201)
         self.assertEqual(second_response.status_code, 400)
 
-    def test_create_vocabulary_rejects_sql_injection(self):
+    def test_create_vocabulary_allows_sql_statement_text(self):
         self.login_user()
         data = self.valid_entry()
         data["word"] = "operation'; DROP TABLE users; --"
 
         response = self.create_entry(data)
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["word"], "operation'; DROP TABLE users; --")
 
     def test_generate_vocabulary_requires_login(self):
         response = self.generate_entry("operation")
@@ -272,12 +273,20 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    def test_generate_vocabulary_rejects_sql_keyword(self):
+    def test_generate_vocabulary_accepts_sql_keyword_as_word(self):
         self.login_user()
+        generated_entry = self.valid_entry()
+        generated_entry["word"] = "DROP"
 
-        response = self.generate_entry("DROP")
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.generate_entry",
+            return_value=(generated_entry, None),
+        ) as generate_entry:
+            response = self.generate_entry("DROP")
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), generated_entry)
+        generate_entry.assert_called_once_with("DROP", "test-api-key", "test-model")
 
     def test_generate_vocabulary_rejects_more_than_one_word(self):
         self.login_user()
@@ -418,6 +427,25 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="word" name="word" value="stultify"', response.data)
 
+    def test_trusted_user_new_vocabulary_page_hides_ai_setup_check(self):
+        self.login_user()
+
+        response = self.client.get("/vocabulary/new")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"Check AI setup", response.data)
+        self.assertNotIn(b'id="check-ai-button"', response.data)
+
+    def test_admin_new_vocabulary_page_shows_ai_setup_check(self):
+        self.login_user()
+        self.set_user_category("tuomo", "admin")
+
+        response = self.client.get("/vocabulary/new")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Check AI setup", response.data)
+        self.assertIn(b'id="check-ai-button"', response.data)
+
     def test_basic_user_cannot_generate_vocabulary_with_ai(self):
         self.login_user()
         self.logout_user()
@@ -445,7 +473,31 @@ class VocabularyTestCase(unittest.TestCase):
         response = self.client.get("/vocabulary/generate/status")
 
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.get_json()["error"], "Trusted account is required")
+        self.assertEqual(response.get_json()["error"], "Admin account is required")
+
+    def test_trusted_user_cannot_check_ai_status(self):
+        self.login_user()
+
+        response = self.client.get("/vocabulary/generate/status")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Admin account is required")
+
+    def test_admin_user_can_check_ai_status(self):
+        self.login_user()
+        self.set_user_category("tuomo", "admin")
+
+        response = self.client.get("/vocabulary/generate/status")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "openai_api_key_present": True,
+                "openai_api_key_prefix": "test-ap",
+                "openai_model": "test-model",
+            },
+        )
 
     def test_create_vocabulary_rejects_html_tags(self):
         self.login_user()
@@ -556,6 +608,15 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_search_vocabulary_accepts_sql_keyword_as_word(self):
+        self.login_user()
+        self.create_entry_with_word("select")
+
+        response = self.search_entries("select")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()[0]["word"], "select")
+
     def test_search_vocabulary_does_not_crash_when_nothing_is_found(self):
         self.login_user()
         self.create_entry_with_word("operation")
@@ -644,7 +705,7 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Trusted account is required", response.data)
 
-    def test_update_vocabulary_rejects_sql_injection(self):
+    def test_update_vocabulary_allows_sql_statement_text(self):
         self.login_user()
         create_response = self.create_entry()
         vocabulary_id = create_response.get_json()["id"]
@@ -653,7 +714,8 @@ class VocabularyTestCase(unittest.TestCase):
 
         response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["context"], "Medical'; DROP TABLE users; --")
 
     def test_update_vocabulary_rejects_html_tags(self):
         self.login_user()

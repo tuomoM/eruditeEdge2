@@ -47,6 +47,18 @@ def can_manage_vocabulary():
     }
 
 
+def is_admin():
+    user_id = session.get("user_id")
+    if not user_id:
+        return False
+    user = user_service.get_user(user_id)
+    if not user:
+        return False
+    session["username"] = user["username"]
+    session["account_category"] = user["account_category"]
+    return user["account_category"] == ACCOUNT_CATEGORY_ADMIN
+
+
 def vocabulary_manager_required(route_function):
     @wraps(route_function)
     def wrapper(*args, **kwargs):
@@ -54,6 +66,18 @@ def vocabulary_manager_required(route_function):
             return jsonify({"error": "Login required"}), 401
         if not can_manage_vocabulary():
             return jsonify({"error": "Trusted account is required"}), 403
+        return route_function(*args, **kwargs)
+
+    return wrapper
+
+
+def admin_required(route_function):
+    @wraps(route_function)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return jsonify({"error": "Login required"}), 401
+        if not is_admin():
+            return jsonify({"error": "Admin account is required"}), 403
         return route_function(*args, **kwargs)
 
     return wrapper
@@ -174,7 +198,7 @@ def generate_vocabulary():
 
 
 @vocabulary_bp.route("/vocabulary/generate/status", methods=["GET"])
-@vocabulary_manager_required
+@admin_required
 def generate_vocabulary_status():
     api_key = current_app.config["OPENAI_API_KEY"]
     return jsonify(

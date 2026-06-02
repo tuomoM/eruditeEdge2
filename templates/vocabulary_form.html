@@ -17,7 +17,9 @@
                     <span class="ai-sparkle" aria-hidden="true">✦</span>
                     Generate with AI
                 </button>
-                <button class="ai-check-button button-secondary" type="button" id="check-ai-button">Check AI setup</button>
+                {% if session.account_category == "admin" %}
+                    <button class="ai-check-button button-secondary" type="button" id="check-ai-button">Check AI setup</button>
+                {% endif %}
             </div>
             <span id="generate-status" class="ai-status muted" aria-live="polite"></span>
         </div>
@@ -61,24 +63,27 @@ async function readJson(response) {
     }
 }
 
-document.getElementById("check-ai-button").addEventListener("click", async () => {
-    const status = document.getElementById("generate-status");
-    status.textContent = "Checking...";
+const checkAiButton = document.getElementById("check-ai-button");
+if (checkAiButton) {
+    checkAiButton.addEventListener("click", async () => {
+        const status = document.getElementById("generate-status");
+        status.textContent = "Checking...";
 
-    try {
-        const response = await fetch("/vocabulary/generate/status");
-        const data = await readJson(response);
-        if (!response.ok) {
-            status.textContent = data.error || "AI setup check failed";
-            return;
+        try {
+            const response = await fetch("/vocabulary/generate/status");
+            const data = await readJson(response);
+            if (!response.ok) {
+                status.textContent = data.error || "AI setup check failed";
+                return;
+            }
+            status.textContent = data.openai_api_key_present
+                ? `AI key present (${data.openai_api_key_prefix}...), model: ${data.openai_model}`
+                : "OpenAI API key is missing";
+        } catch (error) {
+            status.textContent = `AI setup check failed: ${error.name}`;
         }
-        status.textContent = data.openai_api_key_present
-            ? `AI key present (${data.openai_api_key_prefix}...), model: ${data.openai_model}`
-            : "OpenAI API key is missing";
-    } catch (error) {
-        status.textContent = `AI setup check failed: ${error.name}`;
-    }
-});
+    });
+}
 
 document.getElementById("generate-button").addEventListener("click", async () => {
     const generateButton = document.getElementById("generate-button");

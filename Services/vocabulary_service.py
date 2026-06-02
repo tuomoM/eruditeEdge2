@@ -82,7 +82,7 @@ class VocabularyService:
         fields = [word, definition, context] + synonyms + examples
         unsafe_field = self._find_unsafe_field(fields)
         if unsafe_field:
-            return None, "HTML tags and SQL statements are not allowed"
+            return None, "HTML tags are not allowed"
 
         if not word:
             return None, "Word is required"
@@ -121,15 +121,15 @@ class VocabularyService:
 
     def _find_unsafe_field(self, values):
         for value in values:
-            if HTML_PATTERN.search(value) or SQL_INJECTION_PATTERN.search(value):
+            if HTML_PATTERN.search(value):
                 return value
         return None
 
     def _validate_search_value(self, search_value):
         if not search_value:
             return "Search word is required"
-        if HTML_PATTERN.search(search_value) or SQL_INJECTION_PATTERN.search(search_value):
-            return "HTML tags and SQL statements are not allowed"
+        if HTML_PATTERN.search(search_value):
+            return "HTML tags are not allowed"
         if not SEARCH_PATTERN.fullmatch(search_value):
             return "Search may only contain letters and wildcard *"
         return None

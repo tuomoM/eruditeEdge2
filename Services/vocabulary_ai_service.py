@@ -5,10 +5,6 @@ import re
 
 logger = logging.getLogger(__name__)
 WORD_PATTERN = re.compile(r"^[A-Za-z]+(?:[-'][A-Za-z]+)?$")
-SQL_KEYWORD_PATTERN = re.compile(
-    r"^(DROP|DELETE|INSERT|UPDATE|UNION|SELECT|ALTER|CREATE)$",
-    re.IGNORECASE,
-)
 ALLOWED_CONTEXT_LABELS = {
     "Academic",
     "Business",
@@ -127,7 +123,7 @@ class VocabularyAiService:
 
     def _validate_word(self, word):
         word = (word or "").strip()
-        if not WORD_PATTERN.fullmatch(word) or SQL_KEYWORD_PATTERN.fullmatch(word):
+        if not WORD_PATTERN.fullmatch(word):
             return None, "Please provide one word only"
         return word, None
 

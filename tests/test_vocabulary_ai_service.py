@@ -130,13 +130,13 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIsNone(entry)
         self.assertEqual(error, "Please provide one word only")
 
-    def test_generate_entry_rejects_sql_keyword(self):
+    def test_generate_entry_accepts_sql_keyword_as_word(self):
         service = VocabularyAiService(client=FakeClient(self.valid_output()))
 
         entry, error = service.generate_entry("DROP", "test-key", "test-model")
 
-        self.assertIsNone(entry)
-        self.assertEqual(error, "Please provide one word only")
+        self.assertIsNone(error)
+        self.assertEqual(entry["word"], "DROP")
 
     def test_generate_entry_rejects_html_tags(self):
         service = VocabularyAiService(client=FakeClient(self.valid_output()))
