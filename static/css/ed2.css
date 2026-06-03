@@ -650,6 +650,32 @@ button:hover,
     margin-top: 0;
 }
 
+.practice-section-collapsed {
+    padding: var(--space-md) 0;
+}
+
+.practice-toggle {
+    min-height: 34px;
+}
+
+.practice-panel {
+    max-width: 780px;
+    margin-top: var(--space-md);
+}
+
+.practice-panel h2 {
+    margin: 0 0 var(--space-sm);
+    font-size: 1.2rem;
+}
+
+.practice-section textarea {
+    max-width: 780px;
+}
+
+.practice-section .actions {
+    margin-top: 0;
+}
+
 .selectable-row {
     display: grid;
     grid-template-columns: 28px minmax(0, 1fr);

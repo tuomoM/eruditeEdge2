@@ -62,6 +62,23 @@ VOCABULARY_SCHEMA = {
 }
 
 
+USAGE_VALIDATION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "result": {
+            "type": "string",
+            "enum": ["correct", "incorrect"],
+        },
+        "hint": {
+            "type": "string",
+            "description": "Empty when result is correct. One sentence when result is incorrect.",
+        },
+    },
+    "required": ["result", "hint"],
+}
+
+
 class VocabularyAiService:
     def __init__(self, client=None):
         self._client = client
@@ -117,6 +134,73 @@ class VocabularyAiService:
         entry["context"] = self._normalize_context(entry.get("context"))
         logger.info("Vocabulary AI generation succeeded for word '%s'", word)
         return entry, None
+
+    def validate_usage(self, entry, sentence, api_key, model):
+        sentence = (sentence or "").strip()
+        if not sentence:
+            return None, "Sentence is required"
+        if len(sentence) > 500:
+            return None, "Sentence must be 500 characters or fewer"
+        if not api_key:
+            return None, "OpenAI API key is missing"
+
+        word = entry["word"]
+        logger.info("Vocabulary usage validation started for word '%s' using model '%s'", word, model)
+        try:
+            client = self._get_client(api_key)
+            response = client.responses.create(
+                model=model,
+                instructions=(
+                    "Validate whether the learner uses the target vocabulary word correctly "
+                    "in the submitted sentence. Focus on the meaning and usage of the target "
+                    "word in context. Ignore minor grammar, spelling, capitalization, and typing "
+                    "errors unless they prevent understanding. Return JSON only. Use result "
+                    "'correct' or 'incorrect'. If incorrect, provide exactly one concise sentence "
+                    "as a hint explaining how to improve the usage; if correct, hint must be empty."
+                ),
+                input=(
+                    f"Target word: {word}\n"
+                    f"Definition: {entry['definition']}\n"
+                    f"Context: {entry.get('context') or 'General'}\n"
+                    f"Example sentences:\n"
+                    + "\n".join(f"- {example}" for example in entry.get("examples", []))
+                    + f"\nLearner sentence: {sentence}"
+                ),
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "usage_validation",
+                        "schema": USAGE_VALIDATION_SCHEMA,
+                        "strict": True,
+                    }
+                },
+            )
+        except ImportError:
+            logger.exception("Vocabulary usage validation failed: OpenAI package is not installed")
+            return None, "OpenAI package is not installed. Run python -m pip install -r requirements.txt"
+        except Exception as error:
+            logger.exception(
+                "Vocabulary usage validation failed during OpenAI request: %s",
+                error.__class__.__name__,
+            )
+            return None, f"OpenAI request failed: {error.__class__.__name__}"
+
+        try:
+            result = json.loads(response.output_text)
+        except (AttributeError, json.JSONDecodeError):
+            logger.exception("Vocabulary usage validation failed: invalid response format")
+            return None, "OpenAI returned invalid usage validation data"
+
+        if result.get("result") not in {"correct", "incorrect"}:
+            return None, "OpenAI returned invalid usage validation data"
+        hint = (result.get("hint") or "").strip()
+        if result["result"] == "correct":
+            hint = ""
+        elif not hint:
+            hint = "Try using the word in a sentence that matches its definition."
+
+        logger.info("Vocabulary usage validation succeeded for word '%s'", word)
+        return {"result": result["result"], "hint": hint}, None
 
     def validate_word(self, word):
         return self._validate_word(word)

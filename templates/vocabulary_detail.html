@@ -31,6 +31,90 @@
     </ol>
 </section>
 
+{% if can_practice_usage %}
+    <section class="detail-section practice-section practice-section-collapsed">
+        <button
+            class="button button-subtle practice-toggle"
+            type="button"
+            id="practice-toggle"
+            aria-expanded="false"
+            aria-controls="practice-panel"
+        >
+            Practice usage
+        </button>
+
+        <div id="practice-panel" class="practice-panel" hidden>
+            <h2>Practice usage</h2>
+            <div class="field field-wide">
+                <label for="practice-sentence">Write a sentence using {{ entry.word }}</label><br>
+                <textarea id="practice-sentence" name="sentence" maxlength="500"></textarea>
+            </div>
+            <div class="actions">
+                <button class="button-primary" type="button" id="validate-usage-button">Validate sentence</button>
+                <span id="practice-status" class="ai-status muted" role="status" aria-live="polite"></span>
+            </div>
+        </div>
+    </section>
+
+    <script>
+    async function readPracticeJson(response) {
+        try {
+            return await response.json();
+        } catch {
+            return {error: "Server did not return JSON"};
+        }
+    }
+
+    const practiceToggle = document.getElementById("practice-toggle");
+    const practicePanel = document.getElementById("practice-panel");
+    const practiceSentence = document.getElementById("practice-sentence");
+
+    practiceToggle.addEventListener("click", () => {
+        const isOpen = practiceToggle.getAttribute("aria-expanded") === "true";
+        practiceToggle.setAttribute("aria-expanded", String(!isOpen));
+        practicePanel.hidden = isOpen;
+
+        if (!isOpen) {
+            practiceSentence.focus();
+        }
+    });
+
+    document.getElementById("validate-usage-button").addEventListener("click", async () => {
+        const button = document.getElementById("validate-usage-button");
+        const sentence = document.getElementById("practice-sentence").value;
+        const status = document.getElementById("practice-status");
+        const csrfToken = "{{ csrf_token() }}";
+        status.textContent = "Checking...";
+        button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+
+        try {
+            const response = await fetch("/vocabulary/{{ entry.id }}/practice-usage", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRF-Token": csrfToken
+                },
+                body: JSON.stringify({sentence})
+            });
+            const data = await readPracticeJson(response);
+            if (!response.ok) {
+                status.textContent = data.error || "Validation failed";
+                return;
+            }
+            status.textContent = data.result === "correct"
+                ? "Correct"
+                : `Incorrect. ${data.hint}`;
+        } catch (error) {
+            status.textContent = `Validation request failed: ${error.name}`;
+        } finally {
+            button.disabled = false;
+            button.removeAttribute("aria-busy");
+        }
+    });
+    </script>
+{% endif %}
+
 <div class="actions">
     {% if session.account_category in ["trusted", "admin"] %}
         <a class="button button-primary" href="/vocabulary/{{ entry.id }}/edit">Edit</a>

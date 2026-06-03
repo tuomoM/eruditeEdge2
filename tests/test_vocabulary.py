@@ -127,6 +127,19 @@ class VocabularyTestCase(unittest.TestCase):
             return 0
         return rows[0]["generation_count"]
 
+    def ai_generation_total_count(self, username):
+        with self.app.app_context():
+            rows = db.query(
+                """
+                SELECT COALESCE(SUM(ai_generation_usage.generation_count), 0) AS count
+                FROM ai_generation_usage
+                JOIN users ON users.id = ai_generation_usage.user_id
+                WHERE users.username = ?
+                """,
+                [username],
+            )
+        return rows[0]["count"]
+
     def valid_entry(self):
         return {
             "word": "operation",
@@ -154,6 +167,14 @@ class VocabularyTestCase(unittest.TestCase):
         return self.client.post(
             "/vocabulary/generate",
             json={"word": word},
+            headers=headers,
+        )
+
+    def practice_usage(self, vocabulary_id, sentence, include_csrf=True):
+        headers = self.csrf_headers() if include_csrf else {}
+        return self.client.post(
+            f"/vocabulary/{vocabulary_id}/practice-usage",
+            json={"sentence": sentence},
             headers=headers,
         )
 
@@ -595,6 +616,35 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["word"], "operation")
 
+    def test_vocabulary_page_shows_usage_practice_for_trusted_user(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+
+        response = self.client.get(f"/vocabulary/{vocabulary_id}/page")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Practice usage", response.data)
+        self.assertIn(b'id="practice-toggle"', response.data)
+        self.assertIn(b'aria-expanded="false"', response.data)
+        self.assertIn(b'aria-controls="practice-panel"', response.data)
+        self.assertIn(b'id="practice-panel" class="practice-panel" hidden', response.data)
+        self.assertIn(b'id="practice-sentence"', response.data)
+        self.assertIn(b"Validate sentence", response.data)
+
+    def test_vocabulary_page_hides_usage_practice_for_basic_user(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.client.get(f"/vocabulary/{vocabulary_id}/page")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"Practice usage", response.data)
+        self.assertNotIn(b'id="practice-sentence"', response.data)
+
     def test_view_vocabulary_does_not_allow_sql_injection(self):
         self.login_user()
 
@@ -678,6 +728,140 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual([entry["word"] for entry in response.get_json()], ["operation"])
+
+    def test_practice_usage_requires_login(self):
+        response = self.client.post(
+            "/vocabulary/1/practice-usage",
+            json={"sentence": "The operation was careful."},
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_practice_usage_rejects_missing_csrf_token(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+
+        response = self.practice_usage(
+            vocabulary_id,
+            "The operation was careful.",
+            include_csrf=False,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
+
+    def test_basic_user_cannot_practice_usage(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+        self.logout_user()
+        self.login_second_user()
+
+        response = self.practice_usage(vocabulary_id, "The operation was careful.")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Trusted account is required")
+
+    def test_practice_usage_returns_correct_result(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.validate_usage",
+            return_value=({"result": "correct", "hint": ""}, None),
+        ) as validate_usage:
+            response = self.practice_usage(
+                vocabulary_id,
+                "The operation was carefully planned.",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"result": "correct", "hint": ""})
+        validate_usage.assert_called_once()
+        self.assertEqual(validate_usage.call_args.args[1], "The operation was carefully planned.")
+        self.assertEqual(validate_usage.call_args.args[2], "test-api-key")
+        self.assertEqual(validate_usage.call_args.args[3], "test-model")
+        self.assertEqual(self.ai_generation_total_count("tuomo"), 1)
+
+    def test_practice_usage_returns_incorrect_result_with_hint(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.validate_usage",
+            return_value=(
+                {
+                    "result": "incorrect",
+                    "hint": "Use operation to describe an action or procedure.",
+                },
+                None,
+            ),
+        ):
+            response = self.practice_usage(vocabulary_id, "The operation was blue.")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "result": "incorrect",
+                "hint": "Use operation to describe an action or procedure.",
+            },
+        )
+
+    def test_failed_practice_usage_does_not_use_daily_quota(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.validate_usage",
+            return_value=(None, "OpenAI returned invalid usage validation data"),
+        ):
+            response = self.practice_usage(vocabulary_id, "The operation was careful.")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.ai_generation_total_count("tuomo"), 0)
+
+    def test_trusted_user_cannot_practice_usage_more_than_daily_quota(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.validate_usage",
+            return_value=({"result": "correct", "hint": ""}, None),
+        ) as validate_usage:
+            first_response = self.practice_usage(vocabulary_id, "The operation was first.")
+            second_response = self.practice_usage(vocabulary_id, "The operation was second.")
+            third_response = self.practice_usage(vocabulary_id, "The operation was third.")
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(third_response.status_code, 429)
+        self.assertEqual(validate_usage.call_count, 2)
+
+    def test_admin_user_has_unlimited_practice_usage_quota(self):
+        self.login_user()
+        self.set_user_category("tuomo", "admin")
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.validate_usage",
+            return_value=({"result": "correct", "hint": ""}, None),
+        ) as validate_usage:
+            responses = [
+                self.practice_usage(vocabulary_id, "The operation was first."),
+                self.practice_usage(vocabulary_id, "The operation was second."),
+                self.practice_usage(vocabulary_id, "The operation was third."),
+            ]
+
+        self.assertEqual([response.status_code for response in responses], [200, 200, 200])
+        self.assertEqual(validate_usage.call_count, 3)
 
     def test_update_vocabulary_requires_login(self):
         response = self.client.put("/vocabulary/1", json=self.valid_entry())

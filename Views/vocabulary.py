@@ -246,7 +246,45 @@ def vocabulary_page(vocabulary_id):
     if not entry:
         flash("Vocabulary entry was not found")
         return redirect("/vocabulary")
-    return render_template("vocabulary_detail.html", entry=entry)
+    return render_template(
+        "vocabulary_detail.html",
+        entry=entry,
+        can_practice_usage=can_manage_vocabulary(),
+    )
+
+
+@vocabulary_bp.route("/vocabulary/<int:vocabulary_id>/practice-usage", methods=["POST"])
+@vocabulary_manager_required
+@csrf_required
+def practice_vocabulary_usage(vocabulary_id):
+    entry = vocabulary_service.get_entry(vocabulary_id)
+    if not entry:
+        return jsonify({"error": "Vocabulary entry was not found"}), 404
+
+    data = request.get_json(silent=True) or request.form
+    sentence = data.get("sentence")
+    api_key = current_app.config["OPENAI_API_KEY"]
+    if not api_key:
+        return jsonify({"error": "OpenAI API key is missing"}), 400
+
+    user = user_service.get_user(session["user_id"])
+    allowed, error = ai_quota_service.record_generation_if_allowed(
+        user,
+        current_app.config["TRUSTED_AI_DAILY_QUOTA"],
+    )
+    if not allowed:
+        return jsonify({"error": error}), 429
+
+    result, error = vocabulary_ai_service.validate_usage(
+        entry,
+        sentence,
+        api_key,
+        current_app.config["OPENAI_MODEL"],
+    )
+    if error:
+        ai_quota_service.refund_generation(user)
+        return jsonify({"error": error}), 400
+    return jsonify(result)
 
 
 @vocabulary_bp.route("/vocabulary/<int:vocabulary_id>/edit", methods=["GET", "POST"])

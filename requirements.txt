@@ -3,3 +3,4 @@ openai
 certifi
 gunicorn
 pip-audit
+pip>=26.1

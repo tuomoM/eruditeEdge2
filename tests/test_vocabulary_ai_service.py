@@ -154,6 +154,86 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIsNone(entry)
         self.assertEqual(error, "OpenAI API key is missing")
 
+    def test_validate_usage_accepts_correct_sentence(self):
+        output = json.dumps({"result": "correct", "hint": ""})
+        client = FakeClient(output)
+        service = VocabularyAiService(client=client)
+
+        result, error = service.validate_usage(
+            {
+                "word": "chagrin",
+                "definition": "Disappointment or anger.",
+                "context": "Formal",
+                "examples": ["She felt chagrin after the mistake."],
+            },
+            "To my chagrin, I forgot the appointment.",
+            "test-key",
+            "test-model",
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(result, {"result": "correct", "hint": ""})
+        self.assertIn("Ignore minor grammar", client.responses.last_request["instructions"])
+        self.assertIn("Target word: chagrin", client.responses.last_request["input"])
+        self.assertEqual(
+            client.responses.last_request["text"]["format"]["schema"]["properties"]["result"]["enum"],
+            ["correct", "incorrect"],
+        )
+
+    def test_validate_usage_returns_incorrect_with_hint(self):
+        output = json.dumps(
+            {
+                "result": "incorrect",
+                "hint": "Use chagrin to describe disappointment or embarrassment.",
+            }
+        )
+        service = VocabularyAiService(client=FakeClient(output))
+
+        result, error = service.validate_usage(
+            {
+                "word": "chagrin",
+                "definition": "Disappointment or anger.",
+                "context": "Formal",
+                "examples": [],
+            },
+            "The chagrin was very blue.",
+            "test-key",
+            "test-model",
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(result["result"], "incorrect")
+        self.assertEqual(
+            result["hint"],
+            "Use chagrin to describe disappointment or embarrassment.",
+        )
+
+    def test_validate_usage_rejects_empty_sentence(self):
+        service = VocabularyAiService(client=FakeClient("{}"))
+
+        result, error = service.validate_usage(
+            {"word": "chagrin", "definition": "Disappointment.", "examples": []},
+            "",
+            "test-key",
+            "test-model",
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(error, "Sentence is required")
+
+    def test_validate_usage_requires_api_key(self):
+        service = VocabularyAiService(client=FakeClient("{}"))
+
+        result, error = service.validate_usage(
+            {"word": "chagrin", "definition": "Disappointment.", "examples": []},
+            "To my chagrin, I was late.",
+            "",
+            "test-model",
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(error, "OpenAI API key is missing")
+
 
 if __name__ == "__main__":
     unittest.main()
