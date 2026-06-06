@@ -162,8 +162,7 @@
                         </form>
                     {% endif %}
                 {% endif %}
-                <form action="/admin/users/{{ user.id }}/vocabs/delete" method="post">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <form action="/admin/users/{{ user.id }}/vocabs/delete/confirm" method="get">
                     <button class="button-danger button-compact" type="submit">Remove vocabs</button>
                 </form>
                 <form action="/admin/users/{{ user.id }}/ai-quota/reset" method="post">

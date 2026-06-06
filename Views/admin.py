@@ -136,6 +136,33 @@ def update_user_category(user_id):
     return redirect("/admin")
 
 
+@admin_bp.route("/admin/users/<int:user_id>/vocabs/delete/confirm", methods=["GET"])
+@page_admin_required
+def confirm_delete_user_vocabs(user_id):
+    target_user = user_service.get_user(user_id)
+    if not target_user:
+        flash("User was not found")
+        return redirect("/admin")
+
+    users, error = user_service.list_users(session["user_id"])
+    if error:
+        flash(error)
+        return redirect("/admin")
+    vocabulary_count = next(
+        (
+            user["vocabulary_count"]
+            for user in users
+            if user["id"] == user_id
+        ),
+        0,
+    )
+    return render_template(
+        "admin_confirm_vocab_delete.html",
+        target_user=target_user,
+        vocabulary_count=vocabulary_count,
+    )
+
+
 @admin_bp.route("/admin/users/<int:user_id>/vocabs/delete", methods=["POST"])
 @admin_required
 @csrf_required
@@ -146,6 +173,17 @@ def delete_user_vocabs(user_id):
             return jsonify({"error": "User was not found"}), 404
         flash("User was not found")
         return redirect("/admin")
+
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        confirmed = data.get("confirmed") is True
+    else:
+        confirmed = request.form.get("confirmed") == "yes"
+    if not confirmed:
+        if request.is_json:
+            return jsonify({"error": "Vocabulary deletion must be confirmed"}), 400
+        flash("Vocabulary deletion was not confirmed")
+        return redirect(f"/admin/users/{user_id}/vocabs/delete/confirm")
 
     deleted_count = vocabulary_service.delete_entries_by_user(user_id)
     if request.is_json:

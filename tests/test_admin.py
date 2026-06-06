@@ -517,6 +517,84 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
         self.assertEqual(self.user_categories()["anna"], "basic")
 
+    def test_admin_vocab_deletion_requires_confirmation(self):
+        self.create_admin("tuomo")
+        user_response = self.register("anna")
+        user_id = user_response.get_json()["id"]
+        self.logout()
+        self.login("tuomo")
+        self.client.post(
+            f"/admin/users/{user_id}/category",
+            json={"account_category": "trusted"},
+            headers=self.csrf_headers(),
+        )
+        self.logout()
+        self.login("anna")
+        self.create_vocab("alpha")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            f'/admin/users/{user_id}/vocabs/delete/confirm'.encode(),
+            response.data,
+        )
+
+        response = self.client.get(
+            f"/admin/users/{user_id}/vocabs/delete/confirm",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            b"You are about to permanently remove all",
+            response.data,
+        )
+        self.assertIn(b"<strong>1</strong>", response.data)
+        self.assertIn(b"<strong>anna</strong>", response.data)
+        self.assertIn(b"This action cannot be undone.", response.data)
+        self.assertIn(b'name="confirmed" value="yes"', response.data)
+
+    def test_admin_cannot_remove_user_vocabs_without_confirmation(self):
+        self.create_admin("tuomo")
+        user_response = self.register("anna")
+        user_id = user_response.get_json()["id"]
+        self.logout()
+        self.login("tuomo")
+        self.client.post(
+            f"/admin/users/{user_id}/category",
+            json={"account_category": "trusted"},
+            headers=self.csrf_headers(),
+        )
+        self.logout()
+        self.login("anna")
+        self.create_vocab("alpha")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post(
+            f"/admin/users/{user_id}/vocabs/delete",
+            json={},
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json()["error"],
+            "Vocabulary deletion must be confirmed",
+        )
+        with self.app.app_context():
+            vocab_count = db.query(
+                """
+                SELECT COUNT(*) AS count
+                FROM vocabulary_entries
+                WHERE created_by = ?
+                """,
+                [user_id],
+            )[0]["count"]
+        self.assertEqual(vocab_count, 1)
+
     def test_admin_can_remove_all_vocabs_created_by_user(self):
         self.create_admin("tuomo")
         user_response = self.register("anna")
@@ -541,7 +619,7 @@ class AdminTestCase(unittest.TestCase):
 
         response = self.client.post(
             f"/admin/users/{user_id}/vocabs/delete",
-            json={},
+            json={"confirmed": True},
             headers=self.csrf_headers(),
         )
 

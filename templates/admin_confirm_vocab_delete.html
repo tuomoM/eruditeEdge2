@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Confirm deletion</h1>
+        <p class="muted">This action cannot be undone.</p>
+    </div>
+</div>
+
+<section class="detail-section">
+    <h2>Remove vocabulary entries?</h2>
+    <p>
+        You are about to permanently remove all
+        <strong>{{ vocabulary_count }}</strong>
+        vocabulary entries created by
+        <strong>{{ target_user.username }}</strong>.
+    </p>
+
+    <div class="actions">
+        <form action="/admin/users/{{ target_user.id }}/vocabs/delete" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="confirmed" value="yes">
+            <button class="button-danger" type="submit">Yes, remove all entries</button>
+        </form>
+        <a class="button button-secondary" href="/admin">Cancel</a>
+    </div>
+</section>
+{% endblock %}
