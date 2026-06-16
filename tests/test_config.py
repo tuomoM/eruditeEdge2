@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 import config
+from app import create_app
 
 
 class ConfigTestCase(unittest.TestCase):
@@ -69,6 +70,27 @@ class ConfigTestCase(unittest.TestCase):
                 config._default_security_report_path(),
                 os.path.join(config.BASE_DIR, "security-report.json"),
             )
+
+    def test_production_requires_explicit_secret_key(self):
+        with self.assertRaisesRegex(RuntimeError, "SECRET_KEY must be set"):
+            create_app(
+                {
+                    "APP_ENV": "production",
+                    "SECRET_KEY": "dev-secret-key",
+                }
+            )
+
+    def test_production_accepts_explicit_secret_key_and_secure_cookie_defaults(self):
+        app = create_app(
+            {
+                "APP_ENV": "production",
+                "SECRET_KEY": "production-secret-key",
+            }
+        )
+
+        self.assertTrue(app.config["SESSION_COOKIE_HTTPONLY"])
+        self.assertEqual(app.config["SESSION_COOKIE_SAMESITE"], "Lax")
+        self.assertTrue(app.config["SESSION_COOKIE_SECURE"])
 
 
 if __name__ == "__main__":

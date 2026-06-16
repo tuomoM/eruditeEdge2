@@ -17,6 +17,8 @@ def create_app(test_config=None):
     app.config.from_object(config)
     if test_config:
         app.config.update(test_config)
+    _configure_session_security(app)
+    _validate_secret_key(app)
     logging.basicConfig(level=logging.INFO)
 
     app.teardown_appcontext(db.close_connection)
@@ -37,6 +39,27 @@ def create_app(test_config=None):
         return redirect("/login")
 
     return app
+
+
+def _configure_session_security(app):
+    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
+    app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+    app_env = app.config.get("APP_ENV", "development")
+    if not app.config.get("TESTING") and app_env not in {"development", "dev", "local"}:
+        app.config["SESSION_COOKIE_SECURE"] = True
+
+
+def _validate_secret_key(app):
+    if app.config.get("TESTING"):
+        return
+
+    app_env = app.config.get("APP_ENV", "development")
+    if app_env in {"development", "dev", "local", "testing", "test"}:
+        return
+
+    secret_key = app.config.get("SECRET_KEY")
+    if not secret_key or secret_key == "dev-secret-key":
+        raise RuntimeError("SECRET_KEY must be set for production environments")
 
 
 app = create_app()

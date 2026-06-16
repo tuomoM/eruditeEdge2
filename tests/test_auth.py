@@ -79,7 +79,7 @@ class AuthTestCase(unittest.TestCase):
                 INSERT INTO users (username, password_hash, account_category)
                 VALUES (?, ?, ?)
                 """,
-                [username, generate_password_hash("safe-password"), "trusted"],
+                [username, generate_password_hash("AdminSafe12!"), "trusted"],
             )
 
     def invite_creator_id(self):
@@ -87,7 +87,7 @@ class AuthTestCase(unittest.TestCase):
             rows = db.query("SELECT id FROM users ORDER BY id LIMIT 1")
             if rows:
                 return rows[0]["id"]
-            admin_user, error = user_service.create_admin("invite_issuer", "safe-password")
+            admin_user, error = user_service.create_admin("invite_issuer", "AdminSafe12!")
             self.assertIsNone(error)
             return admin_user["id"]
 
@@ -121,7 +121,7 @@ class AuthTestCase(unittest.TestCase):
         return user_id
 
     def test_user_creation_succeeds(self):
-        response = self.register("tuomo", "safe-password")
+        response = self.register("tuomo", "AdminSafe12!")
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.get_json()["username"], "tuomo")
@@ -143,7 +143,7 @@ class AuthTestCase(unittest.TestCase):
         self.assertIn(b"EE%20icon.png", response.data)
 
     def test_account_page_for_logged_in_user_shows_logout(self):
-        self.register("tuomo", "safe-password")
+        self.register("tuomo", "AdminSafe12!")
 
         response = self.client.get("/account")
 
@@ -155,7 +155,7 @@ class AuthTestCase(unittest.TestCase):
     def test_user_creation_requires_invite_code(self):
         response = self.client.post(
             "/register",
-            json={"username": "tuomo", "password": "safe-password"},
+            json={"username": "tuomo", "password": "AdminSafe12!"},
             headers=self.registration_csrf_headers(),
         )
 
@@ -169,7 +169,7 @@ class AuthTestCase(unittest.TestCase):
             "/register",
             json={
                 "username": "tuomo",
-                "password": "safe-password",
+                "password": "AdminSafe12!",
                 "invite_code": invite_code,
             },
         )
@@ -186,7 +186,7 @@ class AuthTestCase(unittest.TestCase):
             "/register",
             json={
                 "username": "tuomo",
-                "password": "safe-password",
+                "password": "AdminSafe12!",
                 "invite_code": invite_code,
             },
             headers={"X-CSRF-Token": "wrong-token"},
@@ -200,7 +200,7 @@ class AuthTestCase(unittest.TestCase):
             "/register",
             json={
                 "username": "tuomo",
-                "password": "safe-password",
+                "password": "AdminSafe12!",
                 "invite_code": "missing-code",
             },
             headers=self.registration_csrf_headers(),
@@ -210,13 +210,13 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(response.get_json()["error"], "Invite code is invalid or expired")
 
     def test_invalid_invite_code_does_not_reveal_existing_username(self):
-        self.register("tuomo", "safe-password")
+        self.register("tuomo", "AdminSafe12!")
 
         response = self.client.post(
             "/register",
             json={
                 "username": "tuomo",
-                "password": "another-safe-password",
+                "password": "another-AdminSafe12!",
                 "invite_code": "missing-code",
             },
             headers=self.registration_csrf_headers(),
@@ -235,7 +235,7 @@ class AuthTestCase(unittest.TestCase):
             "/register",
             json={
                 "username": "tuomo",
-                "password": "safe-password",
+                "password": "AdminSafe12!",
                 "invite_code": invite_code,
             },
             headers=self.registration_csrf_headers(),
@@ -251,7 +251,7 @@ class AuthTestCase(unittest.TestCase):
             "/register",
             json={
                 "username": "tuomo",
-                "password": "safe-password",
+                "password": "AdminSafe12!",
                 "invite_code": invite_code,
             },
             headers=self.registration_csrf_headers(),
@@ -278,7 +278,7 @@ class AuthTestCase(unittest.TestCase):
             "/register",
             json={
                 "username": "tuomo",
-                "password": "safe-password",
+                "password": "AdminSafe12!",
                 "invite_code": invite_code,
             },
             headers=self.registration_csrf_headers(),
@@ -287,7 +287,7 @@ class AuthTestCase(unittest.TestCase):
             "/register",
             json={
                 "username": "anna",
-                "password": "safe-password",
+                "password": "AdminSafe12!",
                 "invite_code": invite_code,
             },
             headers=self.registration_csrf_headers(),
@@ -491,26 +491,26 @@ class AuthTestCase(unittest.TestCase):
         self.assertIsNone(invite_codes[0]["used_by"])
 
     def test_registered_user_is_basic(self):
-        response = self.register("tuomo", "safe-password")
+        response = self.register("tuomo", "AdminSafe12!")
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.get_json()["account_category"], "basic")
 
     def test_later_registered_users_are_basic(self):
-        self.register("tuomo", "safe-password")
+        self.register("tuomo", "AdminSafe12!")
 
-        response = self.register("anna", "safe-password")
+        response = self.register("anna", "AdminSafe12!")
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.get_json()["account_category"], "basic")
 
     def test_user_creation_does_not_allow_sql_injection(self):
-        response = self.register("' OR 1=1 --", "safe-password")
+        response = self.register("' OR 1=1 --", "AdminSafe12!")
 
         self.assertEqual(response.status_code, 400)
 
     def test_user_creation_does_not_allow_user_id_shorter_than_two_characters(self):
-        response = self.register("a", "safe-password")
+        response = self.register("a", "AdminSafe12!")
 
         self.assertEqual(response.status_code, 400)
 
@@ -530,23 +530,23 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_login_succeeds_with_correct_user_id_and_password(self):
-        self.register("tuomo", "safe-password")
+        self.register("tuomo", "AdminSafe12!")
 
-        response = self.login("tuomo", "safe-password")
+        response = self.login("tuomo", "AdminSafe12!")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["username"], "tuomo")
         self.assertEqual(response.get_json()["account_category"], "basic")
 
     def test_login_fails_with_incorrect_password(self):
-        self.register("tuomo", "safe-password")
+        self.register("tuomo", "AdminSafe12!")
 
         response = self.login("tuomo", "wrong-password")
 
         self.assertEqual(response.status_code, 401)
 
     def test_login_does_not_allow_sql_injection(self):
-        self.register("tuomo", "safe-password")
+        self.register("tuomo", "AdminSafe12!")
 
         response = self.login("' OR 1=1 --", "anything")
 
@@ -693,9 +693,9 @@ class AuthTestCase(unittest.TestCase):
 
     def test_admin_can_elevate_user_to_trusted(self):
         with self.app.app_context():
-            admin_user, error = user_service.create_admin("tuomo", "safe-password")
+            admin_user, error = user_service.create_admin("tuomo", "AdminSafe12!")
         self.assertIsNone(error)
-        user_response = self.register("anna", "safe-password")
+        user_response = self.register("anna", "AdminSafe12!")
 
         with self.app.app_context():
             updated_user, error = user_service.update_account_category(
@@ -709,9 +709,9 @@ class AuthTestCase(unittest.TestCase):
 
     def test_admin_cannot_elevate_user_to_admin(self):
         with self.app.app_context():
-            admin_user, error = user_service.create_admin("tuomo", "safe-password")
+            admin_user, error = user_service.create_admin("tuomo", "AdminSafe12!")
         self.assertIsNone(error)
-        user_response = self.register("anna", "safe-password")
+        user_response = self.register("anna", "AdminSafe12!")
 
         with self.app.app_context():
             updated_user, error = user_service.update_account_category(
@@ -724,9 +724,9 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(error, "Invalid account category")
 
     def test_non_admin_cannot_change_user_category(self):
-        self.register("tuomo", "safe-password")
-        basic_response = self.register("anna", "safe-password")
-        target_response = self.register("mika", "safe-password")
+        self.register("tuomo", "AdminSafe12!")
+        basic_response = self.register("anna", "AdminSafe12!")
+        target_response = self.register("mika", "AdminSafe12!")
 
         with self.app.app_context():
             updated_user, error = user_service.update_account_category(
@@ -740,9 +740,9 @@ class AuthTestCase(unittest.TestCase):
 
     def test_invalid_account_category_is_rejected(self):
         with self.app.app_context():
-            admin_user, error = user_service.create_admin("tuomo", "safe-password")
+            admin_user, error = user_service.create_admin("tuomo", "AdminSafe12!")
         self.assertIsNone(error)
-        user_response = self.register("anna", "safe-password")
+        user_response = self.register("anna", "AdminSafe12!")
 
         with self.app.app_context():
             updated_user, error = user_service.update_account_category(
@@ -755,7 +755,7 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(error, "Invalid account category")
 
     def test_user_category_is_stored_in_database(self):
-        self.register("tuomo", "safe-password")
+        self.register("tuomo", "AdminSafe12!")
 
         with self.app.app_context():
             rows = db.query(
@@ -777,10 +777,10 @@ class AuthTestCase(unittest.TestCase):
                 "--username",
                 "tuomo",
                 "--password",
-                "safe-password",
+                "AdminSafe12!",
             ]
         )
-        self.register("anna", "safe-password")
+        self.register("anna", "AdminSafe12!")
 
         result = runner.invoke(
             args=[
@@ -788,7 +788,7 @@ class AuthTestCase(unittest.TestCase):
                 "--username",
                 "mika",
                 "--password",
-                "safe-password",
+                "AdminSafe12!",
             ]
         )
 
@@ -803,9 +803,47 @@ class AuthTestCase(unittest.TestCase):
             },
         )
 
+    def test_create_admin_requires_complex_password(self):
+        runner = self.app.test_cli_runner()
+
+        result = runner.invoke(
+            args=[
+                "create-admin",
+                "--username",
+                "tuomo",
+                "--password",
+                "simplepass",
+            ]
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Admin password must be at least 12 characters", result.output)
+
+    def test_create_admin_requires_password_number(self):
+        runner = self.app.test_cli_runner()
+
+        result = runner.invoke(
+            args=[
+                "create-admin",
+                "--username",
+                "tuomo",
+                "--password",
+                "AdminPassword!",
+            ]
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Admin password must include a number", result.output)
+
+    def test_basic_user_password_rule_is_unchanged(self):
+        response = self.register("anna", "short")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["username"], "anna")
+
     def test_create_admin_command_aborts_before_replacing_existing_admin(self):
         runner = self.app.test_cli_runner()
-        self.register("anna", "safe-password")
+        self.register("anna", "AdminSafe12!")
 
         result = runner.invoke(
             args=[
@@ -813,7 +851,7 @@ class AuthTestCase(unittest.TestCase):
                 "--username",
                 "anna",
                 "--password",
-                "safe-password",
+                "AdminSafe12!",
             ]
         )
 
@@ -844,14 +882,14 @@ class AuthTestCase(unittest.TestCase):
                 "--username",
                 "tuomo",
                 "--password",
-                "safe-password",
+                "AdminSafe12!",
             ]
         )
         self.create_trusted_user_directly("anna")
 
         result = runner.invoke(
             args=["rotate-admin"],
-            input="tuomo\nsafe-password\nanna\ny\n",
+            input="tuomo\nAdminSafe12!\nanna\ny\n",
         )
 
         self.assertEqual(result.exit_code, 0)
@@ -873,14 +911,14 @@ class AuthTestCase(unittest.TestCase):
                 "--username",
                 "tuomo",
                 "--password",
-                "safe-password",
+                "AdminSafe12!",
             ]
         )
         self.create_trusted_user_directly("anna")
 
         result = runner.invoke(
             args=["rotate-admin"],
-            input="tuomo\nsafe-password\nanna\nYES\n",
+            input="tuomo\nAdminSafe12!\nanna\nYES\n",
         )
 
         self.assertEqual(result.exit_code, 0)
@@ -895,7 +933,7 @@ class AuthTestCase(unittest.TestCase):
                 "--username",
                 "tuomo",
                 "--password",
-                "safe-password",
+                "AdminSafe12!",
             ]
         )
         self.create_trusted_user_directly("anna")
@@ -924,14 +962,14 @@ class AuthTestCase(unittest.TestCase):
                 "--username",
                 "tuomo",
                 "--password",
-                "safe-password",
+                "AdminSafe12!",
             ]
         )
         self.create_trusted_user_directly("anna")
 
         result = runner.invoke(
             args=["rotate-admin"],
-            input="tuomo\nsafe-password\nanna\nn\n",
+            input="tuomo\nAdminSafe12!\nanna\nn\n",
         )
 
         self.assertEqual(result.exit_code, 0)

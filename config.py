@@ -43,9 +43,27 @@ def _default_security_report_path():
     return os.path.join(BASE_DIR, "security-report.json")
 
 
+def _env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _environment():
+    return os.environ.get("APP_ENV") or os.environ.get("FLASK_ENV") or "development"
+
+
 DATABASE = _default_database_path()
 SECURITY_REPORT_PATH = _default_security_report_path()
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
+APP_ENV = _environment()
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
+SESSION_COOKIE_SECURE = _env_bool(
+    "SESSION_COOKIE_SECURE",
+    APP_ENV not in {"development", "dev", "local", "testing", "test"},
+)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
 TRUSTED_AI_DAILY_QUOTA = int(os.environ.get("TRUSTED_AI_DAILY_QUOTA", "20"))

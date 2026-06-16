@@ -113,6 +113,17 @@ class UserRepository:
         result = db.query("SELECT COUNT(*) AS count FROM users")
         return result[0]["count"]
 
+    def count_created_since(self, created_since):
+        result = db.query(
+            """
+            SELECT COUNT(*) AS count
+            FROM users
+            WHERE created_at >= ?
+            """,
+            [created_since],
+        )
+        return result[0]["count"]
+
     def admin_exists(self):
         result = db.query(
             """

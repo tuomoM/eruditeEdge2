@@ -104,6 +104,17 @@ class VocabularyRepository:
         )
         return [self.get_entry(row["id"]) for row in rows]
 
+    def count_created_since(self, created_since):
+        result = db.query(
+            """
+            SELECT COUNT(*) AS count
+            FROM vocabulary_entries
+            WHERE created_at >= ?
+            """,
+            [created_since],
+        )
+        return result[0]["count"]
+
     def delete_entries_by_user(self, user_id):
         connection = db.get_connection()
         try:

@@ -12,6 +12,15 @@ class InviteCodeRepository:
         )
         return cursor.lastrowid
 
+    def delete_expired_invite_codes(self, now):
+        db.execute(
+            """
+            DELETE FROM invite_codes
+            WHERE expires_at <= ?
+            """,
+            [now],
+        )
+
     def get_invite_code(self, invite_code_id):
         rows = db.query(
             """
@@ -25,7 +34,7 @@ class InviteCodeRepository:
             return None
         return dict(rows[0])
 
-    def list_invite_codes(self):
+    def list_invite_codes(self, now):
         return [
             dict(row)
             for row in db.query(
@@ -44,8 +53,10 @@ class InviteCodeRepository:
                 JOIN users ON users.id = invite_codes.created_by
                 LEFT JOIN users AS used_users ON used_users.id = invite_codes.used_by
                 WHERE invite_codes.used_by IS NULL
+                    AND invite_codes.expires_at > ?
                 ORDER BY invite_codes.created_at DESC, invite_codes.id DESC
-                """
+                """,
+                [now],
             )
         ]
 

@@ -19,7 +19,9 @@ class InviteCodeService:
             return None, "Admin account is required"
 
         code = secrets.token_urlsafe(24)
-        expires_at = datetime.now(timezone.utc) + timedelta(days=INVITE_CODE_VALID_DAYS)
+        now = datetime.now(timezone.utc)
+        self._invite_code_repository.delete_expired_invite_codes(now.isoformat())
+        expires_at = now + timedelta(days=INVITE_CODE_VALID_DAYS)
         invite_code_id = self._invite_code_repository.create_invite_code(
             code,
             acting_user["id"],
@@ -30,7 +32,8 @@ class InviteCodeService:
     def list_invite_codes(self, acting_user):
         if not acting_user or acting_user["account_category"] != ACCOUNT_CATEGORY_ADMIN:
             return None, "Admin account is required"
-        return self._invite_code_repository.list_invite_codes(), None
+        now = datetime.now(timezone.utc).isoformat()
+        return self._invite_code_repository.list_invite_codes(now), None
 
 
 invite_code_service = InviteCodeService()

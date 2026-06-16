@@ -56,7 +56,7 @@ class AccessRequestTestCase(unittest.TestCase):
                 "--username",
                 username,
                 "--password",
-                "safe-password",
+                "AdminSafe12!",
             ]
         )
         self.assertEqual(result.exit_code, 0)
@@ -64,7 +64,7 @@ class AccessRequestTestCase(unittest.TestCase):
     def login(self, username):
         return self.client.post(
             "/login",
-            json={"username": username, "password": "safe-password"},
+            json={"username": username, "password": "AdminSafe12!"},
         )
 
     def create_invite_code(self):
@@ -87,7 +87,7 @@ class AccessRequestTestCase(unittest.TestCase):
             "/register",
             json={
                 "username": "anna",
-                "password": "safe-password",
+                "password": "AdminSafe12!",
                 "invite_code": invite_code,
             },
             headers=self.registration_csrf_headers(),

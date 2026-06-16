@@ -8,41 +8,38 @@
     </div>
 </div>
 
-<section class="admin-section">
-    <div class="section-heading">
-        <h2>Invite codes</h2>
-        <form action="/admin/invite-codes" method="post">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="button-primary" type="submit">Generate invite code</button>
-        </form>
+<section class="admin-summary" aria-label="Admin summary">
+    <div class="summary-metric">
+        <span class="summary-label">Pending requests</span>
+        <strong>{{ admin_summary.pending_access_requests }}</strong>
     </div>
-    <div class="entry-list">
-        {% for invite_code in invite_codes %}
-            <div class="entry-row">
-                <div class="entry-main">
-                    <div class="entry-heading">
-                        <strong class="entry-word">{{ invite_code.code }}</strong>
-                        <button
-                            class="button-secondary button-small copy-code-button"
-                            type="button"
-                            data-code="{{ invite_code.code }}"
-                        >
-                            Copy
-                        </button>
-                        <span class="copy-status muted" aria-live="polite"></span>
-                    </div>
-                    <p class="entry-definition">
-                        Valid until {{ invite_code.expires_at }}.
-                        Created by {{ invite_code.created_by_username }}.
-                        {% if invite_code.used_by_username %}
-                            Used by {{ invite_code.used_by_username }}.
-                        {% endif %}
-                    </p>
-                </div>
-            </div>
-        {% else %}
-            <p class="muted">No invite codes yet.</p>
-        {% endfor %}
+    <div class="summary-metric">
+        <span class="summary-label">Active invite codes</span>
+        <strong>{{ admin_summary.active_invite_codes }}</strong>
+    </div>
+    <div class="summary-metric">
+        <span class="summary-label">Security vulnerabilities</span>
+        <strong>{{ admin_summary.vulnerability_count }}</strong>
+    </div>
+    <div class="summary-metric">
+        <span class="summary-label">Users at AI quota</span>
+        <strong>{{ admin_summary.quota_pressure_count }}</strong>
+    </div>
+    <div class="summary-metric summary-metric-secondary">
+        <span class="summary-label">New users today</span>
+        <strong>{{ admin_summary.users_today }}</strong>
+    </div>
+    <div class="summary-metric summary-metric-secondary">
+        <span class="summary-label">New users last 7 days</span>
+        <strong>{{ admin_summary.users_week }}</strong>
+    </div>
+    <div class="summary-metric summary-metric-secondary">
+        <span class="summary-label">New vocabulary entries today</span>
+        <strong>{{ admin_summary.vocab_today }}</strong>
+    </div>
+    <div class="summary-metric summary-metric-secondary">
+        <span class="summary-label">New vocabulary entries last 7 days</span>
+        <strong>{{ admin_summary.vocab_week }}</strong>
     </div>
 </section>
 
@@ -59,12 +56,17 @@
                         <span class="meta-chip">{{ access_request.email }}</span>
                     </div>
                     <p class="entry-definition">{{ access_request.message }}</p>
-                    <p class="entry-definition muted">Requested {{ access_request.created_at }}</p>
+                    <p class="entry-definition muted">Requested {{ access_request.created_at_label }}</p>
                 </div>
-                <div class="actions">
-                    <form action="/admin/access-requests/{{ access_request.id }}/delete" method="post">
+                <div class="actions admin-row-actions">
+                    <a class="button button-secondary button-compact" href="mailto:{{ access_request.email }}">Email</a>
+                    <form action="/admin/invite-codes" method="post">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="button-danger button-compact" type="submit">Delete</button>
+                        <button class="button-primary button-compact" type="submit">Generate invite</button>
+                    </form>
+                    <form action="/admin/access-requests/{{ access_request.id }}/delete" method="post" class="danger-action">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="button-danger button-compact" type="submit">Mark handled</button>
                     </form>
                 </div>
             </div>
@@ -76,7 +78,132 @@
 
 <section class="admin-section">
     <div class="section-heading">
-        <h2>Dependency security report</h2>
+        <div>
+            <h2>Invite codes</h2>
+            <p class="section-note">Codes are single-use, valid for 5 days, and only active unused codes are shown.</p>
+        </div>
+        <form action="/admin/invite-codes" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="button-primary" type="submit">Generate invite code</button>
+        </form>
+    </div>
+    <div class="entry-list">
+        {% for invite_code in invite_codes %}
+            <div class="entry-row">
+                <div class="entry-main">
+                    <div class="entry-heading">
+                        <strong class="entry-word">{{ invite_code.code }}</strong>
+                        <button class="button-secondary button-small copy-code-button" type="button" data-code="{{ invite_code.code }}">
+                            Copy
+                        </button>
+                        <span class="copy-status muted" aria-live="polite"></span>
+                    </div>
+                    <p class="entry-definition">
+                        Valid until {{ invite_code.expires_at_label }}.
+                        Created by {{ invite_code.created_by_username }}.
+                    </p>
+                </div>
+            </div>
+        {% else %}
+            <p class="muted">No invite codes yet.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="admin-section">
+    <div class="section-heading">
+        <div>
+            <h2>Users</h2>
+            <p class="section-note">{{ users | length }} users, sorted by user id.</p>
+        </div>
+    </div>
+    <div class="toolbar admin-user-toolbar">
+        <div class="field toolbar-search">
+            <label class="toolbar-label" for="admin-user-search">Search users</label>
+            <input id="admin-user-search" type="search" placeholder="User id">
+        </div>
+        <div class="field admin-select-field">
+            <label class="toolbar-label" for="admin-role-filter">Role</label>
+            <select id="admin-role-filter">
+                <option value="all">All roles</option>
+                <option value="admin">Admin</option>
+                <option value="trusted">Trusted</option>
+                <option value="basic">Basic</option>
+            </select>
+        </div>
+        <div class="field admin-select-field">
+            <label class="toolbar-label" for="admin-sort">Sort</label>
+            <select id="admin-sort">
+                <option value="username">User id</option>
+                <option value="recent">Recent signup</option>
+                <option value="vocabulary">Vocabulary entries</option>
+                <option value="quota">AI usage</option>
+            </select>
+        </div>
+    </div>
+    <div class="entry-list" id="admin-user-list">
+        {% for user in users %}
+            <div
+                class="entry-row admin-user-row"
+                data-username="{{ user.username | lower }}"
+                data-role="{{ user.account_category }}"
+                data-created-at="{{ user.created_at }}"
+                data-vocabulary-count="{{ user.vocabulary_count }}"
+                data-ai-generation-count="{{ user.ai_generation_count }}"
+            >
+                <div class="entry-main">
+                    <div class="entry-heading">
+                        <strong class="entry-word">{{ user.username }}</strong>
+                        <span class="meta-chip">{{ user.account_category }}</span>
+                    </div>
+                    <p class="entry-definition">
+                        {{ user.vocabulary_count }} vocabulary entries
+                    </p>
+                    <p class="entry-definition">
+                        AI generations today:
+                        {% if user.ai_generation_quota is none %}
+                            {{ user.ai_generation_count }} / unlimited
+                        {% else %}
+                            {{ user.ai_generation_count }} / {{ user.ai_generation_quota }}
+                        {% endif %}
+                    </p>
+                    <p class="entry-definition muted">Created {{ user.created_at_label }}</p>
+                </div>
+                <div class="actions admin-row-actions">
+                    {% if user.account_category != "admin" %}
+                        {% if user.account_category == "basic" %}
+                            <form action="/admin/users/{{ user.id }}/category" method="post">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="account_category" value="trusted">
+                                <button class="button-primary button-compact" type="submit">Change to trusted</button>
+                            </form>
+                        {% elif user.account_category == "trusted" %}
+                            <form action="/admin/users/{{ user.id }}/category" method="post">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="account_category" value="basic">
+                                <button class="button-secondary button-compact" type="submit">Change to basic</button>
+                            </form>
+                        {% endif %}
+                    {% endif %}
+                    <form action="/admin/users/{{ user.id }}/ai-quota/reset" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="button-secondary button-compact" type="submit">Reset AI quota</button>
+                    </form>
+                    {% if user.account_category != "admin" and user.vocabulary_count > 0 %}
+                        <form action="/admin/users/{{ user.id }}/vocabs/delete/confirm" method="get" class="danger-action">
+                            <button class="button-danger button-compact" type="submit">Delete vocabulary entries</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+        <p class="filter-empty-message" id="admin-user-empty" hidden>No users match the current filters.</p>
+    </div>
+</section>
+
+<section class="admin-section">
+    <div class="section-heading">
+        <h2>Maintenance</h2>
         <form action="/admin/security-report/run" method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="button-secondary" type="submit">Run security audit</button>
@@ -84,7 +211,7 @@
     </div>
     <div class="security-report-summary">
         {% if security_report.last_run_at %}
-            <p class="entry-definition">Last run {{ security_report.last_run_at }}</p>
+            <p class="entry-definition">Dependency security report last run {{ security_report.last_run_label }}</p>
         {% else %}
             <p class="entry-definition">{{ security_report.message }}</p>
         {% endif %}
@@ -126,54 +253,6 @@
     </div>
 </section>
 
-<div class="entry-list">
-    {% for user in users %}
-        <div class="entry-row">
-            <div class="entry-main">
-                <div class="entry-heading">
-                    <strong class="entry-word">{{ user.username }}</strong>
-                    <span class="meta-chip">{{ user.account_category }}</span>
-                </div>
-                <p class="entry-definition">
-                    {{ user.vocabulary_count }} vocabulary entries
-                </p>
-                <p class="entry-definition">
-                    AI generations today:
-                    {% if user.ai_generation_quota is none %}
-                        {{ user.ai_generation_count }} / unlimited
-                    {% else %}
-                        {{ user.ai_generation_count }} / {{ user.ai_generation_quota }}
-                    {% endif %}
-                </p>
-            </div>
-            <div class="actions">
-                {% if user.account_category != "admin" %}
-                    {% if user.account_category == "basic" %}
-                        <form action="/admin/users/{{ user.id }}/category" method="post">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="account_category" value="trusted">
-                            <button class="button-primary button-compact" type="submit">Make trusted</button>
-                        </form>
-                    {% elif user.account_category == "trusted" %}
-                        <form action="/admin/users/{{ user.id }}/category" method="post">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="account_category" value="basic">
-                            <button class="button-secondary button-compact" type="submit">Make basic</button>
-                        </form>
-                    {% endif %}
-                {% endif %}
-                <form action="/admin/users/{{ user.id }}/vocabs/delete/confirm" method="get">
-                    <button class="button-danger button-compact" type="submit">Remove vocabs</button>
-                </form>
-                <form action="/admin/users/{{ user.id }}/ai-quota/reset" method="post">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="button-secondary button-compact" type="submit">Reset AI quota</button>
-                </form>
-            </div>
-        </div>
-    {% endfor %}
-</div>
-
 <script>
 document.querySelectorAll(".copy-code-button").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -203,5 +282,61 @@ document.querySelectorAll(".copy-code-button").forEach((button) => {
         }
     });
 });
+
+const userSearch = document.getElementById("admin-user-search");
+const roleFilter = document.getElementById("admin-role-filter");
+const sortSelect = document.getElementById("admin-sort");
+const userList = document.getElementById("admin-user-list");
+const emptyMessage = document.getElementById("admin-user-empty");
+const userRows = Array.from(document.querySelectorAll(".admin-user-row"));
+
+function userSortValue(row, sortMode) {
+    if (sortMode === "recent") {
+        return row.dataset.createdAt || "";
+    }
+    if (sortMode === "vocabulary") {
+        return Number(row.dataset.vocabularyCount || 0);
+    }
+    if (sortMode === "quota") {
+        return Number(row.dataset.aiGenerationCount || 0);
+    }
+    return row.dataset.username || "";
+}
+
+function refreshUserList() {
+    const query = (userSearch.value || "").trim().toLowerCase();
+    const role = roleFilter.value;
+    const sortMode = sortSelect.value;
+    let visibleCount = 0;
+
+    userRows
+        .sort((first, second) => {
+            const firstValue = userSortValue(first, sortMode);
+            const secondValue = userSortValue(second, sortMode);
+            if (sortMode === "recent" || sortMode === "vocabulary" || sortMode === "quota") {
+                return firstValue < secondValue ? 1 : firstValue > secondValue ? -1 : 0;
+            }
+            return String(firstValue).localeCompare(String(secondValue));
+        })
+        .forEach((row) => {
+            const matchesSearch = !query || row.dataset.username.includes(query);
+            const matchesRole = role === "all" || row.dataset.role === role;
+            const visible = matchesSearch && matchesRole;
+            row.hidden = !visible;
+            if (visible) {
+                visibleCount += 1;
+            }
+            userList.insertBefore(row, emptyMessage);
+        });
+
+    emptyMessage.hidden = visibleCount > 0;
+}
+
+if (userSearch && roleFilter && sortSelect) {
+    userSearch.addEventListener("input", refreshUserList);
+    roleFilter.addEventListener("change", refreshUserList);
+    sortSelect.addEventListener("change", refreshUserList);
+    refreshUserList();
+}
 </script>
 {% endblock %}

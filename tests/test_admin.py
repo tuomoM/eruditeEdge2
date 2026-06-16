@@ -39,7 +39,7 @@ class AdminTestCase(unittest.TestCase):
             "/register",
             json={
                 "username": username,
-                "password": "safe-password",
+                "password": "AdminSafe12!",
                 "invite_code": invite_code,
             },
             headers=self.registration_csrf_headers(),
@@ -53,7 +53,7 @@ class AdminTestCase(unittest.TestCase):
                 "--username",
                 username,
                 "--password",
-                "safe-password",
+                "AdminSafe12!",
             ]
         )
         self.assertEqual(result.exit_code, 0)
@@ -61,7 +61,7 @@ class AdminTestCase(unittest.TestCase):
     def login(self, username):
         return self.client.post(
             "/login",
-            json={"username": username, "password": "safe-password"},
+            json={"username": username, "password": "AdminSafe12!"},
         )
 
     def registration_csrf_headers(self):
@@ -77,8 +77,9 @@ class AdminTestCase(unittest.TestCase):
             self.create_admin("invite_issuer")
             return db.query("SELECT id FROM users WHERE username = ?", ["invite_issuer"])[0]["id"]
 
-    def create_invite_code(self):
-        expires_at = datetime.now(timezone.utc) + timedelta(days=5)
+    def create_invite_code(self, expires_at=None):
+        if expires_at is None:
+            expires_at = datetime.now(timezone.utc) + timedelta(days=5)
         creator_id = self.invite_creator_id()
         with self.app.app_context():
             count = db.query("SELECT COUNT(*) AS count FROM invite_codes")[0]["count"]
@@ -162,6 +163,9 @@ class AdminTestCase(unittest.TestCase):
             )
         return [dict(row) for row in rows]
 
+    def sqlite_timestamp(self, value):
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
     def write_security_report(self, report):
         with open(self.security_report_file.name, "w", encoding="utf-8") as report_file:
             json.dump(report, report_file)
@@ -205,6 +209,65 @@ class AdminTestCase(unittest.TestCase):
         self.assertIn(b"Invite codes", response.data)
         self.assertIn(self.invite_codes()[0]["code"].encode(), response.data)
 
+    def test_admin_page_shows_new_user_and_vocab_summary(self):
+        self.create_admin("tuomo")
+        now = datetime.now(timezone.utc)
+        today = self.sqlite_timestamp(now)
+        rolling_week = self.sqlite_timestamp(now - timedelta(days=2))
+        older = self.sqlite_timestamp(now - timedelta(days=8))
+        with self.app.app_context():
+            admin_id = db.query("SELECT id FROM users WHERE username = ?", ["tuomo"])[0]["id"]
+            db.execute(
+                "UPDATE users SET created_at = ? WHERE id = ?",
+                [older, admin_id],
+            )
+            for username, created_at in [
+                ("today_user", today),
+                ("week_user", rolling_week),
+                ("old_user", older),
+            ]:
+                db.execute(
+                    """
+                    INSERT INTO users (username, password_hash, account_category, created_at)
+                    VALUES (?, 'test-hash', 'basic', ?)
+                    """,
+                    [username, created_at],
+                )
+            for index, created_at in enumerate(
+                [today, today, today, rolling_week, older],
+                start=1,
+            ):
+                db.execute(
+                    """
+                    INSERT INTO vocabulary_entries
+                        (word, definition, context, created_by, created_at)
+                    VALUES (?, ?, 'Admin', ?, ?)
+                    """,
+                    [
+                        f"summaryword{index}",
+                        f"Definition {index}",
+                        admin_id,
+                        created_at,
+                    ],
+                )
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"New users today", response.data)
+        self.assertIn(b"New users last 7 days", response.data)
+        self.assertIn(b"New vocabulary entries today", response.data)
+        self.assertIn(b"New vocabulary entries last 7 days", response.data)
+        self.assertIn(b"Pending requests", response.data)
+        self.assertIn(b"Active invite codes", response.data)
+        self.assertIn(b"Users at AI quota", response.data)
+        self.assertIn(b"<strong>1</strong>", response.data)
+        self.assertIn(b"<strong>2</strong>", response.data)
+        self.assertIn(b"<strong>3</strong>", response.data)
+        self.assertIn(b"<strong>4</strong>", response.data)
+
     def test_admin_page_shows_clean_dependency_security_report(self):
         self.write_security_report(
             {
@@ -223,7 +286,7 @@ class AdminTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Dependency security report", response.data)
-        self.assertIn(b"Last run", response.data)
+        self.assertIn(b"last run", response.data)
         self.assertIn(b"2 dependencies checked.", response.data)
         self.assertIn(b"0 vulnerabilities found.", response.data)
         self.assertIn(b"No dependency vulnerabilities", response.data)
@@ -339,7 +402,7 @@ class AdminTestCase(unittest.TestCase):
             "/register",
             json={
                 "username": "anna",
-                "password": "safe-password",
+                "password": "AdminSafe12!",
                 "invite_code": used_code,
             },
             headers=self.registration_csrf_headers(),
@@ -352,6 +415,23 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(used_code.encode(), response.data)
         self.assertIn(unused_code.encode(), response.data)
+
+    def test_admin_page_hides_expired_invite_codes(self):
+        self.create_admin("tuomo")
+        expired_code = self.create_invite_code(
+            datetime.now(timezone.utc) - timedelta(days=1)
+        )
+        valid_code = self.create_invite_code(
+            datetime.now(timezone.utc) + timedelta(days=1)
+        )
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(expired_code.encode(), response.data)
+        self.assertIn(valid_code.encode(), response.data)
 
     def test_admin_can_generate_invite_code_valid_for_five_days(self):
         self.create_admin("tuomo")
@@ -371,6 +451,29 @@ class AdminTestCase(unittest.TestCase):
         expected_expiry = datetime.now(timezone.utc) + timedelta(days=5)
         self.assertLess(abs(expires_at - expected_expiry), timedelta(seconds=5))
         self.assertEqual(self.invite_codes()[0]["code"], body["code"])
+
+    def test_admin_invite_code_generation_deletes_expired_codes(self):
+        self.create_admin("tuomo")
+        expired_code = self.create_invite_code(
+            datetime.now(timezone.utc) - timedelta(days=1)
+        )
+        valid_code = self.create_invite_code(
+            datetime.now(timezone.utc) + timedelta(days=1)
+        )
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post(
+            "/admin/invite-codes",
+            json={},
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 201)
+        codes = [invite_code["code"] for invite_code in self.invite_codes()]
+        self.assertNotIn(expired_code, codes)
+        self.assertIn(valid_code, codes)
+        self.assertIn(response.get_json()["code"], codes)
 
     def test_basic_user_cannot_generate_invite_code(self):
         self.register("anna")
@@ -646,6 +749,24 @@ class AdminTestCase(unittest.TestCase):
 
         self.assertEqual(vocab_count, 0)
         self.assertEqual(training_count, 0)
+
+    def test_admin_cannot_remove_admin_user_vocabs(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        admin_id = self.create_vocab("adminword").get_json()["created_by"]
+
+        response = self.client.post(
+            f"/admin/users/{admin_id}/vocabs/delete",
+            json={"confirmed": True},
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json()["error"],
+            "Admin vocabulary entries cannot be removed here",
+        )
 
     def test_basic_user_cannot_remove_user_vocabs(self):
         target_response = self.register("anna")

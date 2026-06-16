@@ -66,6 +66,9 @@ class VocabularyService:
     def list_entries(self):
         return self._vocabulary_repository.list_entries()
 
+    def count_entries_created_since(self, created_since):
+        return self._vocabulary_repository.count_created_since(created_since)
+
     def delete_entries_by_user(self, user_id):
         return self._vocabulary_repository.delete_entries_by_user(user_id)
 

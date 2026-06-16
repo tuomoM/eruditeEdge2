@@ -8,6 +8,7 @@ from Repositories.user_repository import user_repository as default_user_reposit
 
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 USERNAME_CHARACTER_PATTERN = re.compile(r"[^A-Za-z0-9_]+")
+ADMIN_PASSWORD_MIN_LENGTH = 12
 ACCOUNT_CATEGORY_BASIC = "basic"
 ACCOUNT_CATEGORY_TRUSTED = "trusted"
 ACCOUNT_CATEGORY_ADMIN = "admin"
@@ -43,6 +44,22 @@ class UserService:
             return "Password cannot be same as user id"
         if len(password) < 4:
             return "Password must be at least 4 characters"
+        return None
+
+    def validate_admin_password(self, username, password):
+        password_error = self.validate_password(username, password)
+        if password_error:
+            return password_error
+        if len(password) < ADMIN_PASSWORD_MIN_LENGTH:
+            return f"Admin password must be at least {ADMIN_PASSWORD_MIN_LENGTH} characters"
+        if not re.search(r"[a-z]", password):
+            return "Admin password must include a lowercase letter"
+        if not re.search(r"[A-Z]", password):
+            return "Admin password must include an uppercase letter"
+        if not re.search(r"\d", password):
+            return "Admin password must include a number"
+        if not re.search(r"[^A-Za-z0-9]", password):
+            return "Admin password must include a symbol"
         return None
 
     def register(self, username, password, invite_code=None):
@@ -162,6 +179,12 @@ class UserService:
             return None, "Admin account is required"
         return self._user_repository.list_users(), None
 
+    def count_users_created_since(self, acting_user_id, created_since):
+        acting_user = self._user_repository.find_by_id(acting_user_id)
+        if not acting_user or acting_user["account_category"] != ACCOUNT_CATEGORY_ADMIN:
+            return None, "Admin account is required"
+        return self._user_repository.count_created_since(created_since), None
+
     def create_admin(self, username, password):
         username = (username or "").strip()
         if self._user_repository.admin_exists():
@@ -171,7 +194,7 @@ class UserService:
         if username_error:
             return None, username_error
 
-        password_error = self.validate_password(username, password)
+        password_error = self.validate_admin_password(username, password)
         if password_error:
             return None, password_error
 

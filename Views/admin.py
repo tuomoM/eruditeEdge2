@@ -1,4 +1,5 @@
 from functools import wraps
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session
 
@@ -95,13 +96,88 @@ def admin_page():
         user["ai_generation_quota"] = (
             None if user["account_category"] == ACCOUNT_CATEGORY_ADMIN else trusted_quota
         )
+        user["created_at_label"] = format_admin_timestamp(user.get("created_at"))
+    for invite_code in invite_codes:
+        invite_code["expires_at_label"] = format_admin_timestamp(invite_code.get("expires_at"))
+    for access_request in access_requests:
+        access_request["created_at_label"] = format_admin_timestamp(access_request.get("created_at"))
+    security_report["last_run_label"] = format_admin_timestamp(security_report.get("last_run_at"))
+    admin_summary, error = build_admin_summary(
+        session["user_id"],
+        users,
+        invite_codes,
+        access_requests,
+        security_report,
+    )
+    if error:
+        flash(error)
+        return redirect("/vocabulary")
     return render_template(
         "admin.html",
         users=users,
+        admin_summary=admin_summary,
         invite_codes=invite_codes,
         access_requests=access_requests,
         security_report=security_report,
     )
+
+
+def build_admin_summary(acting_user_id, users, invite_codes, access_requests, security_report):
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = now - timedelta(days=7)
+
+    today_cutoff = format_sqlite_timestamp(today_start)
+    week_cutoff = format_sqlite_timestamp(week_start)
+
+    users_today, error = user_service.count_users_created_since(acting_user_id, today_cutoff)
+    if error:
+        return None, error
+    users_week, error = user_service.count_users_created_since(acting_user_id, week_cutoff)
+    if error:
+        return None, error
+
+    return {
+        "users_today": users_today,
+        "users_week": users_week,
+        "vocab_today": vocabulary_service.count_entries_created_since(today_cutoff),
+        "vocab_week": vocabulary_service.count_entries_created_since(week_cutoff),
+        "pending_access_requests": len(access_requests),
+        "active_invite_codes": len(invite_codes),
+        "vulnerability_count": security_report.get("vulnerability_count", 0),
+        "quota_pressure_count": count_users_at_ai_quota(users),
+    }, None
+
+
+def format_sqlite_timestamp(value):
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def format_admin_timestamp(value):
+    if not value:
+        return ""
+    try:
+        if isinstance(value, str):
+            normalized_value = value.replace("Z", "+00:00")
+            if "T" in normalized_value:
+                parsed_value = datetime.fromisoformat(normalized_value)
+            else:
+                parsed_value = datetime.strptime(normalized_value, "%Y-%m-%d %H:%M:%S")
+                parsed_value = parsed_value.replace(tzinfo=timezone.utc)
+        else:
+            parsed_value = value
+    except (TypeError, ValueError):
+        return value
+    return parsed_value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def count_users_at_ai_quota(users):
+    count = 0
+    for user in users:
+        quota = user.get("ai_generation_quota")
+        if quota is not None and user.get("ai_generation_count", 0) >= quota:
+            count += 1
+    return count
 
 
 @admin_bp.route("/admin/users/<int:user_id>/category", methods=["POST"])
@@ -143,6 +219,9 @@ def confirm_delete_user_vocabs(user_id):
     if not target_user:
         flash("User was not found")
         return redirect("/admin")
+    if target_user["account_category"] == ACCOUNT_CATEGORY_ADMIN:
+        flash("Admin vocabulary entries cannot be removed here")
+        return redirect("/admin")
 
     users, error = user_service.list_users(session["user_id"])
     if error:
@@ -172,6 +251,11 @@ def delete_user_vocabs(user_id):
         if request.is_json:
             return jsonify({"error": "User was not found"}), 404
         flash("User was not found")
+        return redirect("/admin")
+    if target_user["account_category"] == ACCOUNT_CATEGORY_ADMIN:
+        if request.is_json:
+            return jsonify({"error": "Admin vocabulary entries cannot be removed here"}), 400
+        flash("Admin vocabulary entries cannot be removed here")
         return redirect("/admin")
 
     if request.is_json:
