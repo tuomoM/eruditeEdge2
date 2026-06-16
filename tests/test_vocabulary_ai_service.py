@@ -27,7 +27,10 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "A planned activity or procedure.",
                 "context": "Scientific/Medical",
                 "synonyms": ["procedure", "process"],
-                "examples": ["The operation required careful preparation."],
+                "examples": [
+                    "The operation required careful preparation.",
+                    "The rescue operation continued through the night.",
+                ],
             }
         )
 
@@ -49,6 +52,11 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
             client.responses.last_request["text"]["format"]["schema"]["properties"]["context"]
         )
         self.assertIn("not an example sentence", context_schema["description"])
+        self.assertIn("Provide 2-4 example sentences", client.responses.last_request["instructions"])
+        examples_schema = (
+            client.responses.last_request["text"]["format"]["schema"]["properties"]["examples"]
+        )
+        self.assertEqual(examples_schema["minItems"], 2)
 
     def test_generate_entry_normalizes_sentence_like_context_to_general(self):
         output = json.dumps(
@@ -57,7 +65,10 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "The excessive regulations served to stultify innovation.",
                 "synonyms": ["hinder"],
-                "examples": ["The rigid process stultified the team."],
+                "examples": [
+                    "The rigid process stultified the team.",
+                    "Outdated rules can stultify creative work.",
+                ],
             }
         )
         service = VocabularyAiService(client=FakeClient(output))
@@ -74,7 +85,10 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "Business / Formal",
                 "synonyms": ["hinder"],
-                "examples": ["The rigid process stultified the team."],
+                "examples": [
+                    "The rigid process stultified the team.",
+                    "Excessive approvals can stultify a promising project.",
+                ],
             }
         )
         service = VocabularyAiService(client=FakeClient(output))
@@ -91,7 +105,10 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "Business English",
                 "synonyms": ["hinder"],
-                "examples": ["The rigid process stultified the team."],
+                "examples": [
+                    "The rigid process stultified the team.",
+                    "Poor incentives may stultify workplace initiative.",
+                ],
             }
         )
         service = VocabularyAiService(client=FakeClient(output))
@@ -108,7 +125,10 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "The regulations",
                 "synonyms": ["hinder"],
-                "examples": ["The rigid process stultified the team."],
+                "examples": [
+                    "The rigid process stultified the team.",
+                    "The policy threatened to stultify debate.",
+                ],
             }
         )
         service = VocabularyAiService(client=FakeClient(output))
@@ -117,6 +137,23 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
 
         self.assertIsNone(error)
         self.assertEqual(entry["context"], "General")
+
+    def test_generate_entry_rejects_ai_output_with_fewer_than_two_examples(self):
+        output = json.dumps(
+            {
+                "word": "stultify",
+                "definition": "To make ineffective.",
+                "context": "Formal",
+                "synonyms": ["hinder"],
+                "examples": ["The rigid process stultified the team."],
+            }
+        )
+        service = VocabularyAiService(client=FakeClient(output))
+
+        entry, error = service.generate_entry("stultify", "test-key", "test-model")
+
+        self.assertIsNone(entry)
+        self.assertEqual(error, "OpenAI returned invalid vocabulary data")
 
     def test_generate_entry_rejects_sql_injection(self):
         service = VocabularyAiService(client=FakeClient(self.valid_output()))

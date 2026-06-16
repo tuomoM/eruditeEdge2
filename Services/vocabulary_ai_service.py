@@ -54,7 +54,7 @@ VOCABULARY_SCHEMA = {
         "examples": {
             "type": "array",
             "items": {"type": "string"},
-            "minItems": 1,
+            "minItems": 2,
             "maxItems": 4,
         },
     },
@@ -102,7 +102,8 @@ class VocabularyAiService:
                     "Return only factual dictionary-style data. Do not include HTML. "
                     "The context field must be a short usage category/register/domain, "
                     "not a sentence. Examples: Formal, Casual, Medical, Philosophy, "
-                    "Academic, Business English, Business/Formal."
+                    "Academic, Business English, Business/Formal. Provide 2-4 example "
+                    "sentences that use the word naturally."
                 ),
                 input=f"Word: {word}",
                 text={
@@ -132,6 +133,10 @@ class VocabularyAiService:
 
         entry["word"] = word
         entry["context"] = self._normalize_context(entry.get("context"))
+        entry["examples"] = self._normalize_examples(entry.get("examples"))
+        if len(entry["examples"]) < 2:
+            logger.warning("Vocabulary AI generation failed: fewer than 2 examples returned")
+            return None, "OpenAI returned invalid vocabulary data"
         logger.info("Vocabulary AI generation succeeded for word '%s'", word)
         return entry, None
 
@@ -225,6 +230,15 @@ class VocabularyAiService:
             return "/".join(labels)
         logger.info("Vocabulary AI generation replaced sentence-like context with General")
         return "General"
+
+    def _normalize_examples(self, examples):
+        if not isinstance(examples, list):
+            return []
+        return [
+            str(example).strip()
+            for example in examples
+            if str(example).strip()
+        ][:4]
 
     def _get_client(self, api_key):
         if self._client is not None:
