@@ -4,3 +4,4 @@ certifi
 gunicorn
 pip-audit
 pip>=26.1
+msgpack>=1.2.1
