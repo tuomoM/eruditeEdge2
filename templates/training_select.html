@@ -28,6 +28,17 @@
 
 {% if entries %}
     <form action="/training" method="post" id="training-selection-form">
+        {% set selected_training_type = selected_training_type if selected_training_type is defined else 'definition' %}
+        <div class="filter-toggle" id="training-type-toggle" role="group" aria-label="Training type">
+            <label class="filter-toggle-button {% if selected_training_type == 'definition' %}is-active{% endif %}">
+                <input type="radio" name="training_type" value="definition" {% if selected_training_type == 'definition' %}checked{% endif %}>
+                Definitions
+            </label>
+            <label class="filter-toggle-button {% if selected_training_type == 'cloze' %}is-active{% endif %}">
+                <input type="radio" name="training_type" value="cloze" {% if selected_training_type == 'cloze' %}checked{% endif %}>
+                Cloze
+            </label>
+        </div>
         <div class="entry-list" data-filter-list>
         {% for entry in entries %}
             <label class="selectable-row" data-owned="{{ 'true' if entry.owned else 'false' }}">
@@ -44,8 +55,12 @@
                         {% if entry.context %}
                             <span class="meta-chip">{{ entry.context }}</span>
                         {% endif %}
+                        <span class="meta-chip">{{ entry.part_of_speech }}</span>
                     </span>
                     <span class="entry-definition">{{ entry.definition }}</span>
+                    {% if entry.cloze_sentences %}
+                        <span class="entry-definition muted">{{ entry.cloze_sentences | length }} cloze sentences</span>
+                    {% endif %}
                 </span>
             </label>
         {% endfor %}
@@ -68,6 +83,15 @@
 
     checkboxes.forEach((checkbox) => {
         checkbox.addEventListener("change", updateSelectedCount);
+    });
+    const trainingTypeToggle = document.getElementById("training-type-toggle");
+    document.querySelectorAll('input[name="training_type"]').forEach((input) => {
+        input.addEventListener("change", () => {
+            trainingTypeToggle.querySelectorAll(".filter-toggle-button").forEach((label) => {
+                const radio = label.querySelector('input[name="training_type"]');
+                label.classList.toggle("is-active", radio && radio.checked);
+            });
+        });
     });
     updateSelectedCount();
     </script>

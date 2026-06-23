@@ -28,12 +28,15 @@ def create_training():
         if not isinstance(data, dict):
             return jsonify({"error": "Invalid request"}), 400
         vocabulary_ids = data.get("vocabulary_ids")
+        training_type = data.get("training_type", "definition")
     else:
         vocabulary_ids = request.form.getlist("vocabulary_ids")
+        training_type = request.form.get("training_type", "definition")
 
     training_session, error = training_service.create_training_session(
         session["user_id"],
         vocabulary_ids,
+        training_type,
     )
     if error:
         if request.is_json:
@@ -47,6 +50,7 @@ def create_training():
                 for vocabulary_id in vocabulary_ids
                 if isinstance(vocabulary_id, str) and vocabulary_id.isdigit()
             },
+            selected_training_type=training_type,
         ), 400
 
     if request.is_json:

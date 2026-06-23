@@ -7,12 +7,12 @@ MAX_OPTIONS_PER_QUESTION = 5
 
 
 class TrainingRepository:
-    def create_training_session(self, user_id, vocabs):
+    def create_training_session(self, user_id, vocabs, training_type="definition"):
         connection = db.get_connection()
         try:
             cursor = connection.execute(
-                "INSERT INTO training_sessions (user_id) VALUES (?)",
-                [user_id],
+                "INSERT INTO training_sessions (user_id, training_type) VALUES (?, ?)",
+                [user_id, training_type],
             )
             training_session_id = cursor.lastrowid
             vocabs_by_id = {vocab["id"]: vocab for vocab in vocabs}
@@ -21,6 +21,7 @@ class TrainingRepository:
             for index, vocab in enumerate(vocabs, start=1):
                 vocabulary_id = vocab["id"]
                 question_token = secrets.token_urlsafe(24)
+                prompt_text = self._select_prompt_text(vocab, training_type)
                 connection.execute(
                     """
                     INSERT INTO training_items
@@ -28,29 +29,36 @@ class TrainingRepository:
                             training_session_id,
                             vocabulary_id,
                             question_token,
+                            question_type,
                             word,
                             context,
                             definition,
+                            prompt_text,
                             item_order
                         )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         training_session_id,
                         vocabulary_id,
                         question_token,
+                        training_type,
                         vocab["word"],
                         vocab["context"],
                         vocab["definition"],
+                        prompt_text,
                         index,
                     ],
                 )
                 option_vocabulary_ids = self._select_option_vocabulary_ids(
                     vocabulary_ids,
                     vocabulary_id,
+                    vocabs,
+                    training_type,
                 )
                 for option_order, option_vocabulary_id in enumerate(option_vocabulary_ids, start=1):
                     option_vocab = vocabs_by_id[option_vocabulary_id]
+                    option_text = self._option_text(option_vocab, training_type)
                     connection.execute(
                         """
                         INSERT INTO training_answer_options
@@ -60,9 +68,10 @@ class TrainingRepository:
                                 option_token,
                                 option_vocabulary_id,
                                 option_definition,
+                                option_text,
                                 option_order
                             )
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
                         [
                             training_session_id,
@@ -70,6 +79,7 @@ class TrainingRepository:
                             secrets.token_urlsafe(24),
                             option_vocabulary_id,
                             option_vocab["definition"],
+                            option_text,
                             option_order,
                         ],
                     )
@@ -82,7 +92,7 @@ class TrainingRepository:
     def get_training_session(self, training_session_id, user_id):
         rows = db.query(
             """
-            SELECT id, user_id, created_at, submitted_at, score, total
+            SELECT id, user_id, created_at, training_type, submitted_at, score, total
             FROM training_sessions
             WHERE id = ? AND user_id = ?
             """,
@@ -96,13 +106,22 @@ class TrainingRepository:
             {
                 "vocabulary_id": row["vocabulary_id"],
                 "question_token": row["question_token"],
+                "question_type": row["question_type"],
                 "word": row["word"],
                 "context": row["context"],
                 "definition": row["definition"],
+                "prompt_text": row["prompt_text"],
             }
             for row in db.query(
                 """
-                SELECT vocabulary_id, question_token, word, context, definition
+                SELECT
+                    vocabulary_id,
+                    question_token,
+                    question_type,
+                    word,
+                    context,
+                    definition,
+                    prompt_text
                 FROM training_items
                 WHERE training_session_id = ?
                 ORDER BY item_order
@@ -122,7 +141,8 @@ class TrainingRepository:
                     question_token,
                     option_token,
                     option_vocabulary_id,
-                    option_definition
+                    option_definition,
+                    option_text
                 FROM training_answer_options
                 WHERE training_session_id = ?
                 ORDER BY question_token, option_order
@@ -188,18 +208,26 @@ class TrainingRepository:
                         (
                             training_session_id,
                             vocabulary_id,
+                            question_type,
                             word,
+                            prompt_text,
                             correct_definition,
-                            selected_definition
+                            selected_definition,
+                            correct_answer,
+                            selected_answer
                         )
-                    VALUES (?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         training_session_id,
                         vocab["id"],
+                        vocab.get("question_type", "definition"),
                         vocab["word"],
+                        vocab.get("prompt_text"),
                         vocab["correct_definition"],
                         vocab["selected_definition"],
+                        vocab.get("correct_answer") or vocab["correct_definition"],
+                        vocab.get("selected_answer") or vocab["selected_definition"],
                     ],
                 )
             connection.commit()
@@ -211,7 +239,7 @@ class TrainingRepository:
     def get_training_result(self, training_session_id, user_id):
         rows = db.query(
             """
-            SELECT id, score, total
+            SELECT id, training_type, score, total
             FROM training_sessions
             WHERE id = ? AND user_id = ? AND submitted_at IS NOT NULL
             """,
@@ -222,6 +250,7 @@ class TrainingRepository:
 
         result = {
             "training_session_id": rows[0]["id"],
+            "training_type": rows[0]["training_type"],
             "score": rows[0]["score"],
             "total": rows[0]["total"],
             "incorrect_vocabs": [],
@@ -232,9 +261,13 @@ class TrainingRepository:
                 """
                 SELECT
                     vocabulary_id AS id,
+                    question_type,
                     word,
+                    prompt_text,
                     correct_definition,
-                    selected_definition
+                    selected_definition,
+                    correct_answer,
+                    selected_answer
                 FROM training_incorrect_answers
                 WHERE training_session_id = ?
                 ORDER BY training_incorrect_answers.id
@@ -244,14 +277,31 @@ class TrainingRepository:
         ]
         return result
 
-    def _select_option_vocabulary_ids(self, vocabulary_ids, question_vocabulary_id):
-        if len(vocabulary_ids) <= MAX_OPTIONS_PER_QUESTION:
-            option_vocabulary_ids = vocabulary_ids[:]
+    def _select_option_vocabulary_ids(
+        self,
+        vocabulary_ids,
+        question_vocabulary_id,
+        vocabs=None,
+        training_type="definition",
+    ):
+        eligible_vocabulary_ids = vocabulary_ids
+        if training_type == "cloze":
+            question_vocab = next(
+                vocab for vocab in vocabs if vocab["id"] == question_vocabulary_id
+            )
+            eligible_vocabulary_ids = [
+                vocab["id"]
+                for vocab in vocabs
+                if vocab["part_of_speech"] == question_vocab["part_of_speech"]
+            ]
+
+        if len(eligible_vocabulary_ids) <= MAX_OPTIONS_PER_QUESTION:
+            option_vocabulary_ids = eligible_vocabulary_ids[:]
         else:
             randomizer = secrets.SystemRandom()
             distractor_ids = [
                 vocabulary_id
-                for vocabulary_id in vocabulary_ids
+                for vocabulary_id in eligible_vocabulary_ids
                 if vocabulary_id != question_vocabulary_id
             ]
             option_vocabulary_ids = [
@@ -261,6 +311,16 @@ class TrainingRepository:
 
         self._shuffle_options(option_vocabulary_ids)
         return option_vocabulary_ids
+
+    def _select_prompt_text(self, vocab, training_type):
+        if training_type != "cloze":
+            return None
+        return secrets.SystemRandom().choice(vocab["cloze_sentences"])
+
+    def _option_text(self, vocab, training_type):
+        if training_type == "cloze":
+            return vocab["word"]
+        return vocab["definition"]
 
     def _shuffle_options(self, option_vocabulary_ids):
         if len(option_vocabulary_ids) <= 1:

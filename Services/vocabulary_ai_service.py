@@ -45,6 +45,10 @@ VOCABULARY_SCHEMA = {
                 "Medical, Philosophy, Academic, Business English, Business/Formal."
             ),
         },
+        "part_of_speech": {
+            "type": "string",
+            "enum": ["noun", "verb", "adjective", "adverb", "phrase", "other"],
+        },
         "synonyms": {
             "type": "array",
             "items": {"type": "string"},
@@ -57,8 +61,41 @@ VOCABULARY_SCHEMA = {
             "minItems": 2,
             "maxItems": 4,
         },
+        "cloze_sentences": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 2,
+            "maxItems": 3,
+        },
     },
-    "required": ["word", "definition", "context", "synonyms", "examples"],
+    "required": [
+        "word",
+        "definition",
+        "context",
+        "part_of_speech",
+        "synonyms",
+        "examples",
+        "cloze_sentences",
+    ],
+}
+
+
+CLOZE_DATA_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "part_of_speech": {
+            "type": "string",
+            "enum": ["noun", "verb", "adjective", "adverb", "phrase", "other"],
+        },
+        "cloze_sentences": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 2,
+            "maxItems": 3,
+        },
+    },
+    "required": ["part_of_speech", "cloze_sentences"],
 }
 
 
@@ -103,7 +140,12 @@ class VocabularyAiService:
                     "The context field must be a short usage category/register/domain, "
                     "not a sentence. Examples: Formal, Casual, Medical, Philosophy, "
                     "Academic, Business English, Business/Formal. Provide 2-4 example "
-                    "sentences that use the word naturally."
+                    "sentences that use the word naturally. Identify the primary part "
+                    "of speech for this meaning using noun, verb, adjective, adverb, "
+                    "phrase, or other. Provide 2-3 cloze training sentences. Each cloze "
+                    "sentence must use exactly one ____ blank where the target word "
+                    "belongs, must not include the target word elsewhere, and must be "
+                    "natural enough that same-part-of-speech distractors are plausible."
                 ),
                 input=f"Word: {word}",
                 text={
@@ -134,11 +176,76 @@ class VocabularyAiService:
         entry["word"] = word
         entry["context"] = self._normalize_context(entry.get("context"))
         entry["examples"] = self._normalize_examples(entry.get("examples"))
+        entry["cloze_sentences"] = self._normalize_cloze_sentences(
+            entry.get("cloze_sentences")
+        )
         if len(entry["examples"]) < 2:
             logger.warning("Vocabulary AI generation failed: fewer than 2 examples returned")
             return None, "OpenAI returned invalid vocabulary data"
+        if len(entry["cloze_sentences"]) < 2:
+            logger.warning("Vocabulary AI generation failed: fewer than 2 cloze sentences returned")
+            return None, "OpenAI returned invalid vocabulary data"
         logger.info("Vocabulary AI generation succeeded for word '%s'", word)
         return entry, None
+
+    def generate_cloze_data(self, entry, api_key, model):
+        if not api_key:
+            logger.warning("Cloze AI generation failed: missing OpenAI API key")
+            return None, "OpenAI API key is missing"
+
+        word = entry["word"]
+        logger.info("Cloze AI generation started for word '%s' using model '%s'", word, model)
+        try:
+            client = self._get_client(api_key)
+            response = client.responses.create(
+                model=model,
+                instructions=(
+                    "Create missing cloze training data for one vocabulary entry. "
+                    "Return JSON only. Identify the primary part of speech for the "
+                    "given meaning using noun, verb, adjective, adverb, phrase, or other. "
+                    "Create 2-3 natural cloze sentences. Each sentence must include "
+                    "exactly one ____ blank where the target word belongs, must not "
+                    "include the target word elsewhere, and must fit the definition."
+                ),
+                input=(
+                    f"Word: {word}\n"
+                    f"Definition: {entry['definition']}\n"
+                    f"Context: {entry.get('context') or 'General'}\n"
+                    f"Examples:\n"
+                    + "\n".join(f"- {example}" for example in entry.get("examples", []))
+                ),
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "cloze_data",
+                        "schema": CLOZE_DATA_SCHEMA,
+                        "strict": True,
+                    }
+                },
+            )
+        except ImportError:
+            logger.exception("Cloze AI generation failed: OpenAI package is not installed")
+            return None, "OpenAI package is not installed. Run python -m pip install -r requirements.txt"
+        except Exception as error:
+            logger.exception(
+                "Cloze AI generation failed during OpenAI request: %s",
+                error.__class__.__name__,
+            )
+            return None, f"OpenAI request failed: {error.__class__.__name__}"
+
+        try:
+            cloze_data = json.loads(response.output_text)
+        except (AttributeError, json.JSONDecodeError):
+            logger.exception("Cloze AI generation failed: invalid response format")
+            return None, "OpenAI returned invalid cloze data"
+
+        cloze_data["cloze_sentences"] = self._normalize_cloze_sentences(
+            cloze_data.get("cloze_sentences")
+        )
+        if len(cloze_data["cloze_sentences"]) < 2:
+            return None, "OpenAI returned invalid cloze data"
+        logger.info("Cloze AI generation succeeded for word '%s'", word)
+        return cloze_data, None
 
     def validate_usage(self, entry, sentence, api_key, model):
         sentence = (sentence or "").strip()
@@ -239,6 +346,15 @@ class VocabularyAiService:
             for example in examples
             if str(example).strip()
         ][:4]
+
+    def _normalize_cloze_sentences(self, cloze_sentences):
+        if not isinstance(cloze_sentences, list):
+            return []
+        return [
+            str(sentence).strip()
+            for sentence in cloze_sentences
+            if str(sentence).strip()
+        ][:3]
 
     def _get_client(self, api_key):
         if self._client is not None:

@@ -4,6 +4,8 @@ from Repositories.vocabulary_repository import (
 )
 
 MAX_TRAINING_VOCABS = 50
+TRAINING_TYPE_DEFINITION = "definition"
+TRAINING_TYPE_CLOZE = "cloze"
 
 
 class TrainingService:
@@ -15,8 +17,16 @@ class TrainingService:
         self._training_repository = training_repository
         self._vocabulary_repository = vocabulary_repository
 
-    def create_training_session(self, user_id, vocabulary_ids):
+    def create_training_session(
+        self,
+        user_id,
+        vocabulary_ids,
+        training_type=TRAINING_TYPE_DEFINITION,
+    ):
         vocabulary_ids, error = self._clean_vocabulary_ids(vocabulary_ids)
+        if error:
+            return None, error
+        training_type, error = self._clean_training_type(training_type)
         if error:
             return None, error
 
@@ -27,16 +37,24 @@ class TrainingService:
         ]
         if missing_ids:
             return None, "Selected vocabulary contains unknown entries"
-        if self._has_duplicate_definitions(vocabulary_ids):
+        if (
+            training_type == TRAINING_TYPE_DEFINITION
+            and self._has_duplicate_definitions(vocabulary_ids)
+        ):
             return None, "Training selection contains duplicate definitions"
         vocabs = [
             self._vocabulary_repository.get_entry(vocabulary_id)
             for vocabulary_id in vocabulary_ids
         ]
+        if training_type == TRAINING_TYPE_CLOZE:
+            error = self._validate_cloze_vocabs(vocabs)
+            if error:
+                return None, error
 
         training_session_id = self._training_repository.create_training_session(
             user_id,
             vocabs,
+            training_type,
         )
         return self.get_training_session(training_session_id, user_id), None
 
@@ -86,15 +104,20 @@ class TrainingService:
                     {
                         "id": vocab["id"],
                         "word": vocab["word"],
+                        "question_type": question["type"],
+                        "prompt_text": question["prompt"],
                         "correct_definition": vocab["definition"],
                         "selected_definition": selected_option["definition"]
                         if selected_option
                         else None,
+                        "correct_answer": correct_option["text"],
+                        "selected_answer": selected_option["text"] if selected_option else None,
                     }
                 )
 
         result = {
             "training_session_id": training_session_id,
+            "training_type": training_session["training_type"],
             "score": correct_count,
             "total": total_count,
             "incorrect_vocabs": incorrect_vocabs,
@@ -127,6 +150,7 @@ class TrainingService:
                     "token": option["option_token"],
                     "vocabulary_id": option["option_vocabulary_id"],
                     "definition": option["option_definition"],
+                    "text": option["option_text"] or option["option_definition"],
                 }
             )
 
@@ -136,6 +160,8 @@ class TrainingService:
             questions.append(
                 {
                     "token": item["question_token"],
+                    "type": item["question_type"],
+                    "prompt": item["prompt_text"],
                     "vocab": {
                         "id": vocab["vocabulary_id"],
                         "word": vocab["word"],
@@ -150,10 +176,13 @@ class TrainingService:
     def _to_quiz_response(self, training_session):
         return {
             "id": training_session["id"],
+            "training_type": training_session["training_type"],
             "submitted_at": training_session["submitted_at"],
             "questions": [
                 {
                     "token": question["token"],
+                    "type": question["type"],
+                    "prompt": question["prompt"],
                     "vocab": {
                         "word": question["vocab"]["word"],
                         "context": question["vocab"]["context"],
@@ -162,6 +191,7 @@ class TrainingService:
                         {
                             "token": option["token"],
                             "definition": option["definition"],
+                            "text": option["text"],
                         }
                         for option in question["options"]
                     ],
@@ -189,6 +219,12 @@ class TrainingService:
                 seen_ids.add(cleaned_id)
 
         return cleaned_ids, None
+
+    def _clean_training_type(self, training_type):
+        training_type = str(training_type or TRAINING_TYPE_DEFINITION).strip().lower()
+        if training_type not in {TRAINING_TYPE_DEFINITION, TRAINING_TYPE_CLOZE}:
+            return None, "Invalid training type"
+        return training_type, None
 
     def _clean_answers(self, answers):
         if answers is None:
@@ -249,6 +285,22 @@ class TrainingService:
 
     def _normalize_definition(self, definition):
         return " ".join(definition.lower().split())
+
+    def _validate_cloze_vocabs(self, vocabs):
+        counts_by_part_of_speech = {}
+        for vocab in vocabs:
+            if vocab["part_of_speech"] == "other":
+                return "Cloze training requires classified vocabulary entries"
+            if not vocab["cloze_sentences"]:
+                return "Cloze training requires vocabulary entries with cloze sentences"
+            counts_by_part_of_speech[vocab["part_of_speech"]] = (
+                counts_by_part_of_speech.get(vocab["part_of_speech"], 0) + 1
+            )
+
+        for part_of_speech, count in counts_by_part_of_speech.items():
+            if count < 2:
+                return f"Cloze training needs at least 2 {part_of_speech} entries"
+        return None
 
 
 training_service = TrainingService()

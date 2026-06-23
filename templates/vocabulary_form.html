@@ -36,6 +36,25 @@
             <input id="context" name="context" value="{{ entry.context if entry else '' }}" placeholder="Scientific/Medical">
         </div>
         <div class="field">
+            <label for="part_of_speech">Part of speech</label><br>
+            {% set selected_part_of_speech = entry.part_of_speech if entry and entry.part_of_speech else 'other' %}
+            <select id="part_of_speech" name="part_of_speech">
+                {% for value, label in [
+                    ('noun', 'Noun'),
+                    ('verb', 'Verb'),
+                    ('adjective', 'Adjective'),
+                    ('adverb', 'Adverb'),
+                    ('phrase', 'Phrase'),
+                    ('other', 'Other')
+                ] %}
+                    <option value="{{ value }}" {% if selected_part_of_speech == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div class="form-grid">
+        <div class="field">
             <label for="synonyms">Synonyms, comma separated</label><br>
             <input id="synonyms" name="synonyms" value="{{ entry.synonyms | join(', ') if entry and entry.synonyms else '' }}">
         </div>
@@ -45,6 +64,12 @@
         <label for="examples">Example sentences, one per line</label><br>
         <textarea id="examples" name="examples" required>{{ examples_text if examples_text is defined else (entry.examples | join('\n') if entry and entry.examples else '') }}</textarea>
         <div class="help-text">1-4 example sentences.</div>
+    </div>
+
+    <div class="field field-wide">
+        <label for="cloze_sentences">Cloze training sentences, one per line</label><br>
+        <textarea id="cloze_sentences" name="cloze_sentences">{{ cloze_sentences_text if cloze_sentences_text is defined else (entry.cloze_sentences | join('\n') if entry and entry.cloze_sentences else '') }}</textarea>
+        <div class="help-text">0-3 sentences. Use exactly one ____ blank in each sentence.</div>
     </div>
 
     <div class="actions">
@@ -121,8 +146,10 @@ document.getElementById("generate-button").addEventListener("click", async () =>
 
     document.getElementById("definition").value = data.definition || "";
     document.getElementById("context").value = data.context || "";
+    document.getElementById("part_of_speech").value = data.part_of_speech || "other";
     document.getElementById("synonyms").value = (data.synonyms || []).join(", ");
     document.getElementById("examples").value = (data.examples || []).join("\n");
+    document.getElementById("cloze_sentences").value = (data.cloze_sentences || []).join("\n");
     status.textContent = "Filled";
     generateButton.disabled = false;
     generateButton.removeAttribute("aria-busy");

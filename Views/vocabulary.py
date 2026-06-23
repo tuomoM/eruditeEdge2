@@ -110,12 +110,15 @@ def page_vocabulary_manager_required(route_function):
 def form_to_entry_data(form):
     synonyms = [item.strip() for item in form.get("synonyms", "").split(",")]
     examples = form.get("examples", "").splitlines()
+    cloze_sentences = form.get("cloze_sentences", "").splitlines()
     return {
         "word": form.get("word"),
         "definition": form.get("definition"),
         "context": form.get("context"),
+        "part_of_speech": form.get("part_of_speech"),
         "synonyms": synonyms,
         "examples": examples,
+        "cloze_sentences": cloze_sentences,
     }
 
 
@@ -300,6 +303,7 @@ def edit_vocabulary(vocabulary_id):
             "vocabulary_form.html",
             entry=entry,
             examples_text="\n".join(entry["examples"]),
+            cloze_sentences_text="\n".join(entry["cloze_sentences"]),
         )
 
     updated_entry, error = vocabulary_service.update_entry(
@@ -314,6 +318,7 @@ def edit_vocabulary(vocabulary_id):
             "vocabulary_form.html",
             entry=form_entry,
             examples_text=request.form.get("examples", ""),
+            cloze_sentences_text=request.form.get("cloze_sentences", ""),
         ), 400
     return redirect(f"/vocabulary/{updated_entry['id']}/page")
 

@@ -204,10 +204,13 @@
 <section class="admin-section">
     <div class="section-heading">
         <h2>Maintenance</h2>
-        <form action="/admin/security-report/run" method="post">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="button-secondary" type="submit">Run security audit</button>
-        </form>
+        <div class="actions">
+            <a class="button button-secondary" href="/admin/vocabulary-maintenance">Vocabulary maintenance</a>
+            <form action="/admin/security-report/run" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="button-secondary" type="submit">Run security audit</button>
+            </form>
+        </div>
     </div>
     <div class="security-report-summary">
         {% if security_report.last_run_at %}

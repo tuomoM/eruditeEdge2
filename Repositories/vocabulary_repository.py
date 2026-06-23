@@ -4,14 +4,25 @@ import db
 
 
 class VocabularyRepository:
-    def create_entry(self, word, definition, context, synonyms, examples, user_id):
+    def create_entry(
+        self,
+        word,
+        definition,
+        context,
+        part_of_speech,
+        synonyms,
+        examples,
+        cloze_sentences,
+        user_id,
+    ):
         try:
             cursor = db.execute(
                 """
-                INSERT INTO vocabulary_entries (word, definition, context, created_by)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO vocabulary_entries
+                    (word, definition, context, part_of_speech, created_by)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                [word, definition, context, user_id],
+                [word, definition, context, part_of_speech, user_id],
             )
         except IntegrityError:
             return None
@@ -19,17 +30,33 @@ class VocabularyRepository:
         vocabulary_id = cursor.lastrowid
         self._save_synonyms(vocabulary_id, synonyms)
         self._save_examples(vocabulary_id, examples)
+        self._save_cloze_sentences(vocabulary_id, cloze_sentences)
         return vocabulary_id
 
-    def update_entry(self, vocabulary_id, word, definition, context, synonyms, examples):
+    def update_entry(
+        self,
+        vocabulary_id,
+        word,
+        definition,
+        context,
+        part_of_speech,
+        synonyms,
+        examples,
+        cloze_sentences,
+    ):
         try:
             cursor = db.execute(
                 """
                 UPDATE vocabulary_entries
-                SET word = ?, definition = ?, context = ?, updated_at = CURRENT_TIMESTAMP
+                SET
+                    word = ?,
+                    definition = ?,
+                    context = ?,
+                    part_of_speech = ?,
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
-                [word, definition, context, vocabulary_id],
+                [word, definition, context, part_of_speech, vocabulary_id],
             )
         except IntegrityError:
             return False
@@ -39,14 +66,40 @@ class VocabularyRepository:
 
         db.execute("DELETE FROM vocabulary_synonyms WHERE vocabulary_id = ?", [vocabulary_id])
         db.execute("DELETE FROM vocabulary_examples WHERE vocabulary_id = ?", [vocabulary_id])
+        db.execute("DELETE FROM vocabulary_cloze_sentences WHERE vocabulary_id = ?", [vocabulary_id])
         self._save_synonyms(vocabulary_id, synonyms)
         self._save_examples(vocabulary_id, examples)
+        self._save_cloze_sentences(vocabulary_id, cloze_sentences)
+        return True
+
+    def update_cloze_data(self, vocabulary_id, part_of_speech, cloze_sentences):
+        cursor = db.execute(
+            """
+            UPDATE vocabulary_entries
+            SET part_of_speech = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            [part_of_speech, vocabulary_id],
+        )
+        if cursor.rowcount == 0:
+            return False
+
+        db.execute("DELETE FROM vocabulary_cloze_sentences WHERE vocabulary_id = ?", [vocabulary_id])
+        self._save_cloze_sentences(vocabulary_id, cloze_sentences)
         return True
 
     def get_entry(self, vocabulary_id):
         rows = db.query(
             """
-            SELECT id, word, definition, context, created_by, created_at, updated_at
+            SELECT
+                id,
+                word,
+                definition,
+                context,
+                part_of_speech,
+                created_by,
+                created_at,
+                updated_at
             FROM vocabulary_entries
             WHERE id = ?
             """,
@@ -76,6 +129,18 @@ class VocabularyRepository:
                 FROM vocabulary_examples
                 WHERE vocabulary_id = ?
                 ORDER BY example_order
+                """,
+                [vocabulary_id],
+            )
+        ]
+        entry["cloze_sentences"] = [
+            row["sentence"]
+            for row in db.query(
+                """
+                SELECT sentence
+                FROM vocabulary_cloze_sentences
+                WHERE vocabulary_id = ?
+                ORDER BY cloze_order
                 """,
                 [vocabulary_id],
             )
@@ -115,6 +180,21 @@ class VocabularyRepository:
         )
         return result[0]["count"]
 
+    def list_cloze_maintenance_entries(self):
+        rows = db.query(
+            """
+            SELECT id
+            FROM vocabulary_entries
+            ORDER BY word, context
+            """
+        )
+        entries = [self.get_entry(row["id"]) for row in rows]
+        return [
+            entry
+            for entry in entries
+            if entry["part_of_speech"] == "other" or len(entry["cloze_sentences"]) < 2
+        ]
+
     def delete_entries_by_user(self, user_id):
         connection = db.get_connection()
         try:
@@ -147,6 +227,17 @@ class VocabularyRepository:
                 """,
                 [user_id, user_id, user_id],
             )
+            connection.execute(
+                """
+                DELETE FROM vocabulary_cloze_sentences
+                WHERE vocabulary_id IN (
+                    SELECT id
+                    FROM vocabulary_entries
+                    WHERE created_by = ?
+                )
+                """,
+                [user_id],
+            )
             cursor = connection.execute(
                 "DELETE FROM vocabulary_entries WHERE created_by = ?",
                 [user_id],
@@ -176,6 +267,17 @@ class VocabularyRepository:
                 VALUES (?, ?, ?)
                 """,
                 [vocabulary_id, example, index],
+            )
+
+    def _save_cloze_sentences(self, vocabulary_id, cloze_sentences):
+        for index, sentence in enumerate(cloze_sentences, start=1):
+            db.execute(
+                """
+                INSERT INTO vocabulary_cloze_sentences
+                    (vocabulary_id, sentence, cloze_order)
+                VALUES (?, ?, ?)
+                """,
+                [vocabulary_id, sentence, index],
             )
 
 

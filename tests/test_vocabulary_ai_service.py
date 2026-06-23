@@ -26,10 +26,15 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "word": "operation",
                 "definition": "A planned activity or procedure.",
                 "context": "Scientific/Medical",
+                "part_of_speech": "noun",
                 "synonyms": ["procedure", "process"],
                 "examples": [
                     "The operation required careful preparation.",
                     "The rescue operation continued through the night.",
+                ],
+                "cloze_sentences": [
+                    "The ____ required careful preparation.",
+                    "The rescue ____ continued through the night.",
                 ],
             }
         )
@@ -64,10 +69,15 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "word": "stultify",
                 "definition": "To make ineffective.",
                 "context": "The excessive regulations served to stultify innovation.",
+                "part_of_speech": "verb",
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
                     "Outdated rules can stultify creative work.",
+                ],
+                "cloze_sentences": [
+                    "The rigid process could ____ the team.",
+                    "Outdated rules can ____ creative work.",
                 ],
             }
         )
@@ -84,10 +94,15 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "word": "stultify",
                 "definition": "To make ineffective.",
                 "context": "Business / Formal",
+                "part_of_speech": "verb",
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
                     "Excessive approvals can stultify a promising project.",
+                ],
+                "cloze_sentences": [
+                    "The rigid process could ____ the team.",
+                    "Excessive approvals can ____ a promising project.",
                 ],
             }
         )
@@ -104,10 +119,15 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "word": "stultify",
                 "definition": "To make ineffective.",
                 "context": "Business English",
+                "part_of_speech": "verb",
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
                     "Poor incentives may stultify workplace initiative.",
+                ],
+                "cloze_sentences": [
+                    "The rigid process could ____ the team.",
+                    "Poor incentives may ____ workplace initiative.",
                 ],
             }
         )
@@ -124,10 +144,15 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "word": "stultify",
                 "definition": "To make ineffective.",
                 "context": "The regulations",
+                "part_of_speech": "verb",
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
                     "The policy threatened to stultify debate.",
+                ],
+                "cloze_sentences": [
+                    "The rigid process could ____ the team.",
+                    "The policy threatened to ____ debate.",
                 ],
             }
         )
@@ -144,8 +169,13 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "word": "stultify",
                 "definition": "To make ineffective.",
                 "context": "Formal",
+                "part_of_speech": "verb",
                 "synonyms": ["hinder"],
                 "examples": ["The rigid process stultified the team."],
+                "cloze_sentences": [
+                    "The rigid process could ____ the team.",
+                    "The policy threatened to ____ debate.",
+                ],
             }
         )
         service = VocabularyAiService(client=FakeClient(output))

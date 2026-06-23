@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Vocabulary maintenance</h1>
+        <div class="result-count">{{ entries | length }} entries need cloze data</div>
+    </div>
+    <a class="button button-secondary" href="/admin">Back to admin</a>
+</div>
+
+{% if entries %}
+    <div class="entry-list">
+        {% for entry in entries %}
+            <div class="entry-row">
+                <div class="entry-main">
+                    <div class="entry-heading">
+                        <strong class="entry-word">{{ entry.word }}</strong>
+                        {% if entry.context %}
+                            <span class="meta-chip">{{ entry.context }}</span>
+                        {% endif %}
+                        <span class="meta-chip">{{ entry.part_of_speech }}</span>
+                    </div>
+                    <p class="entry-definition">{{ entry.definition }}</p>
+                    <form action="/admin/vocabulary/{{ entry.id }}/cloze-data" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="form-grid">
+                            <div class="field">
+                                <label for="part-of-speech-{{ entry.id }}">Part of speech</label><br>
+                                <select id="part-of-speech-{{ entry.id }}" name="part_of_speech">
+                                    {% for value, label in [
+                                        ('noun', 'Noun'),
+                                        ('verb', 'Verb'),
+                                        ('adjective', 'Adjective'),
+                                        ('adverb', 'Adverb'),
+                                        ('phrase', 'Phrase'),
+                                        ('other', 'Other')
+                                    ] %}
+                                        <option value="{{ value }}" {% if entry.part_of_speech == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="field field-wide">
+                            <label for="cloze-sentences-{{ entry.id }}">Cloze sentences</label><br>
+                            <textarea id="cloze-sentences-{{ entry.id }}" name="cloze_sentences">{{ entry.cloze_sentences | join('\n') }}</textarea>
+                            <div class="help-text">Use exactly one ____ blank per sentence.</div>
+                        </div>
+                        <div class="actions">
+                            <button class="button-primary button-compact" type="submit">Save cloze data</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="actions admin-row-actions">
+                    <form action="/admin/vocabulary/{{ entry.id }}/generate-cloze-data" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="button-secondary button-compact" type="submit">Generate missing</button>
+                    </form>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p>No vocabulary entries need cloze maintenance.</p>
+{% endif %}
+{% endblock %}

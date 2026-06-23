@@ -260,7 +260,14 @@ class VocabularyTestCase(unittest.TestCase):
             response = self.generate_entry("operation")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), generated_entry)
+        self.assertEqual(
+            response.get_json(),
+            {
+                **generated_entry,
+                "part_of_speech": "other",
+                "cloze_sentences": [],
+            },
+        )
         generate_entry.assert_called_once_with(
             "operation",
             "test-api-key",
@@ -285,7 +292,14 @@ class VocabularyTestCase(unittest.TestCase):
             response = self.generate_entry("stultify")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), generated_entry)
+        self.assertEqual(
+            response.get_json(),
+            {
+                **generated_entry,
+                "part_of_speech": "other",
+                "cloze_sentences": [],
+            },
+        )
 
     def test_generate_vocabulary_rejects_sql_injection(self):
         self.login_user()
@@ -306,7 +320,14 @@ class VocabularyTestCase(unittest.TestCase):
             response = self.generate_entry("DROP")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), generated_entry)
+        self.assertEqual(
+            response.get_json(),
+            {
+                **generated_entry,
+                "part_of_speech": "other",
+                "cloze_sentences": [],
+            },
+        )
         generate_entry.assert_called_once_with("DROP", "test-api-key", "test-model")
 
     def test_generate_vocabulary_rejects_more_than_one_word(self):

@@ -105,8 +105,20 @@ class AdminTestCase(unittest.TestCase):
             "examples": [f"{word} appears in this sentence."],
         }
 
+    def valid_cloze_entry(self, word):
+        entry = self.valid_entry(word)
+        entry["part_of_speech"] = "adjective"
+        entry["cloze_sentences"] = [
+            "The argument rested on a ____ assumption.",
+            "The evidence showed only a ____ connection.",
+        ]
+        return entry
+
     def create_vocab(self, word):
         return self.client.post("/vocabulary", json=self.valid_entry(word))
+
+    def create_cloze_vocab(self, word):
+        return self.client.post("/vocabulary", json=self.valid_cloze_entry(word))
 
     def csrf_token(self):
         self.client.get("/admin")
@@ -301,6 +313,148 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"/admin/security-report/run", response.data)
         self.assertIn(b"Run security audit", response.data)
+
+    def test_admin_vocabulary_maintenance_requires_admin(self):
+        self.register("anna")
+
+        response = self.client.get("/admin/vocabulary-maintenance", follow_redirects=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Admin account is required", response.data)
+
+    def test_admin_vocabulary_maintenance_shows_entries_needing_cloze_data(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        self.create_vocab("alpha")
+
+        response = self.client.get("/admin/vocabulary-maintenance")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Vocabulary maintenance", response.data)
+        self.assertIn(b"alpha", response.data)
+        self.assertIn(b"Generate missing", response.data)
+
+    def test_admin_can_update_vocabulary_cloze_data(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        vocabulary_id = self.create_vocab("tenuous").get_json()["id"]
+
+        response = self.client.post(
+            f"/admin/vocabulary/{vocabulary_id}/cloze-data",
+            json={
+                "part_of_speech": "adjective",
+                "cloze_sentences": [
+                    "The argument rested on a ____ assumption.",
+                    "The evidence showed only a ____ connection.",
+                ],
+            },
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["part_of_speech"], "adjective")
+        self.assertEqual(len(body["cloze_sentences"]), 2)
+
+    def test_admin_update_vocabulary_cloze_data_rejects_missing_csrf_token(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        vocabulary_id = self.create_vocab("tenuous").get_json()["id"]
+
+        response = self.client.post(
+            f"/admin/vocabulary/{vocabulary_id}/cloze-data",
+            json={
+                "part_of_speech": "adjective",
+                "cloze_sentences": ["The argument rested on a ____ assumption."],
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
+
+    def test_admin_update_vocabulary_cloze_data_validates_sentence_blank(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        vocabulary_id = self.create_vocab("tenuous").get_json()["id"]
+
+        response = self.client.post(
+            f"/admin/vocabulary/{vocabulary_id}/cloze-data",
+            json={
+                "part_of_speech": "adjective",
+                "cloze_sentences": ["The argument rested on a tenuous assumption."],
+            },
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json()["error"],
+            "Each cloze sentence must contain exactly one ____ blank",
+        )
+
+    def test_admin_can_generate_missing_vocabulary_cloze_data(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        vocabulary_id = self.create_vocab("tenuous").get_json()["id"]
+        generated_data = {
+            "part_of_speech": "adjective",
+            "cloze_sentences": [
+                "The argument rested on a ____ assumption.",
+                "The evidence showed only a ____ connection.",
+            ],
+        }
+
+        with patch(
+            "Views.admin.vocabulary_ai_service.generate_cloze_data",
+            return_value=(generated_data, None),
+        ) as generate_cloze_data:
+            response = self.client.post(
+                f"/admin/vocabulary/{vocabulary_id}/generate-cloze-data",
+                json={},
+                headers=self.csrf_headers(),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["part_of_speech"], "adjective")
+        self.assertEqual(body["cloze_sentences"], generated_data["cloze_sentences"])
+        generate_cloze_data.assert_called_once()
+
+    def test_admin_generate_cloze_data_preserves_existing_valid_manual_data(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        vocabulary_id = self.create_cloze_vocab("tenuous").get_json()["id"]
+        generated_data = {
+            "part_of_speech": "noun",
+            "cloze_sentences": [
+                "Generated ____ should not replace manual data.",
+                "Another generated ____ should stay unused.",
+            ],
+        }
+
+        with patch(
+            "Views.admin.vocabulary_ai_service.generate_cloze_data",
+            return_value=(generated_data, None),
+        ):
+            response = self.client.post(
+                f"/admin/vocabulary/{vocabulary_id}/generate-cloze-data",
+                json={},
+                headers=self.csrf_headers(),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["part_of_speech"], "adjective")
+        self.assertEqual(
+            body["cloze_sentences"],
+            self.valid_cloze_entry("tenuous")["cloze_sentences"],
+        )
 
     def test_admin_can_run_security_audit(self):
         self.create_admin("tuomo")
@@ -749,6 +903,48 @@ class AdminTestCase(unittest.TestCase):
 
         self.assertEqual(vocab_count, 0)
         self.assertEqual(training_count, 0)
+
+    def test_admin_can_remove_user_vocabs_with_cloze_sentences(self):
+        self.create_admin("tuomo")
+        user_response = self.register("anna")
+        user_id = user_response.get_json()["id"]
+        self.logout()
+        self.login("tuomo")
+        self.client.post(
+            f"/admin/users/{user_id}/category",
+            json={"account_category": "trusted"},
+            headers=self.csrf_headers(),
+        )
+        self.logout()
+        self.login("anna")
+        vocab_id = self.create_cloze_vocab("tenuous").get_json()["id"]
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post(
+            f"/admin/users/{user_id}/vocabs/delete",
+            json={"confirmed": True},
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["deleted_vocabulary_count"], 1)
+        with self.app.app_context():
+            vocab_count = db.query(
+                "SELECT COUNT(*) AS count FROM vocabulary_entries WHERE id = ?",
+                [vocab_id],
+            )[0]["count"]
+            cloze_count = db.query(
+                """
+                SELECT COUNT(*) AS count
+                FROM vocabulary_cloze_sentences
+                WHERE vocabulary_id = ?
+                """,
+                [vocab_id],
+            )[0]["count"]
+
+        self.assertEqual(vocab_count, 0)
+        self.assertEqual(cloze_count, 0)
 
     def test_admin_cannot_remove_admin_user_vocabs(self):
         self.create_admin("tuomo")

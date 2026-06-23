@@ -3,16 +3,23 @@
 {% block content %}
 <h1>Training set</h1>
 
-<p class="result-count">{{ training.questions | length }} vocabulary entries selected.</p>
+<p class="result-count">
+    {{ training.questions | length }} vocabulary entries selected.
+    {% if training.training_type == "cloze" %}Cloze training.{% else %}Definition training.{% endif %}
+</p>
 
 <form action="/training/{{ training.id }}/submit" method="post">
     {% for question in training.questions %}
         {% set vocab = question.vocab %}
         <fieldset class="question-row">
             <legend>
-                <strong class="entry-word">{{ vocab.word }}</strong>
-                {% if vocab.context %}
-                    <span class="meta-chip">{{ vocab.context }}</span>
+                {% if question.type == "cloze" %}
+                    <strong>{{ question.prompt }}</strong>
+                {% else %}
+                    <strong class="entry-word">{{ vocab.word }}</strong>
+                    {% if vocab.context %}
+                        <span class="meta-chip">{{ vocab.context }}</span>
+                    {% endif %}
                 {% endif %}
             </legend>
 
@@ -24,7 +31,7 @@
                         value="{{ option.token }}"
                         required
                     >
-                    <span>{{ option.definition }}</span>
+                    <span>{{ option.text }}</span>
                 </label>
             {% endfor %}
         </fieldset>

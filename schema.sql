@@ -14,6 +14,8 @@ CREATE TABLE vocabulary_entries (
     word TEXT NOT NULL,
     definition TEXT NOT NULL,
     context TEXT,
+    part_of_speech TEXT NOT NULL DEFAULT 'other'
+        CHECK (part_of_speech IN ('noun', 'verb', 'adjective', 'adverb', 'phrase', 'other')),
     created_by INTEGER NOT NULL REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -36,10 +38,21 @@ CREATE TABLE vocabulary_examples (
     UNIQUE (vocabulary_id, example_order)
 );
 
+CREATE TABLE vocabulary_cloze_sentences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_entries(id) ON DELETE CASCADE,
+    sentence TEXT NOT NULL,
+    cloze_order INTEGER NOT NULL,
+    UNIQUE (vocabulary_id, cloze_order),
+    CHECK (cloze_order BETWEEN 1 AND 3)
+);
+
 CREATE TABLE training_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    training_type TEXT NOT NULL DEFAULT 'definition'
+        CHECK (training_type IN ('definition', 'cloze')),
     submitted_at TIMESTAMP,
     score INTEGER,
     total INTEGER
@@ -50,9 +63,12 @@ CREATE TABLE training_items (
     training_session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
     vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_entries(id),
     question_token TEXT NOT NULL UNIQUE,
+    question_type TEXT NOT NULL DEFAULT 'definition'
+        CHECK (question_type IN ('definition', 'cloze')),
     word TEXT NOT NULL,
     context TEXT,
     definition TEXT NOT NULL,
+    prompt_text TEXT,
     item_order INTEGER NOT NULL,
     UNIQUE (training_session_id, vocabulary_id),
     UNIQUE (training_session_id, item_order)
@@ -65,6 +81,7 @@ CREATE TABLE training_answer_options (
     option_token TEXT NOT NULL UNIQUE,
     option_vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_entries(id),
     option_definition TEXT NOT NULL,
+    option_text TEXT,
     option_order INTEGER NOT NULL,
     UNIQUE (question_token, option_vocabulary_id),
     UNIQUE (question_token, option_order)
@@ -74,9 +91,14 @@ CREATE TABLE training_incorrect_answers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     training_session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
     vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_entries(id),
+    question_type TEXT NOT NULL DEFAULT 'definition'
+        CHECK (question_type IN ('definition', 'cloze')),
     word TEXT NOT NULL,
+    prompt_text TEXT,
     correct_definition TEXT NOT NULL,
-    selected_definition TEXT
+    selected_definition TEXT,
+    correct_answer TEXT,
+    selected_answer TEXT
 );
 
 CREATE TABLE ai_generation_usage (

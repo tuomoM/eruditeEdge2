@@ -118,6 +118,15 @@ class TrainingTestCase(unittest.TestCase):
             "examples": [f"{word} appears in this sentence."],
         }
 
+    def valid_cloze_entry(self, word, part_of_speech):
+        entry = self.valid_entry(word)
+        entry["part_of_speech"] = part_of_speech
+        entry["cloze_sentences"] = [
+            "The sentence needs ____ in this position.",
+            "A second prompt uses ____ carefully.",
+        ]
+        return entry
+
     def sample_words(self):
         return [
             "Ubiquitous",
@@ -175,6 +184,12 @@ class TrainingTestCase(unittest.TestCase):
         return self.client.post(
             "/training",
             json={"vocabulary_ids": vocabulary_ids},
+        )
+
+    def create_cloze_training(self, vocabulary_ids):
+        return self.client.post(
+            "/training",
+            json={"vocabulary_ids": vocabulary_ids, "training_type": "cloze"},
         )
 
     def submit_training(self, training_session_id, answers):
@@ -413,12 +428,62 @@ class TrainingTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 201)
         body = response.get_json()
-        self.assertEqual(set(body.keys()), {"id", "submitted_at", "questions"})
+        self.assertEqual(set(body.keys()), {"id", "training_type", "submitted_at", "questions"})
+        self.assertEqual(body["training_type"], "definition")
         self.assertNotIn("vocabs", body)
         self.assertNotIn("vocabulary_ids", body)
         self.assertNotIn("id", body["questions"][0]["vocab"])
         self.assertNotIn("definition", body["questions"][0]["vocab"])
         self.assertNotIn("vocabulary_id", body["questions"][0]["options"][0])
+
+    def test_cloze_training_uses_only_same_part_of_speech_options(self):
+        self.login_user()
+        entries = [
+            self.valid_cloze_entry("tenuous", "adjective"),
+            self.valid_cloze_entry("jubilant", "adjective"),
+            self.valid_cloze_entry("curfew", "noun"),
+            self.valid_cloze_entry("premise", "noun"),
+        ]
+        vocabulary_ids = [
+            self.client.post("/vocabulary", json=entry).get_json()["id"]
+            for entry in entries
+        ]
+
+        response = self.create_cloze_training(vocabulary_ids)
+
+        self.assertEqual(response.status_code, 201)
+        training = response.get_json()
+        self.assertEqual(training["training_type"], "cloze")
+        options_by_word = {
+            question["vocab"]["word"]: {option["text"] for option in question["options"]}
+            for question in training["questions"]
+        }
+        self.assertEqual(options_by_word["tenuous"], {"tenuous", "jubilant"})
+        self.assertEqual(options_by_word["jubilant"], {"tenuous", "jubilant"})
+        self.assertEqual(options_by_word["curfew"], {"curfew", "premise"})
+        self.assertEqual(options_by_word["premise"], {"curfew", "premise"})
+        for question in training["questions"]:
+            self.assertEqual(question["type"], "cloze")
+            self.assertIn("____", question["prompt"])
+
+    def test_cloze_training_rejects_unclassified_entries(self):
+        self.login_user()
+        first_id = self.client.post(
+            "/vocabulary",
+            json=self.valid_cloze_entry("tenuous", "adjective"),
+        ).get_json()["id"]
+        second_id = self.client.post(
+            "/vocabulary",
+            json=self.valid_entry("jubilant"),
+        ).get_json()["id"]
+
+        response = self.create_cloze_training([first_id, second_id])
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json()["error"],
+            "Cloze training requires classified vocabulary entries",
+        )
 
     def test_training_option_shuffle_allows_correct_answer_in_every_position(self):
         repository = TrainingRepository()

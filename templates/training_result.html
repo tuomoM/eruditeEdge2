@@ -5,22 +5,27 @@
 
 <div class="score-summary">
     <span class="score-number">{{ result.score }} / {{ result.total }}</span>
-    <span class="muted">correct definitions</span>
+    <span class="muted">
+        {% if result.training_type == "cloze" %}correct cloze answers{% else %}correct definitions{% endif %}
+    </span>
 </div>
 
 {% if result.incorrect_vocabs %}
-    <h2>Incorrectly defined vocabularies</h2>
+    <h2>{% if result.training_type == "cloze" %}Incorrect cloze answers{% else %}Incorrectly defined vocabularies{% endif %}</h2>
     <div class="review-list">
         {% for vocab in result.incorrect_vocabs %}
             <div class="review-row">
                 <strong class="entry-word">{{ vocab.word }}</strong>
+                {% if vocab.question_type == "cloze" and vocab.prompt_text %}
+                    <p>{{ vocab.prompt_text }}</p>
+                {% endif %}
                 <div class="review-grid">
                     <span class="review-label">Correct</span>
-                    <span>{{ vocab.correct_definition }}</span>
+                    <span>{{ vocab.correct_answer or vocab.correct_definition }}</span>
                     <span class="review-label">Selected</span>
                     <span>
-                        {% if vocab.selected_definition %}
-                            {{ vocab.selected_definition }}
+                        {% if vocab.selected_answer or vocab.selected_definition %}
+                            {{ vocab.selected_answer or vocab.selected_definition }}
                         {% else %}
                             No answer selected
                         {% endif %}

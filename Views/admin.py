@@ -9,6 +9,7 @@ from Services.ai_quota_service import ai_quota_service
 from Services.invite_code_service import invite_code_service
 from Services.security_report_service import security_report_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
+from Services.vocabulary_ai_service import vocabulary_ai_service
 from Services.vocabulary_service import vocabulary_service
 
 
@@ -120,6 +121,90 @@ def admin_page():
         access_requests=access_requests,
         security_report=security_report,
     )
+
+
+@admin_bp.route("/admin/vocabulary-maintenance", methods=["GET"])
+@page_admin_required
+def vocabulary_maintenance_page():
+    return render_template(
+        "admin_vocabulary_maintenance.html",
+        entries=vocabulary_service.list_cloze_maintenance_entries(),
+    )
+
+
+@admin_bp.route("/admin/vocabulary/<int:vocabulary_id>/cloze-data", methods=["POST"])
+@admin_required
+@csrf_required
+def update_vocabulary_cloze_data(vocabulary_id):
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+    else:
+        data = {
+            "part_of_speech": request.form.get("part_of_speech"),
+            "cloze_sentences": request.form.get("cloze_sentences", "").splitlines(),
+        }
+
+    entry, error = vocabulary_service.update_cloze_data(vocabulary_id, data)
+    if error:
+        if request.is_json:
+            return jsonify({"error": error}), 400
+        flash(error)
+        return redirect("/admin/vocabulary-maintenance")
+
+    if request.is_json:
+        return jsonify(entry)
+    flash(f"Updated cloze data for {entry['word']}.")
+    return redirect("/admin/vocabulary-maintenance")
+
+
+@admin_bp.route("/admin/vocabulary/<int:vocabulary_id>/generate-cloze-data", methods=["POST"])
+@admin_required
+@csrf_required
+def generate_vocabulary_cloze_data(vocabulary_id):
+    entry = vocabulary_service.get_entry(vocabulary_id)
+    if not entry:
+        if request.is_json:
+            return jsonify({"error": "Vocabulary entry was not found"}), 404
+        flash("Vocabulary entry was not found")
+        return redirect("/admin/vocabulary-maintenance")
+
+    api_key = current_app.config["OPENAI_API_KEY"]
+    if not api_key:
+        if request.is_json:
+            return jsonify({"error": "OpenAI API key is missing"}), 400
+        flash("OpenAI API key is missing")
+        return redirect("/admin/vocabulary-maintenance")
+
+    generated_data, error = vocabulary_ai_service.generate_cloze_data(
+        entry,
+        api_key,
+        current_app.config["OPENAI_MODEL"],
+    )
+    if error:
+        if request.is_json:
+            return jsonify({"error": error}), 400
+        flash(error)
+        return redirect("/admin/vocabulary-maintenance")
+
+    update_data = {
+        "part_of_speech": (
+            generated_data["part_of_speech"]
+            if entry["part_of_speech"] == "other"
+            else entry["part_of_speech"]
+        ),
+        "cloze_sentences": entry["cloze_sentences"] or generated_data["cloze_sentences"],
+    }
+    updated_entry, error = vocabulary_service.update_cloze_data(vocabulary_id, update_data)
+    if error:
+        if request.is_json:
+            return jsonify({"error": error}), 400
+        flash(error)
+        return redirect("/admin/vocabulary-maintenance")
+
+    if request.is_json:
+        return jsonify(updated_entry)
+    flash(f"Generated cloze data for {updated_entry['word']}.")
+    return redirect("/admin/vocabulary-maintenance")
 
 
 def build_admin_summary(acting_user_id, users, invite_codes, access_requests, security_report):

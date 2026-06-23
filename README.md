@@ -110,30 +110,38 @@ SECURITY_REPORT_DIR=./data
 
 The `check-database` command fails on Railway if no persistent database path is configured.
 
-8. Run tests:
+8. Run database migrations:
+
+```bash
+flask --app app migrate
+```
+
+Run this after pulling or deploying code that includes new files in
+`migrations/`. The command uses Python's built-in SQLite support, records applied
+migrations in `schema_migrations`, and safely stamps schema changes that were
+applied manually before the migration ledger existed.
+
+On Railway, open a shell for the deployed service after the automatic deploy and
+run:
+
+```bash
+flask --app app migrate
+```
+
+The `sqlite3` command-line tool does not need to be installed in the container.
+The command uses the configured production database path, including
+`$RAILWAY_VOLUME_MOUNT_PATH/database.db` when `DATABASE` is not set.
+
+9. Run tests:
 
 ```bash
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-9. Create a new admin user:
+10. Create a new admin user:
 
 ```bash
 flask --app app create-admin
 ```
 
 The command prompts for a user id and password. When the new admin is created, all existing admin users are moved to the `trusted` category.
-
-If you already have an older local `database.db`, back it up before applying schema changes. Existing training schema upgrades can be applied with:
-
-```bash
-sqlite3 database.db ".read migrations/001_training_quiz.sql"
-sqlite3 database.db ".read migrations/002_user_account_categories.sql"
-sqlite3 database.db ".read migrations/003_ai_generation_usage.sql"
-sqlite3 database.db ".read migrations/004_invite_codes.sql"
-sqlite3 database.db ".read migrations/005_invite_code_usage.sql"
-sqlite3 database.db ".read migrations/006_google_registration.sql"
-sqlite3 database.db ".read migrations/007_access_requests.sql"
-sqlite3 database.db ".read migrations/008_access_request_guardrails.sql"
-sqlite3 database.db ".read migrations/009_access_request_unique_email.sql"
-```
