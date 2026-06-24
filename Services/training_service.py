@@ -47,14 +47,18 @@ class TrainingService:
             for vocabulary_id in vocabulary_ids
         ]
         if training_type == TRAINING_TYPE_CLOZE:
-            error = self._validate_cloze_vocabs(vocabs)
+            option_vocabs = self._vocabulary_repository.list_entries()
+            error = self._validate_cloze_vocabs(vocabs, option_vocabs)
             if error:
                 return None, error
+        else:
+            option_vocabs = None
 
         training_session_id = self._training_repository.create_training_session(
             user_id,
             vocabs,
             training_type,
+            option_vocabs,
         )
         return self.get_training_session(training_session_id, user_id), None
 
@@ -286,20 +290,27 @@ class TrainingService:
     def _normalize_definition(self, definition):
         return " ".join(definition.lower().split())
 
-    def _validate_cloze_vocabs(self, vocabs):
-        counts_by_part_of_speech = {}
+    def _validate_cloze_vocabs(self, vocabs, option_vocabs):
         for vocab in vocabs:
             if vocab["part_of_speech"] == "other":
                 return "Cloze training requires classified vocabulary entries"
             if not vocab["cloze_sentences"]:
                 return "Cloze training requires vocabulary entries with cloze sentences"
-            counts_by_part_of_speech[vocab["part_of_speech"]] = (
-                counts_by_part_of_speech.get(vocab["part_of_speech"], 0) + 1
-            )
 
-        for part_of_speech, count in counts_by_part_of_speech.items():
+        selected_parts_of_speech = {
+            vocab["part_of_speech"]
+            for vocab in vocabs
+        }
+        for part_of_speech in selected_parts_of_speech:
+            count = sum(
+                option_vocab["part_of_speech"] == part_of_speech
+                for option_vocab in option_vocabs
+            )
             if count < 2:
-                return f"Cloze training needs at least 2 {part_of_speech} entries"
+                return (
+                    f"Cloze training needs at least 2 {part_of_speech} entries "
+                    "in the vocabulary"
+                )
         return None
 
 

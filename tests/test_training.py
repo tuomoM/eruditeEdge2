@@ -2,7 +2,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from datetime import datetime, timedelta, timezone
 
 import db
@@ -465,6 +465,56 @@ class TrainingTestCase(unittest.TestCase):
         for question in training["questions"]:
             self.assertEqual(question["type"], "cloze")
             self.assertIn("____", question["prompt"])
+
+    def test_cloze_training_uses_unselected_vocabulary_as_option_pool(self):
+        self.login_user()
+        selected_id = self.client.post(
+            "/vocabulary",
+            json=self.valid_cloze_entry("tenuous", "adjective"),
+        ).get_json()["id"]
+        self.client.post(
+            "/vocabulary",
+            json=self.valid_cloze_entry("jubilant", "adjective"),
+        )
+        self.client.post(
+            "/vocabulary",
+            json=self.valid_cloze_entry("premise", "noun"),
+        )
+
+        response = self.create_cloze_training([selected_id])
+
+        self.assertEqual(response.status_code, 201)
+        training = response.get_json()
+        self.assertEqual(len(training["questions"]), 1)
+        self.assertEqual(training["questions"][0]["vocab"]["word"], "tenuous")
+        self.assertEqual(
+            {option["text"] for option in training["questions"][0]["options"]},
+            {"tenuous", "jubilant"},
+        )
+
+    def test_cloze_training_randomly_samples_options_from_full_category_pool(self):
+        repository = TrainingRepository()
+        vocabs = [
+            {"id": vocabulary_id, "part_of_speech": "adjective"}
+            for vocabulary_id in range(1, 8)
+        ]
+        randomizer = Mock()
+        randomizer.sample.return_value = [7, 5, 3, 2]
+
+        with patch(
+            "Repositories.training_repository.secrets.SystemRandom",
+            return_value=randomizer,
+        ):
+            option_ids = repository._select_option_vocabulary_ids(
+                [vocab["id"] for vocab in vocabs],
+                1,
+                vocabs,
+                "cloze",
+            )
+
+        randomizer.sample.assert_called_once_with([2, 3, 4, 5, 6, 7], 4)
+        self.assertEqual(option_ids, [1, 7, 5, 3, 2])
+        randomizer.shuffle.assert_called_once_with(option_ids)
 
     def test_cloze_training_rejects_unclassified_entries(self):
         self.login_user()

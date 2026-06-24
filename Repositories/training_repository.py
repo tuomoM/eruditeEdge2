@@ -7,7 +7,13 @@ MAX_OPTIONS_PER_QUESTION = 5
 
 
 class TrainingRepository:
-    def create_training_session(self, user_id, vocabs, training_type="definition"):
+    def create_training_session(
+        self,
+        user_id,
+        vocabs,
+        training_type="definition",
+        option_vocabs=None,
+    ):
         connection = db.get_connection()
         try:
             cursor = connection.execute(
@@ -15,8 +21,13 @@ class TrainingRepository:
                 [user_id, training_type],
             )
             training_session_id = cursor.lastrowid
-            vocabs_by_id = {vocab["id"]: vocab for vocab in vocabs}
+            option_vocabs = option_vocabs or vocabs
+            vocabs_by_id = {vocab["id"]: vocab for vocab in option_vocabs}
             vocabulary_ids = [vocab["id"] for vocab in vocabs]
+            available_option_vocabulary_ids = [
+                vocab["id"]
+                for vocab in option_vocabs
+            ]
 
             for index, vocab in enumerate(vocabs, start=1):
                 vocabulary_id = vocab["id"]
@@ -51,9 +62,11 @@ class TrainingRepository:
                     ],
                 )
                 option_vocabulary_ids = self._select_option_vocabulary_ids(
-                    vocabulary_ids,
+                    available_option_vocabulary_ids
+                    if training_type == "cloze"
+                    else vocabulary_ids,
                     vocabulary_id,
-                    vocabs,
+                    option_vocabs,
                     training_type,
                 )
                 for option_order, option_vocabulary_id in enumerate(option_vocabulary_ids, start=1):
