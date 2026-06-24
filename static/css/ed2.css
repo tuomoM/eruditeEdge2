@@ -540,6 +540,37 @@ button:hover,
     max-width: 760px;
 }
 
+.domain-fieldset {
+    border: 0;
+    padding: 0;
+}
+
+.domain-fieldset legend {
+    font-weight: 600;
+    margin-bottom: var(--space-sm);
+}
+
+.domain-options {
+    display: grid;
+    gap: var(--space-sm) var(--space-lg);
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+}
+
+.domain-option {
+    align-items: center;
+    display: flex;
+    gap: var(--space-sm);
+    min-height: 2rem;
+}
+
+.domain-option input {
+    flex: 0 0 auto;
+}
+
+.domain-option:has(input:disabled) {
+    opacity: 0.55;
+}
+
 .form-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

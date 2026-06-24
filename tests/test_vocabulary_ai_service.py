@@ -27,6 +27,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "A planned activity or procedure.",
                 "context": "Scientific/Medical",
                 "part_of_speech": "noun",
+                "domains": ["communication", "body"],
                 "synonyms": ["procedure", "process"],
                 "examples": [
                     "The operation required careful preparation.",
@@ -50,18 +51,32 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertEqual(client.responses.last_request["input"], "Word: operation")
         self.assertEqual(client.responses.last_request["model"], "test-model")
         self.assertIn(
-            "context field must be a short usage category",
+            "context field must describe the usage setting",
+            client.responses.last_request["instructions"],
+        )
+        self.assertIn(
+            "Keep context separate from domains",
             client.responses.last_request["instructions"],
         )
         context_schema = (
             client.responses.last_request["text"]["format"]["schema"]["properties"]["context"]
         )
         self.assertIn("not an example sentence", context_schema["description"])
+        self.assertIn("separate from semantic domains", context_schema["description"])
         self.assertIn("Provide 2-4 example sentences", client.responses.last_request["instructions"])
         examples_schema = (
             client.responses.last_request["text"]["format"]["schema"]["properties"]["examples"]
         )
         self.assertEqual(examples_schema["minItems"], 2)
+        domains_schema = (
+            client.responses.last_request["text"]["format"]["schema"]["properties"]["domains"]
+        )
+        self.assertEqual(domains_schema["minItems"], 1)
+        self.assertEqual(domains_schema["maxItems"], 4)
+        self.assertIn("emotion", domains_schema["items"]["enum"])
+        self.assertIn("body", domains_schema["items"]["enum"])
+        self.assertIn("independent of usage settings", domains_schema["description"])
+        self.assertEqual(entry["domains"], ["communication", "body"])
 
     def test_generate_entry_normalizes_sentence_like_context_to_general(self):
         output = json.dumps(

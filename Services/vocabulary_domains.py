@@ -1,0 +1,27 @@
+VOCABULARY_DOMAINS = (
+    "emotion",
+    "attitude",
+    "cognition",
+    "communication",
+    "morality",
+    "justice",
+    "power",
+    "society",
+    "status",
+    "conflict",
+    "violence",
+    "time",
+    "change",
+    "certainty",
+    "perception",
+    "appearance",
+    "movement",
+    "quantity",
+    "causation",
+    "rhetoric",
+    "literature",
+    "religion",
+    "body",
+)
+
+MAX_VOCABULARY_DOMAINS = 4

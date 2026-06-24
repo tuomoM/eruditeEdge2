@@ -56,6 +56,9 @@
                             <span class="meta-chip">{{ entry.context }}</span>
                         {% endif %}
                         <span class="meta-chip">{{ entry.part_of_speech }}</span>
+                        {% for domain in entry.domains %}
+                            <span class="meta-chip">{{ domain }}</span>
+                        {% endfor %}
                     </span>
                     <span class="entry-definition">{{ entry.definition }}</span>
                     {% if entry.cloze_sentences %}

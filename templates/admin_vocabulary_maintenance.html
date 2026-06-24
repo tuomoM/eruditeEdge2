@@ -4,9 +4,32 @@
 <div class="page-header">
     <div>
         <h1>Vocabulary maintenance</h1>
-        <div class="result-count">{{ entries | length }} entries need cloze data</div>
+        <div class="result-count">
+            {% if selected_view == "all" %}
+                {{ entries | length }} vocabulary entries
+            {% else %}
+                {{ entries | length }} entries need cloze data
+            {% endif %}
+        </div>
     </div>
     <a class="button button-secondary" href="/admin">Back to admin</a>
+</div>
+
+<div class="filter-toggle" role="group" aria-label="Vocabulary maintenance filter">
+    <a
+        class="filter-toggle-button {% if selected_view == 'missing' %}is-active{% endif %}"
+        href="/admin/vocabulary-maintenance"
+        aria-current="{{ 'page' if selected_view == 'missing' else 'false' }}"
+    >
+        Needs maintenance
+    </a>
+    <a
+        class="filter-toggle-button {% if selected_view == 'all' %}is-active{% endif %}"
+        href="/admin/vocabulary-maintenance?view=all"
+        aria-current="{{ 'page' if selected_view == 'all' else 'false' }}"
+    >
+        All vocabulary
+    </a>
 </div>
 
 {% if entries %}
@@ -22,7 +45,7 @@
                         <span class="meta-chip">{{ entry.part_of_speech }}</span>
                     </div>
                     <p class="entry-definition">{{ entry.definition }}</p>
-                    <form action="/admin/vocabulary/{{ entry.id }}/cloze-data" method="post">
+                    <form action="/admin/vocabulary/{{ entry.id }}/cloze-data{% if selected_view == 'all' %}?view=all{% endif %}" method="post">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="form-grid">
                             <div class="field">
@@ -52,7 +75,7 @@
                     </form>
                 </div>
                 <div class="actions admin-row-actions">
-                    <form action="/admin/vocabulary/{{ entry.id }}/generate-cloze-data" method="post">
+                    <form action="/admin/vocabulary/{{ entry.id }}/generate-cloze-data{% if selected_view == 'all' %}?view=all{% endif %}" method="post">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="button-secondary button-compact" type="submit">Generate missing</button>
                     </form>
@@ -61,6 +84,12 @@
         {% endfor %}
     </div>
 {% else %}
-    <p>No vocabulary entries need cloze maintenance.</p>
+    <p>
+        {% if selected_view == "all" %}
+            No vocabulary entries found.
+        {% else %}
+            No vocabulary entries need cloze maintenance.
+        {% endif %}
+    </p>
 {% endif %}
 {% endblock %}

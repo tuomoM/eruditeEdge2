@@ -6,6 +6,7 @@ from csrf import csrf_required
 from Services.ai_quota_service import ai_quota_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, ACCOUNT_CATEGORY_TRUSTED, user_service
 from Services.vocabulary_ai_service import vocabulary_ai_service
+from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
 from Services.vocabulary_service import vocabulary_service
 
 
@@ -111,11 +112,13 @@ def form_to_entry_data(form):
     synonyms = [item.strip() for item in form.get("synonyms", "").split(",")]
     examples = form.get("examples", "").splitlines()
     cloze_sentences = form.get("cloze_sentences", "").splitlines()
+    domains = form.getlist("domains")
     return {
         "word": form.get("word"),
         "definition": form.get("definition"),
         "context": form.get("context"),
         "part_of_speech": form.get("part_of_speech"),
+        "domains": domains,
         "synonyms": synonyms,
         "examples": examples,
         "cloze_sentences": cloze_sentences,
@@ -148,6 +151,8 @@ def new_vocabulary():
             "vocabulary_form.html",
             entry=None,
             prefill_word=request.args.get("word", "").strip(),
+            available_domains=VOCABULARY_DOMAINS,
+            max_domains=MAX_VOCABULARY_DOMAINS,
         )
 
     entry, error = vocabulary_service.create_entry(
@@ -160,6 +165,9 @@ def new_vocabulary():
             "vocabulary_form.html",
             entry=form_to_entry_data(request.form),
             examples_text=request.form.get("examples", ""),
+            cloze_sentences_text=request.form.get("cloze_sentences", ""),
+            available_domains=VOCABULARY_DOMAINS,
+            max_domains=MAX_VOCABULARY_DOMAINS,
         ), 400
     return redirect(f"/vocabulary/{entry['id']}/page")
 
@@ -304,6 +312,8 @@ def edit_vocabulary(vocabulary_id):
             entry=entry,
             examples_text="\n".join(entry["examples"]),
             cloze_sentences_text="\n".join(entry["cloze_sentences"]),
+            available_domains=VOCABULARY_DOMAINS,
+            max_domains=MAX_VOCABULARY_DOMAINS,
         )
 
     updated_entry, error = vocabulary_service.update_entry(
@@ -319,6 +329,8 @@ def edit_vocabulary(vocabulary_id):
             entry=form_entry,
             examples_text=request.form.get("examples", ""),
             cloze_sentences_text=request.form.get("cloze_sentences", ""),
+            available_domains=VOCABULARY_DOMAINS,
+            max_domains=MAX_VOCABULARY_DOMAINS,
         ), 400
     return redirect(f"/vocabulary/{updated_entry['id']}/page")
 

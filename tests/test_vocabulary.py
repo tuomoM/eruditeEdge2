@@ -198,6 +198,48 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(body["synonyms"], ["procedure", "process"])
         self.assertEqual(len(body["examples"]), 2)
 
+    def test_create_vocabulary_persists_up_to_four_domains_in_order(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["domains"] = ["cognition", "communication", "society", "power"]
+
+        response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.get_json()["domains"],
+            ["cognition", "communication", "society", "power"],
+        )
+
+    def test_create_vocabulary_rejects_more_than_four_domains(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["domains"] = [
+            "emotion",
+            "attitude",
+            "cognition",
+            "communication",
+            "morality",
+        ]
+
+        response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json()["error"],
+            "Vocabulary entry must have at most 4 domains",
+        )
+
+    def test_create_vocabulary_rejects_unknown_domain(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["domains"] = ["technology"]
+
+        response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Vocabulary domain is invalid")
+
     def test_different_users_cannot_create_duplicate_global_word_and_context(self):
         self.login_user()
         first_response = self.create_entry()
@@ -265,6 +307,7 @@ class VocabularyTestCase(unittest.TestCase):
             {
                 **generated_entry,
                 "part_of_speech": "other",
+                "domains": [],
                 "cloze_sentences": [],
             },
         )
@@ -297,6 +340,7 @@ class VocabularyTestCase(unittest.TestCase):
             {
                 **generated_entry,
                 "part_of_speech": "other",
+                "domains": [],
                 "cloze_sentences": [],
             },
         )
@@ -325,6 +369,7 @@ class VocabularyTestCase(unittest.TestCase):
             {
                 **generated_entry,
                 "part_of_speech": "other",
+                "domains": [],
                 "cloze_sentences": [],
             },
         )
@@ -905,6 +950,18 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(body["definition"], "A controlled activity")
         self.assertEqual(body["synonyms"], ["activity"])
         self.assertEqual(body["examples"], ["The operation was successful."])
+
+    def test_update_vocabulary_replaces_domains(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["domains"] = ["body", "movement"]
+        vocabulary_id = self.create_entry(data).get_json()["id"]
+        data["domains"] = ["communication", "society"]
+
+        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["domains"], ["communication", "society"])
 
     def test_update_vocabulary_can_update_another_users_entry_because_vocabs_are_global(self):
         self.login_user()

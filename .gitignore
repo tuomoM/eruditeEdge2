@@ -10,3 +10,4 @@ Technical setup.md
 /agents/AGENTS.md
 security-report.json
 security_audit.json
+deploy-production.sh

@@ -7,6 +7,10 @@ This version is almost entirely written using Open AI Codex.
 # Project website
  [eruditeEdge](https://erudite-edge.com)
 
+# Documentation
+
+* [Data model](datamodel.md)
+
 # Features
 
 * it is possible to register a user

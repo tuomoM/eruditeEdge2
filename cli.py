@@ -56,6 +56,9 @@ MIGRATION_MARKERS = {
         },
         "tables": ["vocabulary_cloze_sentences"],
     },
+    "011_vocabulary_domains.sql": {
+        "tables": ["vocabulary_domains"],
+    },
 }
 
 

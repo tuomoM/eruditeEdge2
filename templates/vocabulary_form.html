@@ -30,6 +30,25 @@
         <textarea id="definition" name="definition" required>{{ entry.definition if entry else '' }}</textarea>
     </div>
 
+    <fieldset class="field field-wide domain-fieldset">
+        <legend>Domains</legend>
+        <div class="domain-options">
+            {% set selected_domains = entry.domains if entry and entry.domains else [] %}
+            {% for domain in available_domains %}
+                <label class="domain-option">
+                    <input
+                        type="checkbox"
+                        name="domains"
+                        value="{{ domain }}"
+                        {% if domain in selected_domains %}checked{% endif %}
+                    >
+                    <span>{{ domain | capitalize }}</span>
+                </label>
+            {% endfor %}
+        </div>
+        <div class="help-text">Choose up to {{ max_domains }}.</div>
+    </fieldset>
+
     <div class="form-grid">
         <div class="field">
             <label for="context">Context</label><br>
@@ -147,6 +166,11 @@ document.getElementById("generate-button").addEventListener("click", async () =>
     document.getElementById("definition").value = data.definition || "";
     document.getElementById("context").value = data.context || "";
     document.getElementById("part_of_speech").value = data.part_of_speech || "other";
+    const generatedDomains = new Set(data.domains || []);
+    document.querySelectorAll('input[name="domains"]').forEach((checkbox) => {
+        checkbox.checked = generatedDomains.has(checkbox.value);
+    });
+    updateDomainSelection();
     document.getElementById("synonyms").value = (data.synonyms || []).join(", ");
     document.getElementById("examples").value = (data.examples || []).join("\n");
     document.getElementById("cloze_sentences").value = (data.cloze_sentences || []).join("\n");
@@ -156,4 +180,20 @@ document.getElementById("generate-button").addEventListener("click", async () =>
 });
 </script>
 {% endif %}
+<script>
+const maxDomains = {{ max_domains }};
+const domainCheckboxes = Array.from(document.querySelectorAll('input[name="domains"]'));
+
+function updateDomainSelection() {
+    const selectedCount = domainCheckboxes.filter((checkbox) => checkbox.checked).length;
+    domainCheckboxes.forEach((checkbox) => {
+        checkbox.disabled = !checkbox.checked && selectedCount >= maxDomains;
+    });
+}
+
+domainCheckboxes.forEach((checkbox) => {
+    checkbox.addEventListener("change", updateDomainSelection);
+});
+updateDomainSelection();
+</script>
 {% endblock %}

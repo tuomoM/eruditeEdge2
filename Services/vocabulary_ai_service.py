@@ -2,6 +2,8 @@ import json
 import logging
 import re
 
+from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
+
 
 logger = logging.getLogger(__name__)
 WORD_PATTERN = re.compile(r"^[A-Za-z]+(?:[-'][A-Za-z]+)?$")
@@ -40,7 +42,9 @@ VOCABULARY_SCHEMA = {
         "context": {
             "type": "string",
             "description": (
-                "A short usage category or register, not an example sentence. "
+                "A short usage setting, category, or register, not an example sentence. "
+                "This is separate "
+                "from semantic domains and must not describe the word's meaning. "
                 "Use 1-4 slash-separated labels such as Formal, Casual, "
                 "Medical, Philosophy, Academic, Business English, Business/Formal."
             ),
@@ -48,6 +52,17 @@ VOCABULARY_SCHEMA = {
         "part_of_speech": {
             "type": "string",
             "enum": ["noun", "verb", "adjective", "adverb", "phrase", "other"],
+        },
+        "domains": {
+            "type": "array",
+            "items": {"type": "string", "enum": list(VOCABULARY_DOMAINS)},
+            "minItems": 1,
+            "maxItems": MAX_VOCABULARY_DOMAINS,
+            "uniqueItems": True,
+            "description": (
+                "Semantic areas represented by the word's meaning. These are "
+                "independent of usage settings such as Academic, Medical, or General."
+            ),
         },
         "synonyms": {
             "type": "array",
@@ -73,6 +88,7 @@ VOCABULARY_SCHEMA = {
         "definition",
         "context",
         "part_of_speech",
+        "domains",
         "synonyms",
         "examples",
         "cloze_sentences",
@@ -137,12 +153,17 @@ class VocabularyAiService:
                 instructions=(
                     "Create vocabulary entry data for the provided single word. "
                     "Return only factual dictionary-style data. Do not include HTML. "
-                    "The context field must be a short usage category/register/domain, "
-                    "not a sentence. Examples: Formal, Casual, Medical, Philosophy, "
-                    "Academic, Business English, Business/Formal. Provide 2-4 example "
+                    "The context field must describe the usage setting, category, or "
+                    "register, not the word's semantic meaning and not a sentence. "
+                    "Examples: Formal, Casual, Medical, Philosophy, Academic, Business "
+                    "English, Business/Formal. Keep context separate from domains. "
+                    "Domains describe semantic meaning, such as cognition, power, or "
+                    "rhetoric. Provide 2-4 example "
                     "sentences that use the word naturally. Identify the primary part "
                     "of speech for this meaning using noun, verb, adjective, adverb, "
-                    "phrase, or other. Provide 2-3 cloze training sentences. Each cloze "
+                    "phrase, or other. Assign 1-4 semantic domains using only: "
+                    f"{', '.join(VOCABULARY_DOMAINS)}. Provide 2-3 cloze training "
+                    "sentences. Each cloze "
                     "sentence must use exactly one ____ blank where the target word "
                     "belongs, must not include the target word elsewhere, and must be "
                     "natural enough that same-part-of-speech distractors are plausible."
@@ -175,6 +196,7 @@ class VocabularyAiService:
 
         entry["word"] = word
         entry["context"] = self._normalize_context(entry.get("context"))
+        entry["domains"] = self._normalize_domains(entry.get("domains"))
         entry["examples"] = self._normalize_examples(entry.get("examples"))
         entry["cloze_sentences"] = self._normalize_cloze_sentences(
             entry.get("cloze_sentences")
@@ -346,6 +368,20 @@ class VocabularyAiService:
             for example in examples
             if str(example).strip()
         ][:4]
+
+    def _normalize_domains(self, domains):
+        if not isinstance(domains, list):
+            return []
+
+        normalized_domains = []
+        for domain in domains:
+            normalized_domain = str(domain).strip().lower()
+            if (
+                normalized_domain in VOCABULARY_DOMAINS
+                and normalized_domain not in normalized_domains
+            ):
+                normalized_domains.append(normalized_domain)
+        return normalized_domains[:MAX_VOCABULARY_DOMAINS]
 
     def _normalize_cloze_sentences(self, cloze_sentences):
         if not isinstance(cloze_sentences, list):

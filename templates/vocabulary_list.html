@@ -53,6 +53,9 @@
                     {% if entry.context %}
                         <span class="meta-chip">{{ entry.context }}</span>
                     {% endif %}
+                    {% for domain in entry.domains %}
+                        <span class="meta-chip">{{ domain }}</span>
+                    {% endfor %}
                 </div>
                 <p class="entry-definition">{{ entry.definition }}</p>
             </div>

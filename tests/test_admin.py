@@ -335,6 +335,55 @@ class AdminTestCase(unittest.TestCase):
         self.assertIn(b"alpha", response.data)
         self.assertIn(b"Generate missing", response.data)
 
+    def test_admin_vocabulary_maintenance_all_view_shows_complete_entries(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        self.create_vocab("alpha")
+        self.create_cloze_vocab("tenuous")
+
+        missing_response = self.client.get("/admin/vocabulary-maintenance")
+        all_response = self.client.get(
+            "/admin/vocabulary-maintenance",
+            query_string={"view": "all"},
+        )
+
+        self.assertEqual(missing_response.status_code, 200)
+        self.assertIn(b"alpha", missing_response.data)
+        self.assertNotIn(b"tenuous", missing_response.data)
+        self.assertEqual(all_response.status_code, 200)
+        self.assertIn(b"alpha", all_response.data)
+        self.assertIn(b"tenuous", all_response.data)
+        self.assertIn(b"All vocabulary", all_response.data)
+        self.assertIn(
+            b"/admin/vocabulary/",
+            all_response.data,
+        )
+        self.assertIn(b"/cloze-data?view=all", all_response.data)
+
+    def test_admin_maintenance_save_preserves_all_view(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        vocabulary_id = self.create_cloze_vocab("tenuous").get_json()["id"]
+
+        response = self.client.post(
+            f"/admin/vocabulary/{vocabulary_id}/cloze-data?view=all",
+            data={
+                "csrf_token": self.csrf_token(),
+                "part_of_speech": "adjective",
+                "cloze_sentences": "\n".join(
+                    self.valid_cloze_entry("tenuous")["cloze_sentences"]
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.headers["Location"],
+            "/admin/vocabulary-maintenance?view=all",
+        )
+
     def test_admin_can_update_vocabulary_cloze_data(self):
         self.create_admin("tuomo")
         self.logout()

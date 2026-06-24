@@ -3,6 +3,7 @@ import re
 from Repositories.vocabulary_repository import (
     vocabulary_repository as default_vocabulary_repository,
 )
+from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
 
 
 HTML_PATTERN = re.compile(r"<[^>]+>")
@@ -36,6 +37,7 @@ class VocabularyService:
             values["definition"],
             values["context"],
             values["part_of_speech"],
+            values["domains"],
             values["synonyms"],
             values["examples"],
             values["cloze_sentences"],
@@ -56,6 +58,7 @@ class VocabularyService:
             values["definition"],
             values["context"],
             values["part_of_speech"],
+            values["domains"],
             values["synonyms"],
             values["examples"],
             values["cloze_sentences"],
@@ -126,11 +129,18 @@ class VocabularyService:
         definition = self._clean_text(data.get("definition"))
         context = self._clean_text(data.get("context"))
         part_of_speech = self._clean_part_of_speech(data.get("part_of_speech"))
+        domains = self._clean_list(data.get("domains", []))
         synonyms = self._clean_list(data.get("synonyms", []))
         examples = self._clean_list(data.get("examples", []))
         cloze_sentences = self._clean_list(data.get("cloze_sentences", []))
 
-        fields = [word, definition, context, part_of_speech] + synonyms + examples + cloze_sentences
+        fields = (
+            [word, definition, context, part_of_speech]
+            + domains
+            + synonyms
+            + examples
+            + cloze_sentences
+        )
         unsafe_field = self._find_unsafe_field(fields)
         if unsafe_field:
             return None, "HTML tags are not allowed"
@@ -141,6 +151,10 @@ class VocabularyService:
             return None, "Definition is required"
         if part_of_speech not in ALLOWED_PARTS_OF_SPEECH:
             return None, "Part of speech is invalid"
+        if len(domains) > MAX_VOCABULARY_DOMAINS:
+            return None, f"Vocabulary entry must have at most {MAX_VOCABULARY_DOMAINS} domains"
+        if any(domain not in VOCABULARY_DOMAINS for domain in domains):
+            return None, "Vocabulary domain is invalid"
         if len(examples) < 1 or len(examples) > 4:
             return None, "Vocabulary entry must have 1-4 example sentences"
         if len(cloze_sentences) > 3:
@@ -154,6 +168,7 @@ class VocabularyService:
             "definition": definition,
             "context": context,
             "part_of_speech": part_of_speech,
+            "domains": domains,
             "synonyms": synonyms,
             "examples": examples,
             "cloze_sentences": cloze_sentences,

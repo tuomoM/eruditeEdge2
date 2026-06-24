@@ -10,6 +10,7 @@ class VocabularyRepository:
         definition,
         context,
         part_of_speech,
+        domains,
         synonyms,
         examples,
         cloze_sentences,
@@ -31,6 +32,7 @@ class VocabularyRepository:
         self._save_synonyms(vocabulary_id, synonyms)
         self._save_examples(vocabulary_id, examples)
         self._save_cloze_sentences(vocabulary_id, cloze_sentences)
+        self._save_domains(vocabulary_id, domains)
         return vocabulary_id
 
     def update_entry(
@@ -40,6 +42,7 @@ class VocabularyRepository:
         definition,
         context,
         part_of_speech,
+        domains,
         synonyms,
         examples,
         cloze_sentences,
@@ -67,9 +70,11 @@ class VocabularyRepository:
         db.execute("DELETE FROM vocabulary_synonyms WHERE vocabulary_id = ?", [vocabulary_id])
         db.execute("DELETE FROM vocabulary_examples WHERE vocabulary_id = ?", [vocabulary_id])
         db.execute("DELETE FROM vocabulary_cloze_sentences WHERE vocabulary_id = ?", [vocabulary_id])
+        db.execute("DELETE FROM vocabulary_domains WHERE vocabulary_id = ?", [vocabulary_id])
         self._save_synonyms(vocabulary_id, synonyms)
         self._save_examples(vocabulary_id, examples)
         self._save_cloze_sentences(vocabulary_id, cloze_sentences)
+        self._save_domains(vocabulary_id, domains)
         return True
 
     def update_cloze_data(self, vocabulary_id, part_of_speech, cloze_sentences):
@@ -141,6 +146,18 @@ class VocabularyRepository:
                 FROM vocabulary_cloze_sentences
                 WHERE vocabulary_id = ?
                 ORDER BY cloze_order
+                """,
+                [vocabulary_id],
+            )
+        ]
+        entry["domains"] = [
+            row["domain"]
+            for row in db.query(
+                """
+                SELECT domain
+                FROM vocabulary_domains
+                WHERE vocabulary_id = ?
+                ORDER BY domain_order
                 """,
                 [vocabulary_id],
             )
@@ -238,6 +255,17 @@ class VocabularyRepository:
                 """,
                 [user_id],
             )
+            connection.execute(
+                """
+                DELETE FROM vocabulary_domains
+                WHERE vocabulary_id IN (
+                    SELECT id
+                    FROM vocabulary_entries
+                    WHERE created_by = ?
+                )
+                """,
+                [user_id],
+            )
             cursor = connection.execute(
                 "DELETE FROM vocabulary_entries WHERE created_by = ?",
                 [user_id],
@@ -278,6 +306,17 @@ class VocabularyRepository:
                 VALUES (?, ?, ?)
                 """,
                 [vocabulary_id, sentence, index],
+            )
+
+    def _save_domains(self, vocabulary_id, domains):
+        for index, domain in enumerate(domains, start=1):
+            db.execute(
+                """
+                INSERT INTO vocabulary_domains
+                    (vocabulary_id, domain, domain_order)
+                VALUES (?, ?, ?)
+                """,
+                [vocabulary_id, domain, index],
             )
 
 
