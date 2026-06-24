@@ -75,6 +75,9 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertEqual(domains_schema["maxItems"], 4)
         self.assertIn("emotion", domains_schema["items"]["enum"])
         self.assertIn("body", domains_schema["items"]["enum"])
+        self.assertIn("quality", domains_schema["items"]["enum"])
+        self.assertIn("reasoning", domains_schema["items"]["enum"])
+        self.assertIn("truth", domains_schema["items"]["enum"])
         self.assertIn("independent of usage settings", domains_schema["description"])
         self.assertEqual(entry["domains"], ["communication", "body"])
 
@@ -85,6 +88,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "The excessive regulations served to stultify innovation.",
                 "part_of_speech": "verb",
+                "domains": ["change", "power"],
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
@@ -110,6 +114,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "Business / Formal",
                 "part_of_speech": "verb",
+                "domains": ["power", "change"],
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
@@ -135,6 +140,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "Business English",
                 "part_of_speech": "verb",
+                "domains": ["power", "change"],
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
@@ -160,6 +166,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "The regulations",
                 "part_of_speech": "verb",
+                "domains": ["power", "change"],
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
@@ -185,8 +192,35 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "Formal",
                 "part_of_speech": "verb",
+                "domains": ["power", "change"],
                 "synonyms": ["hinder"],
                 "examples": ["The rigid process stultified the team."],
+                "cloze_sentences": [
+                    "The rigid process could ____ the team.",
+                    "The policy threatened to ____ debate.",
+                ],
+            }
+        )
+        service = VocabularyAiService(client=FakeClient(output))
+
+        entry, error = service.generate_entry("stultify", "test-key", "test-model")
+
+        self.assertIsNone(entry)
+        self.assertEqual(error, "OpenAI returned invalid vocabulary data")
+
+    def test_generate_entry_rejects_output_without_domains(self):
+        output = json.dumps(
+            {
+                "word": "stultify",
+                "definition": "To make ineffective.",
+                "context": "Formal",
+                "part_of_speech": "verb",
+                "domains": [],
+                "synonyms": ["hinder"],
+                "examples": [
+                    "The rigid process stultified the team.",
+                    "The policy threatened to stultify debate.",
+                ],
                 "cloze_sentences": [
                     "The rigid process could ____ the team.",
                     "The policy threatened to ____ debate.",
@@ -235,6 +269,41 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
 
         self.assertIsNone(entry)
         self.assertEqual(error, "OpenAI API key is missing")
+
+    def test_generate_cloze_data_includes_semantic_domains(self):
+        output = json.dumps(
+            {
+                "part_of_speech": "noun",
+                "domains": ["emotion", "cognition"],
+                "cloze_sentences": [
+                    "She felt deep ____ after the mistake.",
+                    "To his ____, the plan failed immediately.",
+                ],
+            }
+        )
+        client = FakeClient(output)
+        service = VocabularyAiService(client=client)
+
+        result, error = service.generate_cloze_data(
+            {
+                "word": "chagrin",
+                "definition": "Distress caused by humiliation or failure.",
+                "context": "Formal",
+                "examples": ["She felt chagrin after the mistake."],
+            },
+            "test-key",
+            "test-model",
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(result["domains"], ["emotion", "cognition"])
+        schema = client.responses.last_request["text"]["format"]["schema"]
+        self.assertIn("domains", schema["required"])
+        self.assertEqual(schema["properties"]["domains"]["maxItems"], 4)
+        self.assertIn(
+            "separate from usage context",
+            client.responses.last_request["instructions"],
+        )
 
     def test_validate_usage_accepts_correct_sentence(self):
         output = json.dumps({"result": "correct", "hint": ""})

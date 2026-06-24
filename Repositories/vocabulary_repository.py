@@ -77,7 +77,7 @@ class VocabularyRepository:
         self._save_domains(vocabulary_id, domains)
         return True
 
-    def update_cloze_data(self, vocabulary_id, part_of_speech, cloze_sentences):
+    def update_cloze_data(self, vocabulary_id, part_of_speech, cloze_sentences, domains):
         cursor = db.execute(
             """
             UPDATE vocabulary_entries
@@ -90,7 +90,9 @@ class VocabularyRepository:
             return False
 
         db.execute("DELETE FROM vocabulary_cloze_sentences WHERE vocabulary_id = ?", [vocabulary_id])
+        db.execute("DELETE FROM vocabulary_domains WHERE vocabulary_id = ?", [vocabulary_id])
         self._save_cloze_sentences(vocabulary_id, cloze_sentences)
+        self._save_domains(vocabulary_id, domains)
         return True
 
     def get_entry(self, vocabulary_id):

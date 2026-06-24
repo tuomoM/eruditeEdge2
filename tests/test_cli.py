@@ -85,8 +85,8 @@ class CliTestCase(unittest.TestCase):
                 ORDER BY filename
                 """
             )
-        self.assertEqual(len(rows), 11)
-        self.assertEqual(rows[-1]["filename"], "011_vocabulary_domains.sql")
+        self.assertEqual(len(rows), 12)
+        self.assertEqual(rows[-1]["filename"], "012_expand_vocabulary_domains.sql")
 
     def test_migrate_skips_recorded_migrations(self):
         app = self.create_test_app()
@@ -98,6 +98,60 @@ class CliTestCase(unittest.TestCase):
         self.assertEqual(first_result.exit_code, 0)
         self.assertEqual(second_result.exit_code, 0)
         self.assertIn("No pending migrations.", second_result.output)
+
+    def test_domain_expansion_migration_preserves_data_and_allows_new_values(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["domain-test", "not-used", "admin"],
+            ).lastrowid
+            vocabulary_id = db.execute(
+                """
+                INSERT INTO vocabulary_entries
+                    (word, definition, context, created_by)
+                VALUES (?, ?, ?, ?)
+                """,
+                ["reason", "A basis for thought.", "General", user_id],
+            ).lastrowid
+            db.execute(
+                """
+                INSERT INTO vocabulary_domains
+                    (vocabulary_id, domain, domain_order)
+                VALUES (?, ?, ?)
+                """,
+                [vocabulary_id, "cognition", 1],
+            )
+
+        result = app.test_cli_runner().invoke(args=["migrate"])
+
+        self.assertEqual(result.exit_code, 0)
+        with app.app_context():
+            db.execute(
+                """
+                INSERT INTO vocabulary_domains
+                    (vocabulary_id, domain, domain_order)
+                VALUES (?, ?, ?)
+                """,
+                [vocabulary_id, "reasoning", 2],
+            )
+            domains = [
+                row["domain"]
+                for row in db.query(
+                    """
+                    SELECT domain
+                    FROM vocabulary_domains
+                    WHERE vocabulary_id = ?
+                    ORDER BY domain_order
+                    """,
+                    [vocabulary_id],
+                )
+            ]
+        self.assertEqual(domains, ["cognition", "reasoning"])
 
 
 if __name__ == "__main__":

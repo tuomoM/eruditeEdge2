@@ -99,6 +99,7 @@ class TrainingMigrationTestCase(unittest.TestCase):
                 "migrations/006_google_registration.sql",
                 "migrations/010_cloze_training.sql",
                 "migrations/011_vocabulary_domains.sql",
+                "migrations/012_expand_vocabulary_domains.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())
@@ -245,6 +246,7 @@ class TrainingMigrationLegacySessionTestCase(unittest.TestCase):
                 "migrations/006_google_registration.sql",
                 "migrations/010_cloze_training.sql",
                 "migrations/011_vocabulary_domains.sql",
+                "migrations/012_expand_vocabulary_domains.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())

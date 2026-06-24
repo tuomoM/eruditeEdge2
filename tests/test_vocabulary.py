@@ -211,6 +211,19 @@ class VocabularyTestCase(unittest.TestCase):
             ["cognition", "communication", "society", "power"],
         )
 
+    def test_create_vocabulary_accepts_expanded_domain_catalog(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["domains"] = ["quality", "relation", "judgment", "truth"]
+
+        response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.get_json()["domains"],
+            ["quality", "relation", "judgment", "truth"],
+        )
+
     def test_create_vocabulary_rejects_more_than_four_domains(self):
         self.login_user()
         data = self.valid_entry()

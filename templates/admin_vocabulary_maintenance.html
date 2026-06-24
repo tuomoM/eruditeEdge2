@@ -8,7 +8,7 @@
             {% if selected_view == "all" %}
                 {{ entries | length }} vocabulary entries
             {% else %}
-                {{ entries | length }} entries need cloze data
+                {{ entries | length }} entries need maintenance
             {% endif %}
         </div>
     </div>
@@ -43,9 +43,12 @@
                             <span class="meta-chip">{{ entry.context }}</span>
                         {% endif %}
                         <span class="meta-chip">{{ entry.part_of_speech }}</span>
+                        {% for domain in entry.domains %}
+                            <span class="meta-chip">{{ domain }}</span>
+                        {% endfor %}
                     </div>
                     <p class="entry-definition">{{ entry.definition }}</p>
-                    <form action="/admin/vocabulary/{{ entry.id }}/cloze-data{% if selected_view == 'all' %}?view=all{% endif %}" method="post">
+                    <form class="domain-maintenance-form" action="/admin/vocabulary/{{ entry.id }}/cloze-data{% if selected_view == 'all' %}?view=all{% endif %}" method="post">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="form-grid">
                             <div class="field">
@@ -64,13 +67,30 @@
                                 </select>
                             </div>
                         </div>
+                        <fieldset class="field field-wide domain-fieldset">
+                            <legend>Domains</legend>
+                            <div class="domain-options">
+                                {% for domain in available_domains %}
+                                    <label class="domain-option">
+                                        <input
+                                            type="checkbox"
+                                            name="domains"
+                                            value="{{ domain }}"
+                                            {% if domain in entry.domains %}checked{% endif %}
+                                        >
+                                        <span>{{ domain | capitalize }}</span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                            <div class="help-text">Choose up to {{ max_domains }}.</div>
+                        </fieldset>
                         <div class="field field-wide">
                             <label for="cloze-sentences-{{ entry.id }}">Cloze sentences</label><br>
                             <textarea id="cloze-sentences-{{ entry.id }}" name="cloze_sentences">{{ entry.cloze_sentences | join('\n') }}</textarea>
                             <div class="help-text">Use exactly one ____ blank per sentence.</div>
                         </div>
                         <div class="actions">
-                            <button class="button-primary button-compact" type="submit">Save cloze data</button>
+                            <button class="button-primary button-compact" type="submit">Save maintenance data</button>
                         </div>
                     </form>
                 </div>
@@ -88,8 +108,25 @@
         {% if selected_view == "all" %}
             No vocabulary entries found.
         {% else %}
-            No vocabulary entries need cloze maintenance.
+            No vocabulary entries need maintenance.
         {% endif %}
     </p>
 {% endif %}
+<script>
+document.querySelectorAll(".domain-maintenance-form").forEach((form) => {
+    const checkboxes = Array.from(form.querySelectorAll('input[name="domains"]'));
+
+    function updateDomainSelection() {
+        const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+        checkboxes.forEach((checkbox) => {
+            checkbox.disabled = !checkbox.checked && selectedCount >= {{ max_domains }};
+        });
+    }
+
+    checkboxes.forEach((checkbox) => {
+        checkbox.addEventListener("change", updateDomainSelection);
+    });
+    updateDomainSelection();
+});
+</script>
 {% endblock %}

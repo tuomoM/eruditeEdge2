@@ -136,7 +136,8 @@ The allowed domains are:
 
 `emotion`, `attitude`, `cognition`, `communication`, `morality`, `justice`,
 `power`, `society`, `status`, `conflict`, `violence`, `time`, `change`,
-`certainty`, `perception`, `appearance`, `movement`, `quantity`, `causation`,
+`certainty`, `perception`, `appearance`, `quality`, `relation`, `degree`,
+`movement`, `quantity`, `causation`, `judgment`, `reasoning`, `truth`,
 `rhetoric`, `literature`, `religion`, and `body`.
 
 The shared application catalog is defined in

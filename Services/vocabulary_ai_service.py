@@ -104,6 +104,13 @@ CLOZE_DATA_SCHEMA = {
             "type": "string",
             "enum": ["noun", "verb", "adjective", "adverb", "phrase", "other"],
         },
+        "domains": {
+            "type": "array",
+            "items": {"type": "string", "enum": list(VOCABULARY_DOMAINS)},
+            "minItems": 1,
+            "maxItems": MAX_VOCABULARY_DOMAINS,
+            "uniqueItems": True,
+        },
         "cloze_sentences": {
             "type": "array",
             "items": {"type": "string"},
@@ -111,7 +118,7 @@ CLOZE_DATA_SCHEMA = {
             "maxItems": 3,
         },
     },
-    "required": ["part_of_speech", "cloze_sentences"],
+    "required": ["part_of_speech", "domains", "cloze_sentences"],
 }
 
 
@@ -204,6 +211,9 @@ class VocabularyAiService:
         if len(entry["examples"]) < 2:
             logger.warning("Vocabulary AI generation failed: fewer than 2 examples returned")
             return None, "OpenAI returned invalid vocabulary data"
+        if not entry["domains"]:
+            logger.warning("Vocabulary AI generation failed: no valid domains returned")
+            return None, "OpenAI returned invalid vocabulary data"
         if len(entry["cloze_sentences"]) < 2:
             logger.warning("Vocabulary AI generation failed: fewer than 2 cloze sentences returned")
             return None, "OpenAI returned invalid vocabulary data"
@@ -225,6 +235,9 @@ class VocabularyAiService:
                     "Create missing cloze training data for one vocabulary entry. "
                     "Return JSON only. Identify the primary part of speech for the "
                     "given meaning using noun, verb, adjective, adverb, phrase, or other. "
+                    "Assign 1-4 semantic domains using only: "
+                    f"{', '.join(VOCABULARY_DOMAINS)}. Domains describe meaning and "
+                    "are separate from usage context such as Academic or Medical. "
                     "Create 2-3 natural cloze sentences. Each sentence must include "
                     "exactly one ____ blank where the target word belongs, must not "
                     "include the target word elsewhere, and must fit the definition."
@@ -264,7 +277,10 @@ class VocabularyAiService:
         cloze_data["cloze_sentences"] = self._normalize_cloze_sentences(
             cloze_data.get("cloze_sentences")
         )
+        cloze_data["domains"] = self._normalize_domains(cloze_data.get("domains"))
         if len(cloze_data["cloze_sentences"]) < 2:
+            return None, "OpenAI returned invalid cloze data"
+        if not cloze_data["domains"]:
             return None, "OpenAI returned invalid cloze data"
         logger.info("Cloze AI generation succeeded for word '%s'", word)
         return cloze_data, None

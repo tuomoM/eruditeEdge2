@@ -98,6 +98,7 @@ class VocabularyService:
             for entry in entries
             if (
                 entry["part_of_speech"] == "other"
+                or not entry["domains"]
                 or len(entry["cloze_sentences"]) < 2
                 or self._validate_cloze_sentences(entry["word"], entry["cloze_sentences"])
             )
@@ -110,6 +111,7 @@ class VocabularyService:
 
         merged_data = dict(entry)
         merged_data["part_of_speech"] = data.get("part_of_speech")
+        merged_data["domains"] = data.get("domains", entry["domains"])
         merged_data["cloze_sentences"] = data.get("cloze_sentences", [])
         values, error = self._validate_data(merged_data)
         if error:
@@ -119,6 +121,7 @@ class VocabularyService:
             vocabulary_id,
             values["part_of_speech"],
             values["cloze_sentences"],
+            values["domains"],
         )
         if not updated:
             return None, "Vocabulary entry was not found"

@@ -10,6 +10,7 @@ from Services.invite_code_service import invite_code_service
 from Services.security_report_service import security_report_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_ai_service import vocabulary_ai_service
+from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
 from Services.vocabulary_service import vocabulary_service
 
 
@@ -137,6 +138,8 @@ def vocabulary_maintenance_page():
         "admin_vocabulary_maintenance.html",
         entries=entries,
         selected_view=selected_view,
+        available_domains=VOCABULARY_DOMAINS,
+        max_domains=MAX_VOCABULARY_DOMAINS,
     )
 
 
@@ -149,6 +152,7 @@ def update_vocabulary_cloze_data(vocabulary_id):
     else:
         data = {
             "part_of_speech": request.form.get("part_of_speech"),
+            "domains": request.form.getlist("domains"),
             "cloze_sentences": request.form.get("cloze_sentences", "").splitlines(),
         }
 
@@ -200,6 +204,7 @@ def generate_vocabulary_cloze_data(vocabulary_id):
             if entry["part_of_speech"] == "other"
             else entry["part_of_speech"]
         ),
+        "domains": entry["domains"] or generated_data.get("domains", []),
         "cloze_sentences": entry["cloze_sentences"] or generated_data["cloze_sentences"],
     }
     updated_entry, error = vocabulary_service.update_cloze_data(vocabulary_id, update_data)

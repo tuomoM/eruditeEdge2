@@ -108,6 +108,7 @@ class AdminTestCase(unittest.TestCase):
     def valid_cloze_entry(self, word):
         entry = self.valid_entry(word)
         entry["part_of_speech"] = "adjective"
+        entry["domains"] = ["cognition"]
         entry["cloze_sentences"] = [
             "The argument rested on a ____ assumption.",
             "The evidence showed only a ____ connection.",
@@ -335,6 +336,20 @@ class AdminTestCase(unittest.TestCase):
         self.assertIn(b"alpha", response.data)
         self.assertIn(b"Generate missing", response.data)
 
+    def test_admin_vocabulary_maintenance_shows_entry_missing_only_domains(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        entry = self.valid_cloze_entry("tenuous")
+        entry["domains"] = []
+        self.client.post("/vocabulary", json=entry)
+
+        response = self.client.get("/admin/vocabulary-maintenance")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"tenuous", response.data)
+        self.assertIn(b'name="domains"', response.data)
+
     def test_admin_vocabulary_maintenance_all_view_shows_complete_entries(self):
         self.create_admin("tuomo")
         self.logout()
@@ -372,6 +387,7 @@ class AdminTestCase(unittest.TestCase):
             data={
                 "csrf_token": self.csrf_token(),
                 "part_of_speech": "adjective",
+                "domains": ["cognition"],
                 "cloze_sentences": "\n".join(
                     self.valid_cloze_entry("tenuous")["cloze_sentences"]
                 ),
@@ -394,6 +410,7 @@ class AdminTestCase(unittest.TestCase):
             f"/admin/vocabulary/{vocabulary_id}/cloze-data",
             json={
                 "part_of_speech": "adjective",
+                "domains": ["cognition", "rhetoric"],
                 "cloze_sentences": [
                     "The argument rested on a ____ assumption.",
                     "The evidence showed only a ____ connection.",
@@ -405,6 +422,7 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertEqual(body["part_of_speech"], "adjective")
+        self.assertEqual(body["domains"], ["cognition", "rhetoric"])
         self.assertEqual(len(body["cloze_sentences"]), 2)
 
     def test_admin_update_vocabulary_cloze_data_rejects_missing_csrf_token(self):
@@ -452,6 +470,7 @@ class AdminTestCase(unittest.TestCase):
         vocabulary_id = self.create_vocab("tenuous").get_json()["id"]
         generated_data = {
             "part_of_speech": "adjective",
+            "domains": ["cognition", "communication"],
             "cloze_sentences": [
                 "The argument rested on a ____ assumption.",
                 "The evidence showed only a ____ connection.",
@@ -471,6 +490,7 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertEqual(body["part_of_speech"], "adjective")
+        self.assertEqual(body["domains"], ["cognition", "communication"])
         self.assertEqual(body["cloze_sentences"], generated_data["cloze_sentences"])
         generate_cloze_data.assert_called_once()
 
@@ -481,6 +501,7 @@ class AdminTestCase(unittest.TestCase):
         vocabulary_id = self.create_cloze_vocab("tenuous").get_json()["id"]
         generated_data = {
             "part_of_speech": "noun",
+            "domains": ["communication"],
             "cloze_sentences": [
                 "Generated ____ should not replace manual data.",
                 "Another generated ____ should stay unused.",
@@ -500,6 +521,7 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertEqual(body["part_of_speech"], "adjective")
+        self.assertEqual(body["domains"], ["cognition"])
         self.assertEqual(
             body["cloze_sentences"],
             self.valid_cloze_entry("tenuous")["cloze_sentences"],
