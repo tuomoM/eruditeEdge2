@@ -27,7 +27,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "A planned activity or procedure.",
                 "context": "Scientific/Medical",
                 "part_of_speech": "noun",
-                "domains": ["communication", "body"],
+                "domains": ["communication", "body", "cognition"],
                 "synonyms": ["procedure", "process"],
                 "examples": [
                     "The operation required careful preparation.",
@@ -37,6 +37,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                     "The ____ required careful preparation.",
                     "The rescue ____ continued through the night.",
                 ],
+                "needs_attention": "",
+                "confidence_score": 92,
             }
         )
 
@@ -71,7 +73,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         domains_schema = (
             client.responses.last_request["text"]["format"]["schema"]["properties"]["domains"]
         )
-        self.assertEqual(domains_schema["minItems"], 1)
+        self.assertEqual(domains_schema["minItems"], 3)
         self.assertEqual(domains_schema["maxItems"], 4)
         self.assertIn("emotion", domains_schema["items"]["enum"])
         self.assertIn("body", domains_schema["items"]["enum"])
@@ -79,7 +81,9 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIn("reasoning", domains_schema["items"]["enum"])
         self.assertIn("truth", domains_schema["items"]["enum"])
         self.assertIn("independent of usage settings", domains_schema["description"])
-        self.assertEqual(entry["domains"], ["communication", "body"])
+        self.assertEqual(entry["domains"], ["communication", "body", "cognition"])
+        self.assertIsNone(entry["needs_attention"])
+        self.assertEqual(entry["confidence_score"], 92)
 
     def test_generate_entry_normalizes_sentence_like_context_to_general(self):
         output = json.dumps(
@@ -88,7 +92,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "The excessive regulations served to stultify innovation.",
                 "part_of_speech": "verb",
-                "domains": ["change", "power"],
+                "domains": ["change", "power", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
@@ -98,6 +102,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                     "The rigid process could ____ the team.",
                     "Outdated rules can ____ creative work.",
                 ],
+                "needs_attention": "",
+                "confidence_score": 88,
             }
         )
         service = VocabularyAiService(client=FakeClient(output))
@@ -114,7 +120,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "Business / Formal",
                 "part_of_speech": "verb",
-                "domains": ["power", "change"],
+                "domains": ["power", "change", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
@@ -124,6 +130,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                     "The rigid process could ____ the team.",
                     "Excessive approvals can ____ a promising project.",
                 ],
+                "needs_attention": "",
+                "confidence_score": 88,
             }
         )
         service = VocabularyAiService(client=FakeClient(output))
@@ -140,7 +148,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "Business English",
                 "part_of_speech": "verb",
-                "domains": ["power", "change"],
+                "domains": ["power", "change", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
@@ -150,6 +158,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                     "The rigid process could ____ the team.",
                     "Poor incentives may ____ workplace initiative.",
                 ],
+                "needs_attention": "",
+                "confidence_score": 88,
             }
         )
         service = VocabularyAiService(client=FakeClient(output))
@@ -166,7 +176,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "The regulations",
                 "part_of_speech": "verb",
-                "domains": ["power", "change"],
+                "domains": ["power", "change", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
                     "The rigid process stultified the team.",
@@ -176,6 +186,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                     "The rigid process could ____ the team.",
                     "The policy threatened to ____ debate.",
                 ],
+                "needs_attention": "",
+                "confidence_score": 88,
             }
         )
         service = VocabularyAiService(client=FakeClient(output))
@@ -234,6 +246,17 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIsNone(entry)
         self.assertEqual(error, "OpenAI returned invalid vocabulary data")
 
+    def test_generate_entry_rejects_invalid_assessment(self):
+        output = json.loads(self.valid_output())
+        output["needs_attention"] = "x" * 201
+        output["confidence_score"] = 101
+        service = VocabularyAiService(client=FakeClient(json.dumps(output)))
+
+        entry, error = service.generate_entry("operation", "test-key", "test-model")
+
+        self.assertIsNone(entry)
+        self.assertEqual(error, "OpenAI returned invalid vocabulary data")
+
     def test_generate_entry_rejects_sql_injection(self):
         service = VocabularyAiService(client=FakeClient(self.valid_output()))
 
@@ -274,11 +297,13 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         output = json.dumps(
             {
                 "part_of_speech": "noun",
-                "domains": ["emotion", "cognition"],
+                "domains": ["emotion", "cognition", "attitude"],
                 "cloze_sentences": [
                     "She felt deep ____ after the mistake.",
                     "To his ____, the plan failed immediately.",
                 ],
+                "needs_attention": "The third domain is less certain.",
+                "confidence_score": 74,
             }
         )
         client = FakeClient(output)
@@ -296,7 +321,9 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         )
 
         self.assertIsNone(error)
-        self.assertEqual(result["domains"], ["emotion", "cognition"])
+        self.assertEqual(result["domains"], ["emotion", "cognition", "attitude"])
+        self.assertEqual(result["needs_attention"], "The third domain is less certain.")
+        self.assertEqual(result["confidence_score"], 74)
         schema = client.responses.last_request["text"]["format"]["schema"]
         self.assertIn("domains", schema["required"])
         self.assertEqual(schema["properties"]["domains"]["maxItems"], 4)

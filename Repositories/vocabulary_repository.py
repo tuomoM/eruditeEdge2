@@ -14,16 +14,35 @@ class VocabularyRepository:
         synonyms,
         examples,
         cloze_sentences,
+        needs_attention,
+        confidence_score,
         user_id,
     ):
         try:
             cursor = db.execute(
                 """
                 INSERT INTO vocabulary_entries
-                    (word, definition, context, part_of_speech, created_by)
-                VALUES (?, ?, ?, ?, ?)
+                    (
+                        word,
+                        definition,
+                        context,
+                        part_of_speech,
+                        needs_attention,
+                        confidence_score,
+                        confidence_obsolete,
+                        created_by
+                    )
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?)
                 """,
-                [word, definition, context, part_of_speech, user_id],
+                [
+                    word,
+                    definition,
+                    context,
+                    part_of_speech,
+                    needs_attention,
+                    confidence_score,
+                    user_id,
+                ],
             )
         except IntegrityError:
             return None
@@ -56,6 +75,10 @@ class VocabularyRepository:
                     definition = ?,
                     context = ?,
                     part_of_speech = ?,
+                    confidence_obsolete = CASE
+                        WHEN confidence_score IS NULL THEN 0
+                        ELSE 1
+                    END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
@@ -81,10 +104,52 @@ class VocabularyRepository:
         cursor = db.execute(
             """
             UPDATE vocabulary_entries
-            SET part_of_speech = ?, updated_at = CURRENT_TIMESTAMP
+            SET
+                part_of_speech = ?,
+                confidence_obsolete = CASE
+                    WHEN confidence_score IS NULL THEN 0
+                    ELSE 1
+                END,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
             [part_of_speech, vocabulary_id],
+        )
+        if cursor.rowcount == 0:
+            return False
+
+        db.execute("DELETE FROM vocabulary_cloze_sentences WHERE vocabulary_id = ?", [vocabulary_id])
+        db.execute("DELETE FROM vocabulary_domains WHERE vocabulary_id = ?", [vocabulary_id])
+        self._save_cloze_sentences(vocabulary_id, cloze_sentences)
+        self._save_domains(vocabulary_id, domains)
+        return True
+
+    def update_ai_maintenance_data(
+        self,
+        vocabulary_id,
+        part_of_speech,
+        cloze_sentences,
+        domains,
+        needs_attention,
+        confidence_score,
+    ):
+        cursor = db.execute(
+            """
+            UPDATE vocabulary_entries
+            SET
+                part_of_speech = ?,
+                needs_attention = ?,
+                confidence_score = ?,
+                confidence_obsolete = 0,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            [
+                part_of_speech,
+                needs_attention,
+                confidence_score,
+                vocabulary_id,
+            ],
         )
         if cursor.rowcount == 0:
             return False
@@ -104,6 +169,9 @@ class VocabularyRepository:
                 definition,
                 context,
                 part_of_speech,
+                needs_attention,
+                confidence_score,
+                confidence_obsolete,
                 created_by,
                 created_at,
                 updated_at

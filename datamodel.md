@@ -43,6 +43,10 @@ Vocabulary entries use three separate classification concepts:
 - `domains`: Semantic areas represented by the word's meaning, such as
   cognition, communication, power, or rhetoric. An entry may have zero to four
   domains.
+- `needs_attention`: Optional AI explanation of uncertainty requiring admin
+  review. It is assessment metadata, not a domain.
+- `confidence_score`: AI confidence from 0 to 100 for the generated entry.
+  Manual edits preserve the score but mark it obsolete.
 
 These fields must remain independent. For example, a word may have context
 `Academic`, part of speech `noun`, and domains `cognition` and `communication`.
@@ -75,11 +79,20 @@ Stores the core record for one vocabulary meaning. Vocabulary is global, while
 | `definition` | TEXT | Required |
 | `context` | TEXT | Optional usage setting or register |
 | `part_of_speech` | TEXT | Required; controlled grammatical value; defaults to `other` |
+| `needs_attention` | TEXT | Optional AI review explanation; maximum 200 characters |
+| `confidence_score` | INTEGER | Optional AI confidence score; 0 through 100 |
+| `confidence_obsolete` | INTEGER | Required boolean value; defaults to 0 |
 | `created_by` | INTEGER | Required reference to `users.id` |
 | `created_at` | TIMESTAMP | Defaults to current timestamp |
 | `updated_at` | TIMESTAMP | Defaults to current timestamp; updated by application writes |
 
 The combination of `word` and `context` is unique.
+
+AI generation must return three or four domains even when
+`needs_attention` contains an explanation. A manual vocabulary or maintenance
+edit sets `confidence_obsolete` to 1 when a confidence score exists. An AI
+maintenance refresh replaces the assessment and resets `confidence_obsolete`
+to 0.
 
 ### `vocabulary_synonyms`
 

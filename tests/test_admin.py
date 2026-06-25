@@ -108,7 +108,9 @@ class AdminTestCase(unittest.TestCase):
     def valid_cloze_entry(self, word):
         entry = self.valid_entry(word)
         entry["part_of_speech"] = "adjective"
-        entry["domains"] = ["cognition"]
+        entry["domains"] = ["cognition", "quality", "reasoning"]
+        entry["needs_attention"] = ""
+        entry["confidence_score"] = 90
         entry["cloze_sentences"] = [
             "The argument rested on a ____ assumption.",
             "The evidence showed only a ____ connection.",
@@ -433,10 +435,22 @@ class AdminTestCase(unittest.TestCase):
                     [vocabulary_id],
                 )
             ]
+            assessment = db.query(
+                """
+                SELECT confidence_score, confidence_obsolete
+                FROM vocabulary_entries
+                WHERE id = ?
+                """,
+                [vocabulary_id],
+            )[0]
         self.assertEqual(domains, ["quality", "reasoning"])
+        self.assertEqual(assessment["confidence_score"], 90)
+        self.assertEqual(assessment["confidence_obsolete"], 1)
         html = response.get_data(as_text=True)
         self.assertRegex(html, r'value="quality"\s+checked')
         self.assertRegex(html, r'value="reasoning"\s+checked')
+        self.assertIn("Confidence 90/100", html)
+        self.assertIn("(obsolete)", html)
         self.assertIn(
             b"Updated part of speech, domains, and cloze data for tenuous.",
             response.data,
@@ -512,11 +526,13 @@ class AdminTestCase(unittest.TestCase):
         vocabulary_id = self.create_vocab("tenuous").get_json()["id"]
         generated_data = {
             "part_of_speech": "adjective",
-            "domains": ["cognition", "communication"],
+            "domains": ["cognition", "communication", "reasoning"],
             "cloze_sentences": [
                 "The argument rested on a ____ assumption.",
                 "The evidence showed only a ____ connection.",
             ],
+            "needs_attention": "The third domain may need review.",
+            "confidence_score": 76,
         }
 
         with patch(
@@ -532,9 +548,17 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertEqual(body["part_of_speech"], "adjective")
-        self.assertEqual(body["domains"], ["cognition", "communication"])
+        self.assertEqual(body["domains"], ["cognition", "communication", "reasoning"])
+        self.assertEqual(body["needs_attention"], "The third domain may need review.")
+        self.assertEqual(body["confidence_score"], 76)
+        self.assertEqual(body["confidence_obsolete"], 0)
         self.assertEqual(body["cloze_sentences"], generated_data["cloze_sentences"])
         generate_cloze_data.assert_called_once()
+
+        page_response = self.client.get("/admin/vocabulary-maintenance?view=all")
+        self.assertIn(b"Confidence 76/100", page_response.data)
+        self.assertIn(b"Needs attention:", page_response.data)
+        self.assertIn(b"The third domain may need review.", page_response.data)
 
     def test_admin_generate_cloze_data_preserves_existing_valid_manual_data(self):
         self.create_admin("tuomo")
@@ -543,11 +567,13 @@ class AdminTestCase(unittest.TestCase):
         vocabulary_id = self.create_cloze_vocab("tenuous").get_json()["id"]
         generated_data = {
             "part_of_speech": "noun",
-            "domains": ["communication"],
+            "domains": ["communication", "cognition", "reasoning"],
             "cloze_sentences": [
                 "Generated ____ should not replace manual data.",
                 "Another generated ____ should stay unused.",
             ],
+            "needs_attention": "",
+            "confidence_score": 84,
         }
 
         with patch(
@@ -563,7 +589,9 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertEqual(body["part_of_speech"], "adjective")
-        self.assertEqual(body["domains"], ["cognition"])
+        self.assertEqual(body["domains"], ["cognition", "quality", "reasoning"])
+        self.assertEqual(body["confidence_score"], 84)
+        self.assertEqual(body["confidence_obsolete"], 0)
         self.assertEqual(
             body["cloze_sentences"],
             self.valid_cloze_entry("tenuous")["cloze_sentences"],

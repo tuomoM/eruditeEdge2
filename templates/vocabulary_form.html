@@ -5,6 +5,18 @@
 <h1>{% if is_edit %}Edit vocabulary{% else %}Add vocabulary{% endif %}</h1>
 
 <form method="post" id="vocabulary-form">
+    <input
+        type="hidden"
+        id="needs_attention"
+        name="needs_attention"
+        value="{{ entry.needs_attention if entry and entry.needs_attention else '' }}"
+    >
+    <input
+        type="hidden"
+        id="confidence_score"
+        name="confidence_score"
+        value="{{ entry.confidence_score if entry and entry.confidence_score is not none else '' }}"
+    >
     <div class="field field-wide">
         <label for="word">Word</label><br>
         <input id="word" name="word" value="{{ entry.word if entry else (prefill_word if prefill_word is defined else '') }}" required>
@@ -174,6 +186,11 @@ document.getElementById("generate-button").addEventListener("click", async () =>
     document.getElementById("synonyms").value = (data.synonyms || []).join(", ");
     document.getElementById("examples").value = (data.examples || []).join("\n");
     document.getElementById("cloze_sentences").value = (data.cloze_sentences || []).join("\n");
+    document.getElementById("needs_attention").value = data.needs_attention || "";
+    document.getElementById("confidence_score").value =
+        data.confidence_score === null || data.confidence_score === undefined
+            ? ""
+            : data.confidence_score;
     status.textContent = "Filled";
     generateButton.disabled = false;
     generateButton.removeAttribute("aria-busy");

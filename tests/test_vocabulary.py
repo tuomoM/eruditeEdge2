@@ -211,6 +211,35 @@ class VocabularyTestCase(unittest.TestCase):
             ["cognition", "communication", "society", "power"],
         )
 
+    def test_create_vocabulary_persists_ai_assessment(self):
+        self.login_user()
+        data = self.valid_entry()
+        data.update(
+            {
+                "domains": ["cognition", "communication", "reasoning"],
+                "needs_attention": "The context label may need review.",
+                "confidence_score": 81,
+            }
+        )
+
+        response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 201)
+        body = response.get_json()
+        self.assertEqual(body["needs_attention"], "The context label may need review.")
+        self.assertEqual(body["confidence_score"], 81)
+        self.assertEqual(body["confidence_obsolete"], 0)
+
+    def test_create_vocabulary_rejects_invalid_ai_assessment(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["needs_attention"] = "x" * 201
+        data["confidence_score"] = 101
+
+        response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 400)
+
     def test_create_vocabulary_accepts_expanded_domain_catalog(self):
         self.login_user()
         data = self.valid_entry()
@@ -322,6 +351,8 @@ class VocabularyTestCase(unittest.TestCase):
                 "part_of_speech": "other",
                 "domains": [],
                 "cloze_sentences": [],
+                "needs_attention": None,
+                "confidence_score": None,
             },
         )
         generate_entry.assert_called_once_with(
@@ -355,6 +386,8 @@ class VocabularyTestCase(unittest.TestCase):
                 "part_of_speech": "other",
                 "domains": [],
                 "cloze_sentences": [],
+                "needs_attention": None,
+                "confidence_score": None,
             },
         )
 
@@ -384,6 +417,8 @@ class VocabularyTestCase(unittest.TestCase):
                 "part_of_speech": "other",
                 "domains": [],
                 "cloze_sentences": [],
+                "needs_attention": None,
+                "confidence_score": None,
             },
         )
         generate_entry.assert_called_once_with("DROP", "test-api-key", "test-model")
@@ -975,6 +1010,26 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["domains"], ["communication", "society"])
+
+    def test_manual_vocabulary_update_marks_confidence_obsolete(self):
+        self.login_user()
+        data = self.valid_entry()
+        data.update(
+            {
+                "domains": ["cognition", "communication", "reasoning"],
+                "needs_attention": "",
+                "confidence_score": 93,
+            }
+        )
+        vocabulary_id = self.create_entry(data).get_json()["id"]
+        data["definition"] = "An updated definition"
+
+        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["confidence_score"], 93)
+        self.assertEqual(body["confidence_obsolete"], 1)
 
     def test_update_vocabulary_can_update_another_users_entry_because_vocabs_are_global(self):
         self.login_user()

@@ -48,6 +48,21 @@
                         {% endfor %}
                     </div>
                     <p class="entry-definition">{{ entry.definition }}</p>
+                    <div class="entry-heading">
+                        {% if entry.confidence_score is not none %}
+                            <span class="meta-chip">
+                                Confidence {{ entry.confidence_score }}/100
+                                {% if entry.confidence_obsolete %}(obsolete){% endif %}
+                            </span>
+                        {% else %}
+                            <span class="meta-chip">Not AI assessed</span>
+                        {% endif %}
+                    </div>
+                    {% if entry.needs_attention %}
+                        <p class="entry-definition">
+                            <strong>Needs attention:</strong> {{ entry.needs_attention }}
+                        </p>
+                    {% endif %}
                     <form class="domain-maintenance-form" action="/admin/vocabulary/{{ entry.id }}/cloze-data{% if selected_view == 'all' %}?view=all{% endif %}" method="post">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="form-grid">
@@ -91,6 +106,9 @@
                         </div>
                         <div class="actions">
                             <button class="button-primary button-compact" type="submit">Save maintenance data</button>
+                            {% if entry.confidence_score is not none and not entry.confidence_obsolete %}
+                                <span class="help-text">Saving marks the AI confidence score obsolete.</span>
+                            {% endif %}
                         </div>
                     </form>
                 </div>

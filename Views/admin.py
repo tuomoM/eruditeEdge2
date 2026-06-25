@@ -204,10 +204,19 @@ def generate_vocabulary_cloze_data(vocabulary_id):
             if entry["part_of_speech"] == "other"
             else entry["part_of_speech"]
         ),
-        "domains": entry["domains"] or generated_data.get("domains", []),
+        "domains": (
+            entry["domains"]
+            if len(entry["domains"]) >= 3
+            else generated_data.get("domains", [])
+        ),
         "cloze_sentences": entry["cloze_sentences"] or generated_data["cloze_sentences"],
+        "needs_attention": generated_data.get("needs_attention"),
+        "confidence_score": generated_data.get("confidence_score"),
     }
-    updated_entry, error = vocabulary_service.update_cloze_data(vocabulary_id, update_data)
+    updated_entry, error = vocabulary_service.update_ai_maintenance_data(
+        vocabulary_id,
+        update_data,
+    )
     if error:
         if request.is_json:
             return jsonify({"error": error}), 400

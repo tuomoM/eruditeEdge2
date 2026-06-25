@@ -21,6 +21,7 @@ ALLOWED_PARTS_OF_SPEECH = {
     "other",
 }
 CLOZE_BLANK = "____"
+MAX_NEEDS_ATTENTION_LENGTH = 200
 
 
 class VocabularyService:
@@ -41,6 +42,8 @@ class VocabularyService:
             values["synonyms"],
             values["examples"],
             values["cloze_sentences"],
+            values["needs_attention"],
+            values["confidence_score"],
             user_id,
         )
         if vocabulary_id is None:
@@ -100,6 +103,9 @@ class VocabularyService:
                 entry["part_of_speech"] == "other"
                 or not entry["domains"]
                 or len(entry["cloze_sentences"]) < 2
+                or bool(entry["needs_attention"])
+                or entry["confidence_score"] is None
+                or bool(entry["confidence_obsolete"])
                 or self._validate_cloze_sentences(entry["word"], entry["cloze_sentences"])
             )
         ]
@@ -127,6 +133,31 @@ class VocabularyService:
             return None, "Vocabulary entry was not found"
         return self.get_entry(vocabulary_id), None
 
+    def update_ai_maintenance_data(self, vocabulary_id, data):
+        entry = self.get_entry(vocabulary_id)
+        if not entry:
+            return None, "Vocabulary entry was not found"
+
+        merged_data = dict(entry)
+        merged_data.update(data)
+        values, error = self._validate_data(merged_data)
+        if error:
+            return None, error
+        if values["confidence_score"] is None:
+            return None, "AI confidence score is required"
+
+        updated = self._vocabulary_repository.update_ai_maintenance_data(
+            vocabulary_id,
+            values["part_of_speech"],
+            values["cloze_sentences"],
+            values["domains"],
+            values["needs_attention"],
+            values["confidence_score"],
+        )
+        if not updated:
+            return None, "Vocabulary entry was not found"
+        return self.get_entry(vocabulary_id), None
+
     def _validate_data(self, data):
         word = self._clean_text(data.get("word"))
         definition = self._clean_text(data.get("definition"))
@@ -136,6 +167,8 @@ class VocabularyService:
         synonyms = self._clean_list(data.get("synonyms", []))
         examples = self._clean_list(data.get("examples", []))
         cloze_sentences = self._clean_list(data.get("cloze_sentences", []))
+        needs_attention = self._clean_optional_text(data.get("needs_attention"))
+        confidence_score = self._clean_confidence_score(data.get("confidence_score"))
 
         fields = (
             [word, definition, context, part_of_speech]
@@ -143,6 +176,7 @@ class VocabularyService:
             + synonyms
             + examples
             + cloze_sentences
+            + ([needs_attention] if needs_attention else [])
         )
         unsafe_field = self._find_unsafe_field(fields)
         if unsafe_field:
@@ -158,6 +192,17 @@ class VocabularyService:
             return None, f"Vocabulary entry must have at most {MAX_VOCABULARY_DOMAINS} domains"
         if any(domain not in VOCABULARY_DOMAINS for domain in domains):
             return None, "Vocabulary domain is invalid"
+        if len(needs_attention or "") > MAX_NEEDS_ATTENTION_LENGTH:
+            return None, (
+                f"Needs-attention explanation must be "
+                f"{MAX_NEEDS_ATTENTION_LENGTH} characters or fewer"
+            )
+        if confidence_score is False:
+            return None, "Confidence score must be an integer between 0 and 100"
+        if confidence_score is not None and not 0 <= confidence_score <= 100:
+            return None, "Confidence score must be an integer between 0 and 100"
+        if needs_attention and confidence_score is None:
+            return None, "Confidence score is required when attention is needed"
         if len(examples) < 1 or len(examples) > 4:
             return None, "Vocabulary entry must have 1-4 example sentences"
         if len(cloze_sentences) > 3:
@@ -175,12 +220,29 @@ class VocabularyService:
             "synonyms": synonyms,
             "examples": examples,
             "cloze_sentences": cloze_sentences,
+            "needs_attention": needs_attention,
+            "confidence_score": confidence_score,
         }, None
 
     def _clean_text(self, value):
         if value is None:
             return ""
         return str(value).strip()
+
+    def _clean_optional_text(self, value):
+        value = self._clean_text(value)
+        return value or None
+
+    def _clean_confidence_score(self, value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, bool):
+            return False
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.strip().isdigit():
+            return int(value.strip())
+        return False
 
     def _clean_list(self, values):
         if isinstance(values, str):

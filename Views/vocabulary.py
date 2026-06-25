@@ -122,6 +122,8 @@ def form_to_entry_data(form):
         "synonyms": synonyms,
         "examples": examples,
         "cloze_sentences": cloze_sentences,
+        "needs_attention": form.get("needs_attention"),
+        "confidence_score": form.get("confidence_score"),
     }
 
 

@@ -59,6 +59,15 @@ MIGRATION_MARKERS = {
     "011_vocabulary_domains.sql": {
         "tables": ["vocabulary_domains"],
     },
+    "013_vocabulary_ai_assessment.sql": {
+        "columns": {
+            "vocabulary_entries": [
+                "needs_attention",
+                "confidence_score",
+                "confidence_obsolete",
+            ],
+        },
+    },
 }
 
 

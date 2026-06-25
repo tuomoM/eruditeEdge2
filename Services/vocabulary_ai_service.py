@@ -56,7 +56,7 @@ VOCABULARY_SCHEMA = {
         "domains": {
             "type": "array",
             "items": {"type": "string", "enum": list(VOCABULARY_DOMAINS)},
-            "minItems": 1,
+            "minItems": 3,
             "maxItems": MAX_VOCABULARY_DOMAINS,
             "uniqueItems": True,
             "description": (
@@ -82,6 +82,19 @@ VOCABULARY_SCHEMA = {
             "minItems": 2,
             "maxItems": 3,
         },
+        "needs_attention": {
+            "type": "string",
+            "maxLength": 200,
+            "description": (
+                "Empty when no admin review is needed. Otherwise, a concise "
+                "explanation of the uncertainty, at most 200 characters."
+            ),
+        },
+        "confidence_score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+        },
     },
     "required": [
         "word",
@@ -92,6 +105,8 @@ VOCABULARY_SCHEMA = {
         "synonyms",
         "examples",
         "cloze_sentences",
+        "needs_attention",
+        "confidence_score",
     ],
 }
 
@@ -107,7 +122,7 @@ CLOZE_DATA_SCHEMA = {
         "domains": {
             "type": "array",
             "items": {"type": "string", "enum": list(VOCABULARY_DOMAINS)},
-            "minItems": 1,
+            "minItems": 3,
             "maxItems": MAX_VOCABULARY_DOMAINS,
             "uniqueItems": True,
         },
@@ -117,8 +132,23 @@ CLOZE_DATA_SCHEMA = {
             "minItems": 2,
             "maxItems": 3,
         },
+        "needs_attention": {
+            "type": "string",
+            "maxLength": 200,
+        },
+        "confidence_score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+        },
     },
-    "required": ["part_of_speech", "domains", "cloze_sentences"],
+    "required": [
+        "part_of_speech",
+        "domains",
+        "cloze_sentences",
+        "needs_attention",
+        "confidence_score",
+    ],
 }
 
 
@@ -168,12 +198,17 @@ class VocabularyAiService:
                     "rhetoric. Provide 2-4 example "
                     "sentences that use the word naturally. Identify the primary part "
                     "of speech for this meaning using noun, verb, adjective, adverb, "
-                    "phrase, or other. Assign 1-4 semantic domains using only: "
+                    "phrase, or other. Assign 3-4 semantic domains using only: "
                     f"{', '.join(VOCABULARY_DOMAINS)}. Provide 2-3 cloze training "
                     "sentences. Each cloze "
                     "sentence must use exactly one ____ blank where the target word "
                     "belongs, must not include the target word elsewhere, and must be "
-                    "natural enough that same-part-of-speech distractors are plausible."
+                    "natural enough that same-part-of-speech distractors are plausible. "
+                    "Return a confidence score from 0 to 100 for the complete entry. "
+                    "If any classification or generated content needs admin review, "
+                    "put a concise explanation of at most 200 characters in "
+                    "needs_attention; otherwise return an empty string. Always return "
+                    "3-4 domains even when needs_attention is not empty."
                 ),
                 input=f"Word: {word}",
                 text={
@@ -208,11 +243,15 @@ class VocabularyAiService:
         entry["cloze_sentences"] = self._normalize_cloze_sentences(
             entry.get("cloze_sentences")
         )
+        assessment_error = self._normalize_ai_assessment(entry)
         if len(entry["examples"]) < 2:
             logger.warning("Vocabulary AI generation failed: fewer than 2 examples returned")
             return None, "OpenAI returned invalid vocabulary data"
-        if not entry["domains"]:
-            logger.warning("Vocabulary AI generation failed: no valid domains returned")
+        if len(entry["domains"]) < 3:
+            logger.warning("Vocabulary AI generation failed: fewer than 3 valid domains returned")
+            return None, "OpenAI returned invalid vocabulary data"
+        if assessment_error:
+            logger.warning("Vocabulary AI generation failed: invalid AI assessment")
             return None, "OpenAI returned invalid vocabulary data"
         if len(entry["cloze_sentences"]) < 2:
             logger.warning("Vocabulary AI generation failed: fewer than 2 cloze sentences returned")
@@ -235,12 +274,16 @@ class VocabularyAiService:
                     "Create missing cloze training data for one vocabulary entry. "
                     "Return JSON only. Identify the primary part of speech for the "
                     "given meaning using noun, verb, adjective, adverb, phrase, or other. "
-                    "Assign 1-4 semantic domains using only: "
+                    "Assign 3-4 semantic domains using only: "
                     f"{', '.join(VOCABULARY_DOMAINS)}. Domains describe meaning and "
                     "are separate from usage context such as Academic or Medical. "
                     "Create 2-3 natural cloze sentences. Each sentence must include "
                     "exactly one ____ blank where the target word belongs, must not "
-                    "include the target word elsewhere, and must fit the definition."
+                    "include the target word elsewhere, and must fit the definition. "
+                    "Return a confidence score from 0 to 100 for all generated data. "
+                    "If admin review is needed, return a concise explanation of at most "
+                    "200 characters in needs_attention; otherwise return an empty "
+                    "string. Always return 3-4 domains even when attention is needed."
                 ),
                 input=(
                     f"Word: {word}\n"
@@ -278,9 +321,12 @@ class VocabularyAiService:
             cloze_data.get("cloze_sentences")
         )
         cloze_data["domains"] = self._normalize_domains(cloze_data.get("domains"))
+        assessment_error = self._normalize_ai_assessment(cloze_data)
         if len(cloze_data["cloze_sentences"]) < 2:
             return None, "OpenAI returned invalid cloze data"
-        if not cloze_data["domains"]:
+        if len(cloze_data["domains"]) < 3:
+            return None, "OpenAI returned invalid cloze data"
+        if assessment_error:
             return None, "OpenAI returned invalid cloze data"
         logger.info("Cloze AI generation succeeded for word '%s'", word)
         return cloze_data, None
@@ -398,6 +444,21 @@ class VocabularyAiService:
             ):
                 normalized_domains.append(normalized_domain)
         return normalized_domains[:MAX_VOCABULARY_DOMAINS]
+
+    def _normalize_ai_assessment(self, data):
+        needs_attention = str(data.get("needs_attention") or "").strip()
+        confidence_score = data.get("confidence_score")
+        if (
+            len(needs_attention) > 200
+            or isinstance(confidence_score, bool)
+            or not isinstance(confidence_score, int)
+            or not 0 <= confidence_score <= 100
+        ):
+            return True
+
+        data["needs_attention"] = needs_attention or None
+        data["confidence_score"] = confidence_score
+        return False
 
     def _normalize_cloze_sentences(self, cloze_sentences):
         if not isinstance(cloze_sentences, list):

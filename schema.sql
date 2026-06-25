@@ -16,6 +16,12 @@ CREATE TABLE vocabulary_entries (
     context TEXT,
     part_of_speech TEXT NOT NULL DEFAULT 'other'
         CHECK (part_of_speech IN ('noun', 'verb', 'adjective', 'adverb', 'phrase', 'other')),
+    needs_attention TEXT
+        CHECK (needs_attention IS NULL OR length(needs_attention) <= 200),
+    confidence_score INTEGER
+        CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 100),
+    confidence_obsolete INTEGER NOT NULL DEFAULT 0
+        CHECK (confidence_obsolete IN (0, 1)),
     created_by INTEGER NOT NULL REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
