@@ -165,7 +165,7 @@ def update_vocabulary_cloze_data(vocabulary_id):
 
     if request.is_json:
         return jsonify(entry)
-    flash(f"Updated cloze data for {entry['word']}.")
+    flash(f"Updated part of speech, domains, and cloze data for {entry['word']}.")
     return redirect(_vocabulary_maintenance_url())
 
 

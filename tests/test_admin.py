@@ -400,6 +400,48 @@ class AdminTestCase(unittest.TestCase):
             "/admin/vocabulary-maintenance?view=all",
         )
 
+    def test_admin_maintenance_form_persists_selected_domains(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        entry = self.valid_cloze_entry("tenuous")
+        entry["domains"] = []
+        vocabulary_id = self.client.post("/vocabulary", json=entry).get_json()["id"]
+
+        response = self.client.post(
+            f"/admin/vocabulary/{vocabulary_id}/cloze-data?view=all",
+            data={
+                "csrf_token": self.csrf_token(),
+                "part_of_speech": "adjective",
+                "domains": ["quality", "reasoning"],
+                "cloze_sentences": "\n".join(entry["cloze_sentences"]),
+            },
+            follow_redirects=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        with self.app.app_context():
+            domains = [
+                row["domain"]
+                for row in db.query(
+                    """
+                    SELECT domain
+                    FROM vocabulary_domains
+                    WHERE vocabulary_id = ?
+                    ORDER BY domain_order
+                    """,
+                    [vocabulary_id],
+                )
+            ]
+        self.assertEqual(domains, ["quality", "reasoning"])
+        html = response.get_data(as_text=True)
+        self.assertRegex(html, r'value="quality"\s+checked')
+        self.assertRegex(html, r'value="reasoning"\s+checked')
+        self.assertIn(
+            b"Updated part of speech, domains, and cloze data for tenuous.",
+            response.data,
+        )
+
     def test_admin_can_update_vocabulary_cloze_data(self):
         self.create_admin("tuomo")
         self.logout()
