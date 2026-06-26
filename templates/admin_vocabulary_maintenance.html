@@ -65,6 +65,11 @@
                     {% endif %}
                     <form class="domain-maintenance-form" action="/admin/vocabulary/{{ entry.id }}/cloze-data{% if selected_view == 'all' %}?view=all{% endif %}" method="post">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input
+                            type="hidden"
+                            name="domains_order"
+                            value="{{ entry.domains | join(',') if entry.domains else '' }}"
+                        >
                         <div class="form-grid">
                             <div class="field">
                                 <label for="part-of-speech-{{ entry.id }}">Part of speech</label><br>
@@ -97,7 +102,7 @@
                                     </label>
                                 {% endfor %}
                             </div>
-                            <div class="help-text">Choose up to {{ max_domains }}.</div>
+                            <div class="help-text">Choose the primary domain first. Add secondary domains only when they clearly fit.</div>
                         </fieldset>
                         <div class="field field-wide">
                             <label for="cloze-sentences-{{ entry.id }}">Cloze sentences</label><br>
@@ -133,6 +138,18 @@
 <script>
 document.querySelectorAll(".domain-maintenance-form").forEach((form) => {
     const checkboxes = Array.from(form.querySelectorAll('input[name="domains"]'));
+    const domainsOrderInput = form.querySelector('input[name="domains_order"]');
+
+    function getDomainOrder() {
+        return domainsOrderInput.value
+            .split(",")
+            .map((domain) => domain.trim())
+            .filter(Boolean);
+    }
+
+    function setDomainOrder(domains) {
+        domainsOrderInput.value = domains.join(",");
+    }
 
     function updateDomainSelection() {
         const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
@@ -142,8 +159,26 @@ document.querySelectorAll(".domain-maintenance-form").forEach((form) => {
     }
 
     checkboxes.forEach((checkbox) => {
-        checkbox.addEventListener("change", updateDomainSelection);
+        checkbox.addEventListener("change", () => {
+            const currentOrder = getDomainOrder().filter((domain) => {
+                return checkboxes.some((candidate) => {
+                    return candidate.value === domain && candidate.checked;
+                });
+            });
+            if (checkbox.checked && !currentOrder.includes(checkbox.value)) {
+                currentOrder.push(checkbox.value);
+            }
+            setDomainOrder(currentOrder);
+            updateDomainSelection();
+        });
     });
+    setDomainOrder(
+        getDomainOrder().filter((domain) => {
+            return checkboxes.some((checkbox) => {
+                return checkbox.value === domain && checkbox.checked;
+            });
+        })
+    );
     updateDomainSelection();
 });
 </script>

@@ -1,12 +1,19 @@
 import json
 import logging
 import re
+import time
 
 from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
 
 
 logger = logging.getLogger(__name__)
 WORD_PATTERN = re.compile(r"^[A-Za-z]+(?:[-'][A-Za-z]+)?$")
+OPENAI_REQUEST_TIMEOUT_SECONDS = 20
+OPENAI_MAX_RETRIES = 1
+VOCABULARY_ENTRY_MAX_OUTPUT_TOKENS = 900
+CLOZE_DATA_MAX_OUTPUT_TOKENS = 500
+USAGE_VALIDATION_MAX_OUTPUT_TOKENS = 160
+MAX_AI_VOCABULARY_DOMAINS = 3
 ALLOWED_CONTEXT_LABELS = {
     "Academic",
     "Business",
@@ -57,8 +64,10 @@ VOCABULARY_SCHEMA = {
             "type": "array",
             "items": {"type": "string", "enum": list(VOCABULARY_DOMAINS)},
             "description": (
-                "Semantic areas represented by the word's meaning. These are "
-                "independent of usage settings such as Academic, Medical, or General."
+                "Ordered semantic areas represented by the word's meaning. The first "
+                "item is the primary domain. Add secondary and tertiary domains only "
+                "when they are clearly represented by the meaning. These are independent "
+                "of usage settings such as Academic, Medical, or General."
             ),
         },
         "synonyms": {
@@ -165,8 +174,11 @@ class VocabularyAiService:
         logger.info("Vocabulary AI generation started for word '%s' using model '%s'", word, model)
         try:
             client = self._get_client(api_key)
+            started_at = time.perf_counter()
             response = client.responses.create(
                 model=model,
+                max_output_tokens=VOCABULARY_ENTRY_MAX_OUTPUT_TOKENS,
+                store=False,
                 instructions=(
                     "Create vocabulary entry data for the provided single word. "
                     "Return only factual dictionary-style data. Do not include HTML. "
@@ -174,12 +186,16 @@ class VocabularyAiService:
                     "register, not the word's semantic meaning and not a sentence. "
                     "Examples: Formal, Casual, Medical, Philosophy, Academic, Business "
                     "English, Business/Formal. Keep context separate from domains. "
-                    "Domains describe semantic meaning, such as cognition, power, or "
-                    "rhetoric. Provide 2-4 example "
+                    "Domains describe semantic meaning, such as movement, cognition, "
+                    "power, or rhetoric. Provide 2-4 example "
                     "sentences that use the word naturally. Identify the primary part "
                     "of speech for this meaning using noun, verb, adjective, adverb, "
-                    "phrase, or other. Assign 3-4 semantic domains using only: "
-                    f"{', '.join(VOCABULARY_DOMAINS)}. Provide 2-3 cloze training "
+                    "phrase, or other. Assign 1-3 ordered semantic domains using only: "
+                    f"{', '.join(VOCABULARY_DOMAINS)}. Put the primary domain first. "
+                    "Do not pad the domain list with weak or merely associated labels. "
+                    "For physical motion words, prefer movement as the primary domain "
+                    "over perception unless the meaning is actually about seeing or "
+                    "sensing. Provide 2-3 cloze training "
                     "sentences. Each cloze "
                     "sentence must use exactly one ____ blank where the target word "
                     "belongs, must not include the target word elsewhere, and must be "
@@ -188,7 +204,7 @@ class VocabularyAiService:
                     "If any classification or generated content needs admin review, "
                     "put a concise explanation of at most 200 characters in "
                     "needs_attention; otherwise return an empty string. Always return "
-                    "3-4 domains even when needs_attention is not empty."
+                    "at least the primary domain even when needs_attention is not empty."
                 ),
                 input=f"Word: {word}",
                 text={
@@ -199,6 +215,11 @@ class VocabularyAiService:
                         "strict": True,
                     }
                 },
+            )
+            logger.info(
+                "Vocabulary AI generation OpenAI request completed in %.2fs for word '%s'",
+                time.perf_counter() - started_at,
+                word,
             )
         except ImportError:
             logger.exception("Vocabulary AI generation failed: OpenAI package is not installed")
@@ -227,8 +248,8 @@ class VocabularyAiService:
         if len(entry["examples"]) < 2:
             logger.warning("Vocabulary AI generation failed: fewer than 2 examples returned")
             return None, "OpenAI returned invalid vocabulary data"
-        if len(entry["domains"]) < 3:
-            logger.warning("Vocabulary AI generation failed: fewer than 3 valid domains returned")
+        if len(entry["domains"]) < 1:
+            logger.warning("Vocabulary AI generation failed: no valid domains returned")
             return None, "OpenAI returned invalid vocabulary data"
         if assessment_error:
             logger.warning("Vocabulary AI generation failed: invalid AI assessment")
@@ -248,22 +269,28 @@ class VocabularyAiService:
         logger.info("Cloze AI generation started for word '%s' using model '%s'", word, model)
         try:
             client = self._get_client(api_key)
+            started_at = time.perf_counter()
             response = client.responses.create(
                 model=model,
+                max_output_tokens=CLOZE_DATA_MAX_OUTPUT_TOKENS,
+                store=False,
                 instructions=(
                     "Create missing cloze training data for one vocabulary entry. "
                     "Return JSON only. Identify the primary part of speech for the "
                     "given meaning using noun, verb, adjective, adverb, phrase, or other. "
-                    "Assign 3-4 semantic domains using only: "
-                    f"{', '.join(VOCABULARY_DOMAINS)}. Domains describe meaning and "
-                    "are separate from usage context such as Academic or Medical. "
+                    "Assign 1-3 ordered semantic domains using only: "
+                    f"{', '.join(VOCABULARY_DOMAINS)}. The first item is the primary "
+                    "domain. Add secondary and tertiary domains only when clearly "
+                    "represented by the meaning. Domains describe meaning and are "
+                    "separate from usage context such as Academic or Medical. "
                     "Create 2-3 natural cloze sentences. Each sentence must include "
                     "exactly one ____ blank where the target word belongs, must not "
                     "include the target word elsewhere, and must fit the definition. "
                     "Return a confidence score from 0 to 100 for all generated data. "
                     "If admin review is needed, return a concise explanation of at most "
                     "200 characters in needs_attention; otherwise return an empty "
-                    "string. Always return 3-4 domains even when attention is needed."
+                    "string. Always return at least the primary domain even when "
+                    "attention is needed."
                 ),
                 input=(
                     f"Word: {word}\n"
@@ -280,6 +307,11 @@ class VocabularyAiService:
                         "strict": True,
                     }
                 },
+            )
+            logger.info(
+                "Cloze AI generation OpenAI request completed in %.2fs for word '%s'",
+                time.perf_counter() - started_at,
+                word,
             )
         except ImportError:
             logger.exception("Cloze AI generation failed: OpenAI package is not installed")
@@ -304,7 +336,7 @@ class VocabularyAiService:
         assessment_error = self._normalize_ai_assessment(cloze_data)
         if len(cloze_data["cloze_sentences"]) < 2:
             return None, "OpenAI returned invalid cloze data"
-        if len(cloze_data["domains"]) < 3:
+        if len(cloze_data["domains"]) < 1:
             return None, "OpenAI returned invalid cloze data"
         if assessment_error:
             return None, "OpenAI returned invalid cloze data"
@@ -324,8 +356,11 @@ class VocabularyAiService:
         logger.info("Vocabulary usage validation started for word '%s' using model '%s'", word, model)
         try:
             client = self._get_client(api_key)
+            started_at = time.perf_counter()
             response = client.responses.create(
                 model=model,
+                max_output_tokens=USAGE_VALIDATION_MAX_OUTPUT_TOKENS,
+                store=False,
                 instructions=(
                     "Validate whether the learner uses the target vocabulary word correctly "
                     "in the submitted sentence. Focus on the meaning and usage of the target "
@@ -350,6 +385,11 @@ class VocabularyAiService:
                         "strict": True,
                     }
                 },
+            )
+            logger.info(
+                "Vocabulary usage validation OpenAI request completed in %.2fs for word '%s'",
+                time.perf_counter() - started_at,
+                word,
             )
         except ImportError:
             logger.exception("Vocabulary usage validation failed: OpenAI package is not installed")
@@ -423,7 +463,7 @@ class VocabularyAiService:
                 and normalized_domain not in normalized_domains
             ):
                 normalized_domains.append(normalized_domain)
-        return normalized_domains[:MAX_VOCABULARY_DOMAINS]
+        return normalized_domains[:MAX_AI_VOCABULARY_DOMAINS]
 
     def _normalize_ai_assessment(self, data):
         needs_attention = str(data.get("needs_attention") or "").strip()
@@ -455,7 +495,11 @@ class VocabularyAiService:
 
         from openai import OpenAI
 
-        return OpenAI(api_key=api_key)
+        return OpenAI(
+            api_key=api_key,
+            max_retries=OPENAI_MAX_RETRIES,
+            timeout=OPENAI_REQUEST_TIMEOUT_SECONDS,
+        )
 
 
 vocabulary_ai_service = VocabularyAiService()

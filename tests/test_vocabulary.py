@@ -211,6 +211,54 @@ class VocabularyTestCase(unittest.TestCase):
             ["cognition", "communication", "society", "power"],
         )
 
+    def test_new_vocabulary_form_preserves_ordered_domain_field(self):
+        self.login_user()
+
+        response = self.client.post(
+            "/vocabulary/new",
+            data={
+                "word": "totter",
+                "definition": "To move in a feeble, unsteady, or shaky way.",
+                "context": "General",
+                "part_of_speech": "verb",
+                "domains": ["quality", "movement"],
+                "domains_order": "movement,quality",
+                "synonyms": "stagger, wobble",
+                "examples": "\n".join(
+                    [
+                        "The exhausted hiker began to totter near the summit.",
+                        "The old table seemed to totter on the uneven floor.",
+                    ]
+                ),
+                "cloze_sentences": "\n".join(
+                    [
+                        "The exhausted hiker began to ____ near the summit.",
+                        "The old table seemed to ____ on the uneven floor.",
+                    ]
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        with self.app.app_context():
+            vocabulary_id = db.query(
+                "SELECT id FROM vocabulary_entries WHERE word = ?",
+                ["totter"],
+            )[0]["id"]
+            domains = [
+                row["domain"]
+                for row in db.query(
+                    """
+                    SELECT domain
+                    FROM vocabulary_domains
+                    WHERE vocabulary_id = ?
+                    ORDER BY domain_order
+                    """,
+                    [vocabulary_id],
+                )
+            ]
+        self.assertEqual(domains, ["movement", "quality"])
+
     def test_create_vocabulary_persists_ai_assessment(self):
         self.login_user()
         data = self.valid_entry()
@@ -610,8 +658,9 @@ class VocabularyTestCase(unittest.TestCase):
         response = self.client.get("/vocabulary/new")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Choose up to 4.", response.data)
+        self.assertIn(b"Choose the primary domain first.", response.data)
         self.assertIn(b'name="domains"', response.data)
+        self.assertIn(b'name="domains_order"', response.data)
         self.assertIn(b'value="emotion"', response.data)
 
     def test_trusted_user_new_vocabulary_page_hides_ai_setup_check(self):

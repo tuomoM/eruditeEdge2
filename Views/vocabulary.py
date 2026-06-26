@@ -112,7 +112,22 @@ def form_to_entry_data(form):
     synonyms = [item.strip() for item in form.get("synonyms", "").split(",")]
     examples = form.get("examples", "").splitlines()
     cloze_sentences = form.get("cloze_sentences", "").splitlines()
-    domains = form.getlist("domains")
+    selected_domains = form.getlist("domains")
+    ordered_domain_candidates = [
+        item.strip()
+        for item in form.get("domains_order", "").split(",")
+        if item.strip()
+    ]
+    domains = [
+        domain
+        for domain in ordered_domain_candidates
+        if domain in selected_domains
+    ]
+    domains.extend(
+        domain
+        for domain in selected_domains
+        if domain not in domains
+    )
     return {
         "word": form.get("word"),
         "definition": form.get("definition"),

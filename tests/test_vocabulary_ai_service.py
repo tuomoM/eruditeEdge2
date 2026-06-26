@@ -2,6 +2,11 @@ import json
 import unittest
 
 from Services.vocabulary_ai_service import VocabularyAiService
+from Services.vocabulary_ai_service import (
+    CLOZE_DATA_MAX_OUTPUT_TOKENS,
+    USAGE_VALIDATION_MAX_OUTPUT_TOKENS,
+    VOCABULARY_ENTRY_MAX_OUTPUT_TOKENS,
+)
 
 
 class FakeResponses:
@@ -71,6 +76,11 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertEqual(entry["word"], "operation")
         self.assertEqual(client.responses.last_request["input"], "Word: operation")
         self.assertEqual(client.responses.last_request["model"], "test-model")
+        self.assertEqual(
+            client.responses.last_request["max_output_tokens"],
+            VOCABULARY_ENTRY_MAX_OUTPUT_TOKENS,
+        )
+        self.assertFalse(client.responses.last_request["store"])
         self.assertIn(
             "context field must describe the usage setting",
             client.responses.last_request["instructions"],
@@ -85,6 +95,10 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIn("not an example sentence", context_schema["description"])
         self.assertIn("separate from semantic domains", context_schema["description"])
         self.assertIn("Provide 2-4 example sentences", client.responses.last_request["instructions"])
+        self.assertIn("Assign 1-3 ordered semantic domains", client.responses.last_request["instructions"])
+        self.assertIn("Put the primary domain first", client.responses.last_request["instructions"])
+        self.assertIn("Do not pad the domain list", client.responses.last_request["instructions"])
+        self.assertIn("prefer movement as the primary domain", client.responses.last_request["instructions"])
         domains_schema = (
             client.responses.last_request["text"]["format"]["schema"]["properties"]["domains"]
         )
@@ -100,6 +114,34 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertEqual(entry["domains"], ["communication", "body", "cognition"])
         self.assertIsNone(entry["needs_attention"])
         self.assertEqual(entry["confidence_score"], 92)
+
+    def test_generate_entry_accepts_single_primary_domain(self):
+        output = json.dumps(
+            {
+                "word": "totter",
+                "definition": "To move in a feeble, unsteady, or shaky way.",
+                "context": "General",
+                "part_of_speech": "verb",
+                "domains": ["movement"],
+                "synonyms": ["stagger", "wobble"],
+                "examples": [
+                    "The exhausted hiker began to totter near the summit.",
+                    "The old table seemed to totter on the uneven floor.",
+                ],
+                "cloze_sentences": [
+                    "The exhausted hiker began to ____ near the summit.",
+                    "The old table seemed to ____ on the uneven floor.",
+                ],
+                "needs_attention": "",
+                "confidence_score": 95,
+            }
+        )
+        service = VocabularyAiService(client=FakeClient(output))
+
+        entry, error = service.generate_entry("totter", "test-key", "test-model")
+
+        self.assertIsNone(error)
+        self.assertEqual(entry["domains"], ["movement"])
 
     def test_generate_entry_normalizes_sentence_like_context_to_general(self):
         output = json.dumps(
@@ -342,11 +384,17 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertEqual(result["confidence_score"], 74)
         schema = client.responses.last_request["text"]["format"]["schema"]
         self.assertIn("domains", schema["required"])
+        self.assertEqual(
+            client.responses.last_request["max_output_tokens"],
+            CLOZE_DATA_MAX_OUTPUT_TOKENS,
+        )
+        self.assertFalse(client.responses.last_request["store"])
         self.assert_avoids_unsupported_strict_schema_keywords(schema)
         self.assertIn(
             "separate from usage context",
             client.responses.last_request["instructions"],
         )
+        self.assertIn("Assign 1-3 ordered semantic domains", client.responses.last_request["instructions"])
 
     def test_validate_usage_accepts_correct_sentence(self):
         output = json.dumps({"result": "correct", "hint": ""})
@@ -367,6 +415,11 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
 
         self.assertIsNone(error)
         self.assertEqual(result, {"result": "correct", "hint": ""})
+        self.assertEqual(
+            client.responses.last_request["max_output_tokens"],
+            USAGE_VALIDATION_MAX_OUTPUT_TOKENS,
+        )
+        self.assertFalse(client.responses.last_request["store"])
         self.assertIn("Ignore minor grammar", client.responses.last_request["instructions"])
         self.assertIn("Target word: chagrin", client.responses.last_request["input"])
         self.assertEqual(

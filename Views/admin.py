@@ -150,9 +150,25 @@ def update_vocabulary_cloze_data(vocabulary_id):
     if request.is_json:
         data = request.get_json(silent=True) or {}
     else:
+        selected_domains = request.form.getlist("domains")
+        ordered_domain_candidates = [
+            item.strip()
+            for item in request.form.get("domains_order", "").split(",")
+            if item.strip()
+        ]
+        domains = [
+            domain
+            for domain in ordered_domain_candidates
+            if domain in selected_domains
+        ]
+        domains.extend(
+            domain
+            for domain in selected_domains
+            if domain not in domains
+        )
         data = {
             "part_of_speech": request.form.get("part_of_speech"),
-            "domains": request.form.getlist("domains"),
+            "domains": domains,
             "cloze_sentences": request.form.get("cloze_sentences", "").splitlines(),
         }
 
@@ -206,7 +222,7 @@ def generate_vocabulary_cloze_data(vocabulary_id):
         ),
         "domains": (
             entry["domains"]
-            if len(entry["domains"]) >= 3
+            if entry["domains"]
             else generated_data.get("domains", [])
         ),
         "cloze_sentences": entry["cloze_sentences"] or generated_data["cloze_sentences"],

@@ -88,11 +88,12 @@ Stores the core record for one vocabulary meaning. Vocabulary is global, while
 
 The combination of `word` and `context` is unique.
 
-AI generation must return three or four domains even when
-`needs_attention` contains an explanation. A manual vocabulary or maintenance
-edit sets `confidence_obsolete` to 1 when a confidence score exists. An AI
-maintenance refresh replaces the assessment and resets `confidence_obsolete`
-to 0.
+AI generation returns one primary domain first, plus optional secondary and
+tertiary domains only when they are clearly represented by the meaning. It must
+not pad weakly related domains just to fill the list. A manual vocabulary or
+maintenance edit sets `confidence_obsolete` to 1 when a confidence score exists.
+An AI maintenance refresh replaces the assessment and resets
+`confidence_obsolete` to 0.
 
 ### `vocabulary_synonyms`
 

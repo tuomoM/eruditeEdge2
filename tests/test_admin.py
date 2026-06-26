@@ -416,6 +416,7 @@ class AdminTestCase(unittest.TestCase):
                 "csrf_token": self.csrf_token(),
                 "part_of_speech": "adjective",
                 "domains": ["quality", "reasoning"],
+                "domains_order": "reasoning,quality",
                 "cloze_sentences": "\n".join(entry["cloze_sentences"]),
             },
             follow_redirects=True,
@@ -443,7 +444,7 @@ class AdminTestCase(unittest.TestCase):
                 """,
                 [vocabulary_id],
             )[0]
-        self.assertEqual(domains, ["quality", "reasoning"])
+        self.assertEqual(domains, ["reasoning", "quality"])
         self.assertEqual(assessment["confidence_score"], 90)
         self.assertEqual(assessment["confidence_obsolete"], 1)
         html = response.get_data(as_text=True)

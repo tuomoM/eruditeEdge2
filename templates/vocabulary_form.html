@@ -17,6 +17,12 @@
         name="confidence_score"
         value="{{ entry.confidence_score if entry and entry.confidence_score is not none else '' }}"
     >
+    <input
+        type="hidden"
+        id="domains_order"
+        name="domains_order"
+        value="{{ entry.domains | join(',') if entry and entry.domains else '' }}"
+    >
     <div class="field field-wide">
         <label for="word">Word</label><br>
         <input id="word" name="word" value="{{ entry.word if entry else (prefill_word if prefill_word is defined else '') }}" required>
@@ -58,7 +64,7 @@
                 </label>
             {% endfor %}
         </div>
-        <div class="help-text">Choose up to {{ max_domains | default(4) }}.</div>
+        <div class="help-text">Choose the primary domain first. Add secondary domains only when they clearly fit.</div>
     </fieldset>
 
     <div class="form-grid">
@@ -183,6 +189,7 @@ document.getElementById("generate-button").addEventListener("click", async () =>
         document.querySelectorAll('input[name="domains"]').forEach((checkbox) => {
             checkbox.checked = generatedDomains.has(checkbox.value);
         });
+        setDomainOrder(data.domains || []);
         if (typeof updateDomainSelection === "function") {
             updateDomainSelection();
         }
@@ -207,6 +214,18 @@ document.getElementById("generate-button").addEventListener("click", async () =>
 <script>
 const maxDomains = {{ max_domains | default(4) | tojson }};
 const domainCheckboxes = Array.from(document.querySelectorAll('input[name="domains"]'));
+const domainsOrderInput = document.getElementById("domains_order");
+
+function getDomainOrder() {
+    return domainsOrderInput.value
+        .split(",")
+        .map((domain) => domain.trim())
+        .filter(Boolean);
+}
+
+function setDomainOrder(domains) {
+    domainsOrderInput.value = domains.join(",");
+}
 
 function updateDomainSelection() {
     const selectedCount = domainCheckboxes.filter((checkbox) => checkbox.checked).length;
@@ -216,8 +235,26 @@ function updateDomainSelection() {
 }
 
 domainCheckboxes.forEach((checkbox) => {
-    checkbox.addEventListener("change", updateDomainSelection);
+    checkbox.addEventListener("change", () => {
+        const currentOrder = getDomainOrder().filter((domain) => {
+            return domainCheckboxes.some((candidate) => {
+                return candidate.value === domain && candidate.checked;
+            });
+        });
+        if (checkbox.checked && !currentOrder.includes(checkbox.value)) {
+            currentOrder.push(checkbox.value);
+        }
+        setDomainOrder(currentOrder);
+        updateDomainSelection();
+    });
 });
+setDomainOrder(
+    getDomainOrder().filter((domain) => {
+        return domainCheckboxes.some((checkbox) => {
+            return checkbox.value === domain && checkbox.checked;
+        });
+    })
+);
 updateDomainSelection();
 </script>
 {% endblock %}
