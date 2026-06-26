@@ -58,7 +58,7 @@
                 </label>
             {% endfor %}
         </div>
-        <div class="help-text">Choose up to {{ max_domains }}.</div>
+        <div class="help-text">Choose up to {{ max_domains | default(4) }}.</div>
     </fieldset>
 
     <div class="form-grid">
@@ -175,30 +175,37 @@ document.getElementById("generate-button").addEventListener("click", async () =>
         return;
     }
 
-    document.getElementById("definition").value = data.definition || "";
-    document.getElementById("context").value = data.context || "";
-    document.getElementById("part_of_speech").value = data.part_of_speech || "other";
-    const generatedDomains = new Set(data.domains || []);
-    document.querySelectorAll('input[name="domains"]').forEach((checkbox) => {
-        checkbox.checked = generatedDomains.has(checkbox.value);
-    });
-    updateDomainSelection();
-    document.getElementById("synonyms").value = (data.synonyms || []).join(", ");
-    document.getElementById("examples").value = (data.examples || []).join("\n");
-    document.getElementById("cloze_sentences").value = (data.cloze_sentences || []).join("\n");
-    document.getElementById("needs_attention").value = data.needs_attention || "";
-    document.getElementById("confidence_score").value =
-        data.confidence_score === null || data.confidence_score === undefined
-            ? ""
-            : data.confidence_score;
-    status.textContent = "Filled";
-    generateButton.disabled = false;
-    generateButton.removeAttribute("aria-busy");
+    try {
+        document.getElementById("definition").value = data.definition || "";
+        document.getElementById("context").value = data.context || "";
+        document.getElementById("part_of_speech").value = data.part_of_speech || "other";
+        const generatedDomains = new Set(data.domains || []);
+        document.querySelectorAll('input[name="domains"]').forEach((checkbox) => {
+            checkbox.checked = generatedDomains.has(checkbox.value);
+        });
+        if (typeof updateDomainSelection === "function") {
+            updateDomainSelection();
+        }
+        document.getElementById("synonyms").value = (data.synonyms || []).join(", ");
+        document.getElementById("examples").value = (data.examples || []).join("\n");
+        document.getElementById("cloze_sentences").value = (data.cloze_sentences || []).join("\n");
+        document.getElementById("needs_attention").value = data.needs_attention || "";
+        document.getElementById("confidence_score").value =
+            data.confidence_score === null || data.confidence_score === undefined
+                ? ""
+                : data.confidence_score;
+        status.textContent = "Filled";
+    } catch (error) {
+        status.textContent = `Generation fill failed: ${error.name}`;
+    } finally {
+        generateButton.disabled = false;
+        generateButton.removeAttribute("aria-busy");
+    }
 });
 </script>
 {% endif %}
 <script>
-const maxDomains = {{ max_domains }};
+const maxDomains = {{ max_domains | default(4) | tojson }};
 const domainCheckboxes = Array.from(document.querySelectorAll('input[name="domains"]'));
 
 function updateDomainSelection() {

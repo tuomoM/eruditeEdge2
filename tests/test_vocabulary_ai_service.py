@@ -20,6 +20,25 @@ class FakeClient:
 
 
 class VocabularyAiServiceTestCase(unittest.TestCase):
+    unsupported_strict_schema_keywords = {
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+        "maxLength",
+        "minimum",
+        "maximum",
+    }
+
+    def assert_avoids_unsupported_strict_schema_keywords(self, schema):
+        if isinstance(schema, dict):
+            unsupported_keywords = self.unsupported_strict_schema_keywords & schema.keys()
+            self.assertEqual(unsupported_keywords, set())
+            for value in schema.values():
+                self.assert_avoids_unsupported_strict_schema_keywords(value)
+        elif isinstance(schema, list):
+            for value in schema:
+                self.assert_avoids_unsupported_strict_schema_keywords(value)
+
     def valid_output(self):
         return json.dumps(
             {
@@ -66,15 +85,12 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIn("not an example sentence", context_schema["description"])
         self.assertIn("separate from semantic domains", context_schema["description"])
         self.assertIn("Provide 2-4 example sentences", client.responses.last_request["instructions"])
-        examples_schema = (
-            client.responses.last_request["text"]["format"]["schema"]["properties"]["examples"]
-        )
-        self.assertEqual(examples_schema["minItems"], 2)
         domains_schema = (
             client.responses.last_request["text"]["format"]["schema"]["properties"]["domains"]
         )
-        self.assertEqual(domains_schema["minItems"], 3)
-        self.assertEqual(domains_schema["maxItems"], 4)
+        self.assert_avoids_unsupported_strict_schema_keywords(
+            client.responses.last_request["text"]["format"]["schema"]
+        )
         self.assertIn("emotion", domains_schema["items"]["enum"])
         self.assertIn("body", domains_schema["items"]["enum"])
         self.assertIn("quality", domains_schema["items"]["enum"])
@@ -326,7 +342,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertEqual(result["confidence_score"], 74)
         schema = client.responses.last_request["text"]["format"]["schema"]
         self.assertIn("domains", schema["required"])
-        self.assertEqual(schema["properties"]["domains"]["maxItems"], 4)
+        self.assert_avoids_unsupported_strict_schema_keywords(schema)
         self.assertIn(
             "separate from usage context",
             client.responses.last_request["instructions"],

@@ -6,6 +6,7 @@ import config
 import db
 from csrf import get_csrf_token
 from cli import register_cli_commands
+from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
 from Views.admin import admin_bp
 from Views.training import training_bp
 from Views.user import user_bp
@@ -30,7 +31,11 @@ def create_app(test_config=None):
 
     @app.context_processor
     def inject_csrf_token():
-        return {"csrf_token": get_csrf_token}
+        return {
+            "available_domains": VOCABULARY_DOMAINS,
+            "csrf_token": get_csrf_token,
+            "max_domains": MAX_VOCABULARY_DOMAINS,
+        }
 
     @app.route("/")
     def index():

@@ -56,9 +56,6 @@ VOCABULARY_SCHEMA = {
         "domains": {
             "type": "array",
             "items": {"type": "string", "enum": list(VOCABULARY_DOMAINS)},
-            "minItems": 3,
-            "maxItems": MAX_VOCABULARY_DOMAINS,
-            "uniqueItems": True,
             "description": (
                 "Semantic areas represented by the word's meaning. These are "
                 "independent of usage settings such as Academic, Medical, or General."
@@ -67,24 +64,17 @@ VOCABULARY_SCHEMA = {
         "synonyms": {
             "type": "array",
             "items": {"type": "string"},
-            "minItems": 0,
-            "maxItems": 8,
         },
         "examples": {
             "type": "array",
             "items": {"type": "string"},
-            "minItems": 2,
-            "maxItems": 4,
         },
         "cloze_sentences": {
             "type": "array",
             "items": {"type": "string"},
-            "minItems": 2,
-            "maxItems": 3,
         },
         "needs_attention": {
             "type": "string",
-            "maxLength": 200,
             "description": (
                 "Empty when no admin review is needed. Otherwise, a concise "
                 "explanation of the uncertainty, at most 200 characters."
@@ -92,8 +82,6 @@ VOCABULARY_SCHEMA = {
         },
         "confidence_score": {
             "type": "integer",
-            "minimum": 0,
-            "maximum": 100,
         },
     },
     "required": [
@@ -122,24 +110,16 @@ CLOZE_DATA_SCHEMA = {
         "domains": {
             "type": "array",
             "items": {"type": "string", "enum": list(VOCABULARY_DOMAINS)},
-            "minItems": 3,
-            "maxItems": MAX_VOCABULARY_DOMAINS,
-            "uniqueItems": True,
         },
         "cloze_sentences": {
             "type": "array",
             "items": {"type": "string"},
-            "minItems": 2,
-            "maxItems": 3,
         },
         "needs_attention": {
             "type": "string",
-            "maxLength": 200,
         },
         "confidence_score": {
             "type": "integer",
-            "minimum": 0,
-            "maximum": 100,
         },
     },
     "required": [

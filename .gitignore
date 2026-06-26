@@ -8,6 +8,7 @@ Project.md
 Technical setup.md
 ./agents/*
 /agents/AGENTS.md
+agents/HANDOFF.md
 security-report.json
 security_audit.json
 deploy-production.sh

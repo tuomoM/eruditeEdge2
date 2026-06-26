@@ -604,6 +604,16 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="word" name="word" value="stultify"', response.data)
 
+    def test_new_vocabulary_page_renders_domain_controls(self):
+        self.login_user()
+
+        response = self.client.get("/vocabulary/new")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Choose up to 4.", response.data)
+        self.assertIn(b'name="domains"', response.data)
+        self.assertIn(b'value="emotion"', response.data)
+
     def test_trusted_user_new_vocabulary_page_hides_ai_setup_check(self):
         self.login_user()
 
