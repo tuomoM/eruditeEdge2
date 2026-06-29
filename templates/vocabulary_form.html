@@ -48,8 +48,12 @@
         <textarea id="definition" name="definition" required>{{ entry.definition if entry else '' }}</textarea>
     </div>
 
-    <fieldset class="field field-wide domain-fieldset">
+    <fieldset class="field field-wide domain-fieldset" {% if session.account_category != "admin" %}hidden{% endif %}>
         <legend>Domains</legend>
+        <div class="selected-domain-panel">
+            <div class="selected-domain-list" data-domain-selection-list></div>
+            <p class="selected-domain-empty" data-domain-selection-empty>No domains selected.</p>
+        </div>
         <div class="domain-options">
             {% set selected_domains = entry.domains if entry and entry.domains else [] %}
             {% for domain in available_domains %}
@@ -64,7 +68,6 @@
                 </label>
             {% endfor %}
         </div>
-        <div class="help-text">Choose the primary domain first. Add secondary domains only when they clearly fit.</div>
     </fieldset>
 
     <div class="form-grid">
@@ -224,7 +227,75 @@ function getDomainOrder() {
 }
 
 function setDomainOrder(domains) {
-    domainsOrderInput.value = domains.join(",");
+    const normalizedDomains = domains.filter((domain, index) => {
+        return domain && domains.indexOf(domain) === index;
+    });
+    domainsOrderInput.value = normalizedDomains.join(",");
+    renderDomainSelection();
+}
+
+function domainLabel(domain) {
+    return domain.charAt(0).toUpperCase() + domain.slice(1);
+}
+
+function domainRole(index) {
+    return ["Primary", "Secondary", "Tertiary"][index] || `Domain ${index + 1}`;
+}
+
+function selectedDomainOrder() {
+    return getDomainOrder().filter((domain) => {
+        return domainCheckboxes.some((checkbox) => {
+            return checkbox.value === domain && checkbox.checked;
+        });
+    });
+}
+
+function renderDomainSelection() {
+    const selectionList = document.querySelector("[data-domain-selection-list]");
+    const emptyMessage = document.querySelector("[data-domain-selection-empty]");
+    if (!selectionList || !emptyMessage) {
+        return;
+    }
+
+    const domains = selectedDomainOrder();
+    selectionList.innerHTML = "";
+    emptyMessage.hidden = domains.length > 0;
+
+    domains.forEach((domain, index) => {
+        const row = document.createElement("div");
+        row.className = "selected-domain-row";
+        row.dataset.domain = domain;
+
+        const role = document.createElement("span");
+        role.className = "selected-domain-role";
+        role.textContent = domainRole(index);
+
+        const name = document.createElement("span");
+        name.className = "selected-domain-name";
+        name.textContent = domainLabel(domain);
+
+        const actions = document.createElement("div");
+        actions.className = "selected-domain-actions";
+
+        if (index > 0) {
+            const primaryButton = document.createElement("button");
+            primaryButton.type = "button";
+            primaryButton.className = "button-subtle button-compact";
+            primaryButton.dataset.domainAction = "primary";
+            primaryButton.textContent = "Make primary";
+            actions.appendChild(primaryButton);
+        }
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "button-subtle button-compact";
+        removeButton.dataset.domainAction = "remove";
+        removeButton.textContent = "Remove";
+        actions.appendChild(removeButton);
+
+        row.append(role, name, actions);
+        selectionList.appendChild(row);
+    });
 }
 
 function updateDomainSelection() {
@@ -232,6 +303,7 @@ function updateDomainSelection() {
     domainCheckboxes.forEach((checkbox) => {
         checkbox.disabled = !checkbox.checked && selectedCount >= maxDomains;
     });
+    renderDomainSelection();
 }
 
 domainCheckboxes.forEach((checkbox) => {
@@ -248,6 +320,35 @@ domainCheckboxes.forEach((checkbox) => {
         updateDomainSelection();
     });
 });
+
+document.querySelector("[data-domain-selection-list]")?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-domain-action]");
+    if (!button) {
+        return;
+    }
+
+    const row = button.closest(".selected-domain-row");
+    const domain = row?.dataset.domain;
+    if (!domain) {
+        return;
+    }
+
+    if (button.dataset.domainAction === "remove") {
+        const checkbox = domainCheckboxes.find((candidate) => candidate.value === domain);
+        if (checkbox) {
+            checkbox.checked = false;
+        }
+        setDomainOrder(selectedDomainOrder().filter((candidate) => candidate !== domain));
+    }
+
+    if (button.dataset.domainAction === "primary") {
+        const rest = selectedDomainOrder().filter((candidate) => candidate !== domain);
+        setDomainOrder([domain, ...rest]);
+    }
+
+    updateDomainSelection();
+});
+
 setDomainOrder(
     getDomainOrder().filter((domain) => {
         return domainCheckboxes.some((checkbox) => {
