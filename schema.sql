@@ -31,9 +31,16 @@ CREATE TABLE vocabulary_entries (
 CREATE TABLE vocabulary_synonyms (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vocabulary_id INTEGER NOT NULL REFERENCES vocabulary_entries(id) ON DELETE CASCADE,
+    linked_vocabulary_id INTEGER REFERENCES vocabulary_entries(id) ON DELETE SET NULL,
     synonym TEXT NOT NULL,
     UNIQUE (vocabulary_id, synonym)
 );
+
+CREATE INDEX vocabulary_synonyms_linked_vocabulary_id_idx
+ON vocabulary_synonyms(linked_vocabulary_id);
+
+CREATE INDEX vocabulary_synonyms_synonym_nocase_idx
+ON vocabulary_synonyms(synonym COLLATE NOCASE);
 
 CREATE TABLE vocabulary_examples (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -157,6 +164,22 @@ CREATE TABLE ai_generation_usage (
         CHECK (generation_count >= 0),
     UNIQUE (user_id, generation_date)
 );
+
+CREATE TABLE background_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'running', 'failed')),
+    payload TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0
+        CHECK (attempts >= 0),
+    last_error TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX background_jobs_status_type_idx
+ON background_jobs(status, job_type, created_at);
 
 CREATE TABLE invite_codes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -103,9 +103,29 @@ Stores the repeatable synonyms of a vocabulary entry.
 | --- | --- | --- |
 | `id` | INTEGER | Primary key, autoincrement |
 | `vocabulary_id` | INTEGER | Required reference to `vocabulary_entries.id`; cascades on delete |
+| `linked_vocabulary_id` | INTEGER | Optional reference to the vocabulary entry represented by this synonym; set to null on delete |
 | `synonym` | TEXT | Required |
 
-A synonym may appear only once per vocabulary entry.
+A synonym may appear only once per vocabulary entry. Synonym links are created
+by background maintenance, not during the user-facing creation/edit flow. When
+a synonym links to another vocabulary entry, the detail page renders it as a
+navigation link and the reverse synonym is maintained where missing.
+
+### `background_jobs`
+
+Stores pending, running, and failed maintenance jobs. Successful jobs are
+deleted after completion so this table does not grow indefinitely.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | INTEGER | Primary key, autoincrement |
+| `job_type` | TEXT | Required |
+| `status` | TEXT | Required; one of `pending`, `running`, `failed`; defaults to `pending` |
+| `payload` | TEXT | Required JSON payload |
+| `attempts` | INTEGER | Required; defaults to 0 |
+| `last_error` | TEXT | Optional failure detail |
+| `created_at` | TIMESTAMP | Defaults to current timestamp |
+| `updated_at` | TIMESTAMP | Defaults to current timestamp; updated by job state changes |
 
 ### `vocabulary_examples`
 

@@ -12,6 +12,7 @@ from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_ai_service import vocabulary_ai_service
 from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
 from Services.vocabulary_service import vocabulary_service
+from Services.vocabulary_synonym_link_service import vocabulary_synonym_link_service
 
 
 admin_bp = Blueprint("admin", __name__)
@@ -242,6 +243,28 @@ def generate_vocabulary_cloze_data(vocabulary_id):
     if request.is_json:
         return jsonify(updated_entry)
     flash(f"Generated cloze data for {updated_entry['word']}.")
+    return redirect(_vocabulary_maintenance_url())
+
+
+@admin_bp.route("/admin/vocabulary/<int:vocabulary_id>/analyze-synonym-links", methods=["POST"])
+@admin_required
+@csrf_required
+def analyze_vocabulary_synonym_links(vocabulary_id):
+    entry = vocabulary_service.get_entry(vocabulary_id)
+    if not entry:
+        if request.is_json:
+            return jsonify({"error": "Vocabulary entry was not found"}), 404
+        flash("Vocabulary entry was not found")
+        return redirect(_vocabulary_maintenance_url())
+
+    result = vocabulary_synonym_link_service.link_vocabulary_synonyms(vocabulary_id)
+    if request.is_json:
+        return jsonify(result)
+
+    message = f"Analyzed synonym links for {entry['word']}."
+    if result["ambiguous"]:
+        message = f"{message} {result['ambiguous']} synonym target was ambiguous."
+    flash(message)
     return redirect(_vocabulary_maintenance_url())
 
 

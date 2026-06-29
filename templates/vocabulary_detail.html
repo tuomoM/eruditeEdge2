@@ -22,7 +22,16 @@
 {% if entry.synonyms %}
     <section class="detail-section">
         <h2>Synonyms</h2>
-        <p>{{ entry.synonyms | join(", ") }}</p>
+        <p>
+            {% for synonym in entry.linked_synonyms %}
+                {% if synonym.linked_vocabulary_id %}
+                    <a href="/vocabulary/{{ synonym.linked_vocabulary_id }}/page">{{ synonym.synonym }}</a>
+                {% else %}
+                    {{ synonym.synonym }}
+                {% endif %}
+                {% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </p>
     </section>
 {% endif %}
 

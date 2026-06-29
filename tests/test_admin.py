@@ -598,6 +598,45 @@ class AdminTestCase(unittest.TestCase):
             self.valid_cloze_entry("tenuous")["cloze_sentences"],
         )
 
+    def test_admin_can_analyze_vocabulary_synonym_links(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        stagger_data = self.valid_entry("stagger")
+        stagger_data["synonyms"] = []
+        stagger_id = self.client.post("/vocabulary", json=stagger_data).get_json()["id"]
+        totter_data = self.valid_entry("totter")
+        totter_data["synonyms"] = ["stagger"]
+        totter_id = self.client.post("/vocabulary", json=totter_data).get_json()["id"]
+
+        response = self.client.post(
+            f"/admin/vocabulary/{totter_id}/analyze-synonym-links",
+            json={},
+            headers=self.csrf_headers(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["ambiguous"], 0)
+        with self.app.app_context():
+            totter_synonym = db.query(
+                """
+                SELECT linked_vocabulary_id
+                FROM vocabulary_synonyms
+                WHERE vocabulary_id = ? AND synonym = ?
+                """,
+                [totter_id, "stagger"],
+            )[0]
+            stagger_synonym = db.query(
+                """
+                SELECT linked_vocabulary_id
+                FROM vocabulary_synonyms
+                WHERE vocabulary_id = ? AND synonym = ?
+                """,
+                [stagger_id, "totter"],
+            )[0]
+        self.assertEqual(totter_synonym["linked_vocabulary_id"], stagger_id)
+        self.assertEqual(stagger_synonym["linked_vocabulary_id"], totter_id)
+
     def test_admin_can_run_security_audit(self):
         self.create_admin("tuomo")
         self.logout()

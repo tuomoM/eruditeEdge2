@@ -125,6 +125,10 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="button-secondary button-compact" type="submit">Generate missing</button>
                     </form>
+                    <form action="/admin/vocabulary/{{ entry.id }}/analyze-synonym-links{% if selected_view == 'all' %}?view=all{% endif %}" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="button-secondary button-compact" type="submit">Analyze synonym links</button>
+                    </form>
                 </div>
             </div>
         {% endfor %}

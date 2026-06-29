@@ -3,6 +3,9 @@ import re
 from Repositories.vocabulary_repository import (
     vocabulary_repository as default_vocabulary_repository,
 )
+from Services.background_job_service import (
+    background_job_service as default_background_job_service,
+)
 from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
 
 
@@ -25,8 +28,13 @@ MAX_NEEDS_ATTENTION_LENGTH = 200
 
 
 class VocabularyService:
-    def __init__(self, vocabulary_repository=default_vocabulary_repository):
+    def __init__(
+        self,
+        vocabulary_repository=default_vocabulary_repository,
+        background_job_service=default_background_job_service,
+    ):
         self._vocabulary_repository = vocabulary_repository
+        self._background_job_service = background_job_service
 
     def create_entry(self, data, user_id):
         values, error = self._validate_data(data)
@@ -48,6 +56,7 @@ class VocabularyService:
         )
         if vocabulary_id is None:
             return None, "Vocabulary entry already exists for this word and context"
+        self._background_job_service.enqueue_vocabulary_synonym_linking(vocabulary_id)
         return self._vocabulary_repository.get_entry(vocabulary_id), None
 
     def update_entry(self, vocabulary_id, data):
@@ -68,6 +77,7 @@ class VocabularyService:
         )
         if not updated:
             return None, "Vocabulary entry was not found or already exists"
+        self._background_job_service.enqueue_vocabulary_synonym_linking(vocabulary_id)
         return self._vocabulary_repository.get_entry(vocabulary_id), None
 
     def get_entry(self, vocabulary_id):

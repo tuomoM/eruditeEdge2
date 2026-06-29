@@ -6,6 +6,11 @@ from flask import current_app
 from flask.cli import with_appcontext
 
 from Services.user_service import user_service
+from Services.background_job_service import (
+    LINK_VOCABULARY_SYNONYMS_JOB,
+    background_job_service,
+)
+from Services.vocabulary_synonym_link_service import vocabulary_synonym_link_service
 from db import get_connection, init_db
 
 
@@ -68,6 +73,17 @@ MIGRATION_MARKERS = {
             ],
         },
     },
+    "014_vocabulary_synonym_links_and_jobs.sql": {
+        "columns": {
+            "vocabulary_synonyms": ["linked_vocabulary_id"],
+        },
+        "tables": ["background_jobs"],
+        "indexes": [
+            "vocabulary_synonyms_linked_vocabulary_id_idx",
+            "vocabulary_synonyms_synonym_nocase_idx",
+            "background_jobs_status_type_idx",
+        ],
+    },
 }
 
 
@@ -77,6 +93,7 @@ def register_cli_commands(app):
     app.cli.add_command(init_database)
     app.cli.add_command(migrate_database)
     app.cli.add_command(check_database)
+    app.cli.add_command(run_background_jobs)
 
 
 @click.command("create-admin")
@@ -189,6 +206,24 @@ def check_database():
         )
 
     click.echo("No Railway volume detected; using the local database path.")
+
+
+@click.command("run-background-jobs")
+@click.option("--limit", default=10, show_default=True, type=click.IntRange(1, 100))
+@with_appcontext
+def run_background_jobs(limit):
+    background_job_service.register_handler(
+        LINK_VOCABULARY_SYNONYMS_JOB,
+        lambda payload: vocabulary_synonym_link_service.link_vocabulary_synonyms(
+            payload["vocabulary_id"],
+        ),
+    )
+    summary = background_job_service.run_pending(limit)
+    click.echo(
+        "Processed {processed}, completed {completed}, failed {failed}.".format(
+            **summary,
+        )
+    )
 
 
 def _is_railway_environment():

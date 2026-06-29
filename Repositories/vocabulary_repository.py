@@ -1,4 +1,4 @@
-from sqlite3 import IntegrityError
+from sqlite3 import IntegrityError, OperationalError
 
 import db
 
@@ -184,17 +184,16 @@ class VocabularyRepository:
             return None
 
         entry = dict(rows[0])
-        entry["synonyms"] = [
-            row["synonym"]
-            for row in db.query(
-                """
-                SELECT synonym
-                FROM vocabulary_synonyms
-                WHERE vocabulary_id = ?
-                ORDER BY synonym
-                """,
-                [vocabulary_id],
-            )
+        synonym_rows = self._entry_synonym_rows(vocabulary_id)
+        entry["synonyms"] = [row["synonym"] for row in synonym_rows]
+        entry["linked_synonyms"] = [
+            {
+                "id": row["id"],
+                "synonym": row["synonym"],
+                "linked_vocabulary_id": row["linked_vocabulary_id"],
+                "linked_word": row["linked_word"],
+            }
+            for row in synonym_rows
         ]
         entry["examples"] = [
             row["example_sentence"]
@@ -234,6 +233,45 @@ class VocabularyRepository:
         ]
         return entry
 
+    def _entry_synonym_rows(self, vocabulary_id):
+        try:
+            return db.query(
+                """
+                SELECT
+                    vocabulary_synonyms.id,
+                    vocabulary_synonyms.synonym,
+                    vocabulary_synonyms.linked_vocabulary_id,
+                    linked_entries.word AS linked_word
+                FROM vocabulary_synonyms
+                LEFT JOIN vocabulary_entries AS linked_entries
+                    ON linked_entries.id = vocabulary_synonyms.linked_vocabulary_id
+                WHERE vocabulary_synonyms.vocabulary_id = ?
+                ORDER BY vocabulary_synonyms.synonym
+                """,
+                [vocabulary_id],
+            )
+        except OperationalError as error:
+            if "no such column: vocabulary_synonyms.linked_vocabulary_id" not in str(error):
+                raise
+            rows = db.query(
+                """
+                SELECT id, synonym
+                FROM vocabulary_synonyms
+                WHERE vocabulary_id = ?
+                ORDER BY synonym
+                """,
+                [vocabulary_id],
+            )
+            return [
+                {
+                    "id": row["id"],
+                    "synonym": row["synonym"],
+                    "linked_vocabulary_id": None,
+                    "linked_word": None,
+                }
+                for row in rows
+            ]
+
     def search_by_word(self, search_term):
         rows = db.query(
             """
@@ -266,6 +304,90 @@ class VocabularyRepository:
             [created_since],
         )
         return result[0]["count"]
+
+    def list_synonym_rows(self, vocabulary_id):
+        rows = db.query(
+            """
+            SELECT id, vocabulary_id, synonym, linked_vocabulary_id
+            FROM vocabulary_synonyms
+            WHERE vocabulary_id = ?
+            ORDER BY id
+            """,
+            [vocabulary_id],
+        )
+        return [dict(row) for row in rows]
+
+    def find_entries_by_word(self, word, exclude_vocabulary_id=None):
+        params = [word]
+        exclude_clause = ""
+        if exclude_vocabulary_id is not None:
+            exclude_clause = "AND id != ?"
+            params.append(exclude_vocabulary_id)
+        rows = db.query(
+            f"""
+            SELECT id, word, context
+            FROM vocabulary_entries
+            WHERE word = ? COLLATE NOCASE
+                {exclude_clause}
+            ORDER BY id
+            """,
+            params,
+        )
+        return [dict(row) for row in rows]
+
+    def find_synonym_rows_by_text(self, synonym, exclude_vocabulary_id=None):
+        params = [synonym]
+        exclude_clause = ""
+        if exclude_vocabulary_id is not None:
+            exclude_clause = "AND vocabulary_id != ?"
+            params.append(exclude_vocabulary_id)
+        rows = db.query(
+            f"""
+            SELECT id, vocabulary_id, synonym, linked_vocabulary_id
+            FROM vocabulary_synonyms
+            WHERE synonym = ? COLLATE NOCASE
+                {exclude_clause}
+            ORDER BY id
+            """,
+            params,
+        )
+        return [dict(row) for row in rows]
+
+    def link_synonym(self, synonym_id, linked_vocabulary_id):
+        db.execute(
+            """
+            UPDATE vocabulary_synonyms
+            SET linked_vocabulary_id = ?
+            WHERE id = ?
+            """,
+            [linked_vocabulary_id, synonym_id],
+        )
+
+    def ensure_synonym(self, vocabulary_id, synonym, linked_vocabulary_id=None):
+        existing_rows = db.query(
+            """
+            SELECT id
+            FROM vocabulary_synonyms
+            WHERE vocabulary_id = ?
+                AND synonym = ? COLLATE NOCASE
+            ORDER BY id
+            LIMIT 1
+            """,
+            [vocabulary_id, synonym],
+        )
+        if existing_rows:
+            self.link_synonym(existing_rows[0]["id"], linked_vocabulary_id)
+            return existing_rows[0]["id"]
+
+        cursor = db.execute(
+            """
+            INSERT INTO vocabulary_synonyms
+                (vocabulary_id, synonym, linked_vocabulary_id)
+            VALUES (?, ?, ?)
+            """,
+            [vocabulary_id, synonym, linked_vocabulary_id],
+        )
+        return cursor.lastrowid
 
     def list_cloze_maintenance_entries(self):
         rows = db.query(

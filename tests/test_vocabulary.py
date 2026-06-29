@@ -198,6 +198,90 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(body["synonyms"], ["procedure", "process"])
         self.assertEqual(len(body["examples"]), 2)
 
+    def test_create_vocabulary_queues_synonym_link_job(self):
+        self.login_user()
+
+        response = self.create_entry()
+
+        self.assertEqual(response.status_code, 201)
+        with self.app.app_context():
+            rows = db.query(
+                """
+                SELECT job_type, status, payload
+                FROM background_jobs
+                """
+            )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_type"], "link_vocabulary_synonyms")
+        self.assertEqual(rows[0]["status"], "pending")
+        self.assertIn('"vocabulary_id"', rows[0]["payload"])
+
+    def test_background_job_links_synonyms_bidirectionally_and_deletes_completed_job(self):
+        self.login_user()
+        stagger_data = self.valid_entry()
+        stagger_data["word"] = "stagger"
+        stagger_data["definition"] = "To walk or move unsteadily."
+        stagger_data["synonyms"] = []
+        stagger_data["examples"] = ["The tired runner began to stagger."]
+        stagger_id = self.create_entry(stagger_data).get_json()["id"]
+        totter_data = self.valid_entry()
+        totter_data["word"] = "totter"
+        totter_data["definition"] = "To move in a shaky way."
+        totter_data["synonyms"] = ["stagger"]
+        totter_data["examples"] = ["The stack began to totter."]
+        totter_id = self.create_entry(totter_data).get_json()["id"]
+
+        result = self.app.test_cli_runner().invoke(args=["run-background-jobs", "--limit", "10"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("completed 2", result.output)
+        with self.app.app_context():
+            job_count = db.query("SELECT COUNT(*) AS count FROM background_jobs")[0]["count"]
+            totter_synonym = db.query(
+                """
+                SELECT linked_vocabulary_id
+                FROM vocabulary_synonyms
+                WHERE vocabulary_id = ? AND synonym = ?
+                """,
+                [totter_id, "stagger"],
+            )[0]
+            stagger_synonym = db.query(
+                """
+                SELECT synonym, linked_vocabulary_id
+                FROM vocabulary_synonyms
+                WHERE vocabulary_id = ? AND synonym = ?
+                """,
+                [stagger_id, "totter"],
+            )[0]
+        self.assertEqual(job_count, 0)
+        self.assertEqual(totter_synonym["linked_vocabulary_id"], stagger_id)
+        self.assertEqual(stagger_synonym["synonym"], "totter")
+        self.assertEqual(stagger_synonym["linked_vocabulary_id"], totter_id)
+
+    def test_vocabulary_detail_links_linked_synonyms(self):
+        self.login_user()
+        stagger_data = self.valid_entry()
+        stagger_data["word"] = "stagger"
+        stagger_data["definition"] = "To walk or move unsteadily."
+        stagger_data["synonyms"] = []
+        stagger_data["examples"] = ["The tired runner began to stagger."]
+        stagger_id = self.create_entry(stagger_data).get_json()["id"]
+        totter_data = self.valid_entry()
+        totter_data["word"] = "totter"
+        totter_data["definition"] = "To move in a shaky way."
+        totter_data["synonyms"] = ["stagger"]
+        totter_data["examples"] = ["The stack began to totter."]
+        totter_id = self.create_entry(totter_data).get_json()["id"]
+        self.app.test_cli_runner().invoke(args=["run-background-jobs", "--limit", "10"])
+
+        response = self.client.get(f"/vocabulary/{totter_id}/page")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            f'href="/vocabulary/{stagger_id}/page">stagger</a>'.encode(),
+            response.data,
+        )
+
     def test_create_vocabulary_persists_up_to_four_domains_in_order(self):
         self.login_user()
         data = self.valid_entry()
