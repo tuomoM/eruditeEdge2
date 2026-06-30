@@ -15,11 +15,16 @@ from flask import (
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from Services.anki_export_service import (
+    ANKI_CARD_TYPE_CLOZE,
     ANKI_CARD_TYPE_DESCRIPTION,
     ANKI_CARD_TYPES,
     anki_export_service,
 )
-from Services.training_service import training_service
+from Services.training_service import (
+    TRAINING_TYPE_CLOZE,
+    TRAINING_TYPE_DEFINITION,
+    training_service,
+)
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_service import vocabulary_service
 from Views.vocabulary import entries_with_ownership, login_required, page_login_required
@@ -28,6 +33,10 @@ from Views.vocabulary import entries_with_ownership, login_required, page_login_
 training_bp = Blueprint("training", __name__)
 ANKI_EXPORT_TOKEN_MAX_AGE_SECONDS = 60 * 60
 ANKI_EXPORT_TOKEN_SALT = "anki-export"
+ANKI_CARD_TYPE_BY_TRAINING_TYPE = {
+    TRAINING_TYPE_DEFINITION: ANKI_CARD_TYPE_DESCRIPTION,
+    TRAINING_TYPE_CLOZE: ANKI_CARD_TYPE_CLOZE,
+}
 
 
 @training_bp.route("/training/select", methods=["GET"])
@@ -65,16 +74,20 @@ def _vocabulary_ids_from_request():
     return request.form.getlist("vocabulary_ids"), None
 
 
-def _anki_card_type_from_request():
+def _training_type_from_request():
     if request.method == "GET":
-        card_type = request.args.get("anki_card_type", ANKI_CARD_TYPE_DESCRIPTION)
+        return request.args.get("training_type", TRAINING_TYPE_DEFINITION)
     elif request.is_json:
         data = request.get_json(silent=True)
-        card_type = data.get("anki_card_type", ANKI_CARD_TYPE_DESCRIPTION) if isinstance(data, dict) else None
-    else:
-        card_type = request.form.get("anki_card_type", ANKI_CARD_TYPE_DESCRIPTION)
+        return data.get("training_type", TRAINING_TYPE_DEFINITION) if isinstance(data, dict) else None
+    return request.form.get("training_type", TRAINING_TYPE_DEFINITION)
+
+
+def _anki_card_type_from_request():
+    training_type = _training_type_from_request()
+    card_type = ANKI_CARD_TYPE_BY_TRAINING_TYPE.get(training_type)
     if card_type not in ANKI_CARD_TYPES:
-        return None, "Anki card type is invalid"
+        return None, "Training type is invalid"
     return card_type, None
 
 
@@ -119,9 +132,6 @@ def create_training():
 @training_bp.route("/training/export-anki", methods=["GET", "POST"])
 @login_required
 def export_training_anki():
-    if not _is_admin():
-        return jsonify({"error": "Admin account is required"}), 403
-
     vocabulary_ids, error = _vocabulary_ids_from_request()
     if error:
         return jsonify({"error": error}), 400
@@ -139,9 +149,6 @@ def export_training_anki():
 @training_bp.route("/training/export-anki-link", methods=["GET", "POST"])
 @login_required
 def create_anki_export_link():
-    if not _is_admin():
-        return jsonify({"error": "Admin account is required"}), 403
-
     vocabulary_ids, error = _vocabulary_ids_from_request()
     if error:
         return jsonify({"error": error}), 400

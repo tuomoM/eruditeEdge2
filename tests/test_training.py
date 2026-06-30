@@ -345,15 +345,17 @@ class TrainingTestCase(unittest.TestCase):
         self.assertRegex(html, rf'value="{vocabulary_ids[2]}"[^>]*checked')
         self.assertRegex(html, rf'value="{vocabulary_ids[4]}"[^>]*checked')
 
-    def test_training_selection_hides_anki_export_for_trusted_user(self):
+    def test_training_selection_shows_anki_export_for_trusted_user(self):
         self.login_user()
         self.create_sample_vocabs()
 
         response = self.client.get("/training/select")
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotIn(b"Export Anki", response.data)
-        self.assertNotIn(b"/training/export-anki", response.data)
+        self.assertIn(b"Export Anki", response.data)
+        self.assertIn(b'formaction="/training/export-anki"', response.data)
+        self.assertIn(b"Create Anki link", response.data)
+        self.assertIn(b'formaction="/training/export-anki-link"', response.data)
 
     def test_training_selection_shows_anki_export_for_admin(self):
         self.login_user()
@@ -368,10 +370,19 @@ class TrainingTestCase(unittest.TestCase):
         self.assertIn(b'formmethod="get"', response.data)
         self.assertIn(b"Create Anki link", response.data)
         self.assertIn(b'formaction="/training/export-anki-link"', response.data)
-        self.assertIn(b'name="anki_card_type" value="description" checked', response.data)
-        self.assertIn(b'name="anki_card_type" value="cloze"', response.data)
+        self.assertIn(b'name="training_type" value="definition" checked', response.data)
+        self.assertIn(b"Description", response.data)
+        self.assertNotIn(b'name="anki_card_type"', response.data)
 
-    def test_anki_export_requires_admin(self):
+    def test_anki_export_requires_login(self):
+        response = self.client.post(
+            "/training/export-anki",
+            json={"vocabulary_ids": [1]},
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_trusted_user_can_export_anki_package(self):
         self.login_user()
         vocabulary_ids = self.create_sample_vocabs()
 
@@ -380,8 +391,21 @@ class TrainingTestCase(unittest.TestCase):
             json={"vocabulary_ids": vocabulary_ids[:1]},
         )
 
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.get_json()["error"], "Admin account is required")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[:2], b"PK")
+
+    def test_trusted_user_can_create_copyable_anki_export_link(self):
+        self.login_user()
+        vocabulary_ids = self.create_sample_vocabs()
+
+        response = self.client.get(
+            "/training/export-anki-link",
+            query_string={"vocabulary_ids": [str(vocabulary_ids[0])]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Anki export link", response.data)
+        self.assertIn(b"/training/export-anki/", response.data)
 
     def test_admin_can_export_selected_training_vocab_as_anki_package(self):
         self.login_user()
@@ -441,6 +465,26 @@ class TrainingTestCase(unittest.TestCase):
         self.assertEqual(fields[0][2], self.valid_entry(self.sample_words()[0])["definition"])
         self.assertIn("appears in this sentence", fields[0][6])
 
+    def test_admin_anki_export_shuffles_cards(self):
+        self.login_user()
+        self.make_user_admin()
+        vocabulary_ids = self.create_sample_vocabs()
+
+        with patch("Services.anki_export_service.random.shuffle") as shuffle:
+            shuffle.side_effect = lambda notes: notes.reverse()
+            response = self.client.post(
+                "/training/export-anki",
+                json={"vocabulary_ids": vocabulary_ids[:3]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        fields = self.anki_note_fields(response.data)
+        self.assertEqual(
+            [field[0] for field in fields],
+            [self.sample_words()[2], self.sample_words()[1], self.sample_words()[0]],
+        )
+        shuffle.assert_called_once()
+
     def test_admin_anki_cloze_export_generates_one_card_per_cloze_sentence(self):
         self.login_user()
         self.make_user_admin()
@@ -451,7 +495,7 @@ class TrainingTestCase(unittest.TestCase):
             "/training/export-anki",
             query_string={
                 "vocabulary_ids": [str(vocabulary_id)],
-                "anki_card_type": "cloze",
+                "training_type": "cloze",
             },
         )
 
@@ -459,10 +503,12 @@ class TrainingTestCase(unittest.TestCase):
         self.assertEqual(response.data[:2], b"PK")
         fields = self.anki_note_fields(response.data)
         self.assertEqual(len(fields), 2)
-        self.assertEqual(fields[0][0], entry["cloze_sentences"][0])
-        self.assertEqual(fields[0][1], "tenuous")
-        self.assertEqual(fields[0][3], entry["definition"])
-        self.assertEqual(fields[1][0], entry["cloze_sentences"][1])
+        self.assertCountEqual(
+            [field[0] for field in fields],
+            entry["cloze_sentences"],
+        )
+        self.assertEqual({field[1] for field in fields}, {"tenuous"})
+        self.assertEqual({field[3] for field in fields}, {entry["definition"]})
 
     def test_admin_anki_cloze_export_rejects_selection_without_cloze_sentences(self):
         self.login_user()
@@ -473,7 +519,7 @@ class TrainingTestCase(unittest.TestCase):
             "/training/export-anki",
             query_string={
                 "vocabulary_ids": [str(vocabulary_ids[0])],
-                "anki_card_type": "cloze",
+                "training_type": "cloze",
             },
         )
 
@@ -509,7 +555,7 @@ class TrainingTestCase(unittest.TestCase):
             "/training/export-anki-link",
             query_string={
                 "vocabulary_ids": [str(vocabulary_ids[0])],
-                "anki_card_type": "cloze",
+                "training_type": "cloze",
             },
         )
 

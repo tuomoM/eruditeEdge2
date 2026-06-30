@@ -29,10 +29,10 @@
 {% if entries %}
     <form action="/training" method="post" id="training-selection-form">
         {% set selected_training_type = selected_training_type if selected_training_type is defined else 'definition' %}
-        <div class="filter-toggle" id="training-type-toggle" role="group" aria-label="Training type">
+        <div class="filter-toggle" id="training-type-toggle" role="group" aria-label="Card type">
             <label class="filter-toggle-button {% if selected_training_type == 'definition' %}is-active{% endif %}">
                 <input type="radio" name="training_type" value="definition" {% if selected_training_type == 'definition' %}checked{% endif %}>
-                Definitions
+                Description
             </label>
             <label class="filter-toggle-button {% if selected_training_type == 'cloze' %}is-active{% endif %}">
                 <input type="radio" name="training_type" value="cloze" {% if selected_training_type == 'cloze' %}checked{% endif %}>
@@ -71,34 +71,22 @@
         <p class="filter-empty-message" data-filter-empty hidden>No own vocabulary entries available.</p>
         <div class="training-footer">
             <span id="selected-count" class="selected-count" aria-live="polite">0 vocabulary entries selected</span>
-            {% if session.account_category == "admin" %}
-                <div class="filter-toggle" role="group" aria-label="Anki card type">
-                    <label class="filter-toggle-button is-active">
-                        <input type="radio" name="anki_card_type" value="description" checked>
-                        Description
-                    </label>
-                    <label class="filter-toggle-button">
-                        <input type="radio" name="anki_card_type" value="cloze">
-                        Cloze
-                    </label>
-                </div>
-                <button
-                    class="button-secondary"
-                    type="submit"
-                    formaction="/training/export-anki"
-                    formmethod="get"
-                >
-                    Export Anki
-                </button>
-                <button
-                    class="button-secondary"
-                    type="submit"
-                    formaction="/training/export-anki-link"
-                    formmethod="get"
-                >
-                    Create Anki link
-                </button>
-            {% endif %}
+            <button
+                class="button-secondary"
+                type="submit"
+                formaction="/training/export-anki"
+                formmethod="get"
+            >
+                Export Anki
+            </button>
+            <button
+                class="button-secondary"
+                type="submit"
+                formaction="/training/export-anki-link"
+                formmethod="get"
+            >
+                Create Anki link
+            </button>
             <button class="button-primary" type="submit">Start training</button>
         </div>
     </form>
@@ -121,13 +109,6 @@
             trainingTypeToggle.querySelectorAll(".filter-toggle-button").forEach((label) => {
                 const radio = label.querySelector('input[name="training_type"]');
                 label.classList.toggle("is-active", radio && radio.checked);
-            });
-        });
-    });
-    document.querySelectorAll('input[name="anki_card_type"]').forEach((input) => {
-        input.addEventListener("change", () => {
-            document.querySelectorAll('input[name="anki_card_type"]').forEach((radio) => {
-                radio.closest(".filter-toggle-button").classList.toggle("is-active", radio.checked);
             });
         });
     });

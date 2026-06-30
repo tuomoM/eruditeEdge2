@@ -1,5 +1,6 @@
 import html
 import os
+import random
 import tempfile
 import zipfile
 
@@ -55,6 +56,7 @@ class AnkiExportService:
         if card_type == ANKI_CARD_TYPE_CLOZE and not deck.notes:
             raise RuntimeError("Selected vocabulary has no cloze sentences")
 
+        random.shuffle(deck.notes)
         package_path = self._write_package(genanki.Package(deck))
         self._validate_package_file(package_path)
         return package_path
