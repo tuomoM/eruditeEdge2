@@ -367,11 +367,14 @@ class TrainingTestCase(unittest.TestCase):
         self.login_user()
         self.make_user_admin()
         vocabulary_ids = self.create_sample_vocabs()
+        package_file = tempfile.NamedTemporaryFile(delete=False, suffix=".apkg")
+        package_file.write(b"anki-package")
+        package_file.close()
 
         with patch(
-            "Views.training.anki_export_service.export_vocabulary_entries",
-            return_value=b"anki-package",
-        ) as export_vocabulary_entries:
+            "Views.training.anki_export_service.export_vocabulary_entries_to_file",
+            return_value=package_file.name,
+        ) as export_vocabulary_entries_to_file:
             response = self.client.post(
                 "/training/export-anki",
                 data={"vocabulary_ids": [str(vocabulary_ids[0]), str(vocabulary_ids[2])]},
@@ -379,16 +382,18 @@ class TrainingTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, b"anki-package")
-        self.assertEqual(response.mimetype, "application/octet-stream")
+        self.assertEqual(response.mimetype, "application/zip")
         self.assertIn(
             "attachment; filename=erudite-edge-vocabulary.apkg",
             response.headers["Content-Disposition"],
         )
-        exported_entries = export_vocabulary_entries.call_args.args[0]
+        exported_entries = export_vocabulary_entries_to_file.call_args.args[0]
         self.assertEqual(
             [entry["id"] for entry in exported_entries],
             [vocabulary_ids[0], vocabulary_ids[2]],
         )
+        response.close()
+        self.assertFalse(os.path.exists(package_file.name))
 
     def test_admin_anki_export_generates_real_package(self):
         self.login_user()
@@ -403,7 +408,8 @@ class TrainingTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertGreater(len(response.data), 100)
         self.assertEqual(response.data[:2], b"PK")
-        self.assertEqual(response.mimetype, "application/octet-stream")
+        self.assertEqual(response.mimetype, "application/zip")
+        self.assertEqual(int(response.headers["Content-Length"]), len(response.data))
         with zipfile.ZipFile(BytesIO(response.data)) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("collection.anki2", archive.namelist())
@@ -414,7 +420,7 @@ class TrainingTestCase(unittest.TestCase):
         vocabulary_ids = self.create_sample_vocabs()
 
         with patch(
-            "Views.training.anki_export_service.export_vocabulary_entries",
+            "Views.training.anki_export_service.export_vocabulary_entries_to_file",
             side_effect=RuntimeError("Anki export dependency is not installed"),
         ):
             response = self.client.post(

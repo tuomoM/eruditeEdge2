@@ -1,6 +1,15 @@
-from io import BytesIO
+import os
 
-from flask import Blueprint, jsonify, redirect, render_template, request, send_file, session
+from flask import (
+    Blueprint,
+    after_this_request,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+)
 
 from Services.anki_export_service import anki_export_service
 from Services.training_service import training_service
@@ -89,17 +98,28 @@ def export_training_anki():
         return jsonify({"error": error}), 400
 
     try:
-        package_bytes = anki_export_service.export_vocabulary_entries(entries)
+        package_path = anki_export_service.export_vocabulary_entries_to_file(entries)
     except RuntimeError as error:
         return jsonify({"error": str(error)}), 500
 
-    return send_file(
-        BytesIO(package_bytes),
+    response = send_file(
+        package_path,
         as_attachment=True,
         download_name="erudite-edge-vocabulary.apkg",
-        mimetype="application/octet-stream",
+        mimetype="application/zip",
         max_age=0,
     )
+    response.direct_passthrough = False
+
+    @after_this_request
+    def remove_package_file(response):
+        try:
+            os.unlink(package_path)
+        except FileNotFoundError:
+            pass
+        return response
+
+    return response
 
 
 @training_bp.route("/training/<int:training_session_id>", methods=["GET"])

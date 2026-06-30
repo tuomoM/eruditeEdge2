@@ -10,6 +10,14 @@ ANKI_MODEL_ID = 2059400111
 
 class AnkiExportService:
     def export_vocabulary_entries(self, entries, deck_name="Erudite Edge Vocabulary"):
+        package_path = self.export_vocabulary_entries_to_file(entries, deck_name)
+        try:
+            with open(package_path, "rb") as package_file:
+                return package_file.read()
+        finally:
+            os.unlink(package_path)
+
+    def export_vocabulary_entries_to_file(self, entries, deck_name="Erudite Edge Vocabulary"):
         try:
             import genanki
         except ImportError as error:
@@ -68,14 +76,8 @@ class AnkiExportService:
             deck.add_note(note)
 
         package_path = self._write_package(genanki.Package(deck))
-        try:
-            with open(package_path, "rb") as package_file:
-                package_bytes = package_file.read()
-        finally:
-            os.unlink(package_path)
-
-        self._validate_package(package_bytes)
-        return package_bytes
+        self._validate_package_file(package_path)
+        return package_path
 
     def _write_package(self, package):
         descriptor, package_path = tempfile.mkstemp(suffix=".apkg")
@@ -83,13 +85,10 @@ class AnkiExportService:
         package.write_to_file(package_path)
         return package_path
 
-    def _validate_package(self, package_bytes):
+    def _validate_package_file(self, package_path):
         try:
-            with tempfile.NamedTemporaryFile(suffix=".apkg") as package_file:
-                package_file.write(package_bytes)
-                package_file.flush()
-                with zipfile.ZipFile(package_file.name) as archive:
-                    bad_file = archive.testzip()
+            with zipfile.ZipFile(package_path) as archive:
+                bad_file = archive.testzip()
         except zipfile.BadZipFile as error:
             raise RuntimeError("Generated Anki package is not a valid zip archive") from error
         if bad_file:
