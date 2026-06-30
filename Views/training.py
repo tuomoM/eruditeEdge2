@@ -14,7 +14,11 @@ from flask import (
 )
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from Services.anki_export_service import anki_export_service
+from Services.anki_export_service import (
+    ANKI_CARD_TYPE_DESCRIPTION,
+    ANKI_CARD_TYPES,
+    anki_export_service,
+)
 from Services.training_service import training_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_service import vocabulary_service
@@ -59,6 +63,19 @@ def _vocabulary_ids_from_request():
             return None, "Invalid request"
         return data.get("vocabulary_ids"), None
     return request.form.getlist("vocabulary_ids"), None
+
+
+def _anki_card_type_from_request():
+    if request.method == "GET":
+        card_type = request.args.get("anki_card_type", ANKI_CARD_TYPE_DESCRIPTION)
+    elif request.is_json:
+        data = request.get_json(silent=True)
+        card_type = data.get("anki_card_type", ANKI_CARD_TYPE_DESCRIPTION) if isinstance(data, dict) else None
+    else:
+        card_type = request.form.get("anki_card_type", ANKI_CARD_TYPE_DESCRIPTION)
+    if card_type not in ANKI_CARD_TYPES:
+        return None, "Anki card type is invalid"
+    return card_type, None
 
 
 @training_bp.route("/training", methods=["POST"])
@@ -108,12 +125,15 @@ def export_training_anki():
     vocabulary_ids, error = _vocabulary_ids_from_request()
     if error:
         return jsonify({"error": error}), 400
+    card_type, error = _anki_card_type_from_request()
+    if error:
+        return jsonify({"error": error}), 400
 
     entries, error = training_service.get_selected_vocabulary_entries(vocabulary_ids)
     if error:
         return jsonify({"error": error}), 400
 
-    return _send_anki_entries(entries)
+    return _send_anki_entries(entries, card_type)
 
 
 @training_bp.route("/training/export-anki-link", methods=["GET", "POST"])
@@ -125,13 +145,19 @@ def create_anki_export_link():
     vocabulary_ids, error = _vocabulary_ids_from_request()
     if error:
         return jsonify({"error": error}), 400
+    card_type, error = _anki_card_type_from_request()
+    if error:
+        return jsonify({"error": error}), 400
 
     entries, error = training_service.get_selected_vocabulary_entries(vocabulary_ids)
     if error:
         return jsonify({"error": error}), 400
 
     token = _anki_export_serializer().dumps(
-        {"vocabulary_ids": [entry["id"] for entry in entries]},
+        {
+            "vocabulary_ids": [entry["id"] for entry in entries],
+            "anki_card_type": card_type,
+        },
         salt=ANKI_EXPORT_TOKEN_SALT,
     )
     download_url = url_for(
@@ -145,6 +171,7 @@ def create_anki_export_link():
         "anki_export_link.html",
         download_url=download_url,
         selected_count=len(entries),
+        card_type=card_type,
     )
 
 
@@ -166,13 +193,19 @@ def download_anki_export_link(token):
     )
     if error:
         return jsonify({"error": error}), 400
+    card_type = data.get("anki_card_type", ANKI_CARD_TYPE_DESCRIPTION)
+    if card_type not in ANKI_CARD_TYPES:
+        return jsonify({"error": "Anki card type is invalid"}), 400
 
-    return _send_anki_entries(entries)
+    return _send_anki_entries(entries, card_type)
 
 
-def _send_anki_entries(entries):
+def _send_anki_entries(entries, card_type):
     try:
-        package_path = anki_export_service.export_vocabulary_entries_to_file(entries)
+        package_path = anki_export_service.export_vocabulary_entries_to_file(
+            entries,
+            card_type,
+        )
     except RuntimeError as error:
         return jsonify({"error": str(error)}), 500
 

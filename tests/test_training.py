@@ -193,6 +193,21 @@ class TrainingTestCase(unittest.TestCase):
             for question in training["questions"]
         }
 
+    def anki_note_fields(self, package_bytes):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            package_path = os.path.join(temp_directory, "export.apkg")
+            with open(package_path, "wb") as output:
+                output.write(package_bytes)
+            with zipfile.ZipFile(package_path) as archive:
+                archive.extract("collection.anki2", temp_directory)
+            collection_path = os.path.join(temp_directory, "collection.anki2")
+            connection = sqlite3.connect(collection_path)
+            try:
+                rows = connection.execute("SELECT flds FROM notes ORDER BY id").fetchall()
+            finally:
+                connection.close()
+            return [row[0].split("\x1f") for row in rows]
+
     def create_training(self, vocabulary_ids):
         return self.client.post(
             "/training",
@@ -353,6 +368,8 @@ class TrainingTestCase(unittest.TestCase):
         self.assertIn(b'formmethod="get"', response.data)
         self.assertIn(b"Create Anki link", response.data)
         self.assertIn(b'formaction="/training/export-anki-link"', response.data)
+        self.assertIn(b'name="anki_card_type" value="description" checked', response.data)
+        self.assertIn(b'name="anki_card_type" value="cloze"', response.data)
 
     def test_anki_export_requires_admin(self):
         self.login_user()
@@ -391,10 +408,12 @@ class TrainingTestCase(unittest.TestCase):
             response.headers["Content-Disposition"],
         )
         exported_entries = export_vocabulary_entries_to_file.call_args.args[0]
+        exported_card_type = export_vocabulary_entries_to_file.call_args.args[1]
         self.assertEqual(
             [entry["id"] for entry in exported_entries],
             [vocabulary_ids[0], vocabulary_ids[2]],
         )
+        self.assertEqual(exported_card_type, "description")
         response.close()
         self.assertFalse(os.path.exists(package_file.name))
 
@@ -416,6 +435,53 @@ class TrainingTestCase(unittest.TestCase):
         with zipfile.ZipFile(BytesIO(response.data)) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("collection.anki2", archive.namelist())
+        fields = self.anki_note_fields(response.data)
+        self.assertEqual(len(fields), 1)
+        self.assertEqual(fields[0][0], self.sample_words()[0])
+        self.assertEqual(fields[0][2], self.valid_entry(self.sample_words()[0])["definition"])
+        self.assertIn("appears in this sentence", fields[0][6])
+
+    def test_admin_anki_cloze_export_generates_one_card_per_cloze_sentence(self):
+        self.login_user()
+        self.make_user_admin()
+        entry = self.valid_cloze_entry("tenuous", "adjective")
+        vocabulary_id = self.client.post("/vocabulary", json=entry).get_json()["id"]
+
+        response = self.client.get(
+            "/training/export-anki",
+            query_string={
+                "vocabulary_ids": [str(vocabulary_id)],
+                "anki_card_type": "cloze",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[:2], b"PK")
+        fields = self.anki_note_fields(response.data)
+        self.assertEqual(len(fields), 2)
+        self.assertEqual(fields[0][0], entry["cloze_sentences"][0])
+        self.assertEqual(fields[0][1], "tenuous")
+        self.assertEqual(fields[0][3], entry["definition"])
+        self.assertEqual(fields[1][0], entry["cloze_sentences"][1])
+
+    def test_admin_anki_cloze_export_rejects_selection_without_cloze_sentences(self):
+        self.login_user()
+        self.make_user_admin()
+        vocabulary_ids = self.create_sample_vocabs()
+
+        response = self.client.get(
+            "/training/export-anki",
+            query_string={
+                "vocabulary_ids": [str(vocabulary_ids[0])],
+                "anki_card_type": "cloze",
+            },
+        )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.get_json()["error"],
+            "Selected vocabulary has no cloze sentences",
+        )
 
     def test_admin_anki_export_supports_get_download(self):
         self.login_user()
@@ -441,13 +507,17 @@ class TrainingTestCase(unittest.TestCase):
 
         response = self.client.get(
             "/training/export-anki-link",
-            query_string={"vocabulary_ids": [str(vocabulary_ids[0])]},
+            query_string={
+                "vocabulary_ids": [str(vocabulary_ids[0])],
+                "anki_card_type": "cloze",
+            },
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Anki export link", response.data)
         self.assertIn(b"/training/export-anki/", response.data)
         self.assertIn(b".apkg", response.data)
+        self.assertIn(b"Cloze cards", response.data)
         self.assertIn(b"This signed link expires in 1 hour.", response.data)
 
     def test_anki_export_link_download_does_not_require_login(self):

@@ -72,6 +72,16 @@
         <div class="training-footer">
             <span id="selected-count" class="selected-count" aria-live="polite">0 vocabulary entries selected</span>
             {% if session.account_category == "admin" %}
+                <div class="filter-toggle" role="group" aria-label="Anki card type">
+                    <label class="filter-toggle-button is-active">
+                        <input type="radio" name="anki_card_type" value="description" checked>
+                        Description
+                    </label>
+                    <label class="filter-toggle-button">
+                        <input type="radio" name="anki_card_type" value="cloze">
+                        Cloze
+                    </label>
+                </div>
                 <button
                     class="button-secondary"
                     type="submit"
@@ -111,6 +121,13 @@
             trainingTypeToggle.querySelectorAll(".filter-toggle-button").forEach((label) => {
                 const radio = label.querySelector('input[name="training_type"]');
                 label.classList.toggle("is-active", radio && radio.checked);
+            });
+        });
+    });
+    document.querySelectorAll('input[name="anki_card_type"]').forEach((input) => {
+        input.addEventListener("change", () => {
+            document.querySelectorAll('input[name="anki_card_type"]').forEach((radio) => {
+                radio.closest(".filter-toggle-button").classList.toggle("is-active", radio.checked);
             });
         });
     });
