@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Anki export link</h1>
+        <div class="result-count">{{ selected_count }} vocabulary entries selected</div>
+    </div>
+    <a class="button button-secondary" href="/training/select">Back to training</a>
+</div>
+
+<section class="detail-section">
+    <div class="field field-wide">
+        <label for="anki-export-url">Download link</label><br>
+        <input id="anki-export-url" value="{{ download_url }}" readonly>
+        <div class="help-text">This signed link expires in 1 hour.</div>
+    </div>
+    <div class="actions">
+        <button class="button-primary" type="button" id="copy-anki-link">Copy link</button>
+        <a class="button button-secondary" href="{{ download_url }}">Download</a>
+    </div>
+</section>
+
+<script>
+const copyButton = document.getElementById("copy-anki-link");
+const urlInput = document.getElementById("anki-export-url");
+
+copyButton.addEventListener("click", async () => {
+    urlInput.select();
+    try {
+        await navigator.clipboard.writeText(urlInput.value);
+        copyButton.textContent = "Copied";
+    } catch {
+        document.execCommand("copy");
+        copyButton.textContent = "Copied";
+    }
+});
+</script>
+{% endblock %}

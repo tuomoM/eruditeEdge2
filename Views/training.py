@@ -3,13 +3,16 @@ import os
 from flask import (
     Blueprint,
     after_this_request,
+    current_app,
     jsonify,
     redirect,
     render_template,
     request,
     send_file,
     session,
+    url_for,
 )
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from Services.anki_export_service import anki_export_service
 from Services.training_service import training_service
@@ -19,6 +22,8 @@ from Views.vocabulary import entries_with_ownership, login_required, page_login_
 
 
 training_bp = Blueprint("training", __name__)
+ANKI_EXPORT_TOKEN_MAX_AGE_SECONDS = 60 * 60
+ANKI_EXPORT_TOKEN_SALT = "anki-export"
 
 
 @training_bp.route("/training/select", methods=["GET"])
@@ -39,6 +44,21 @@ def _is_admin():
     if user:
         session["account_category"] = user["account_category"]
     return bool(user and user["account_category"] == ACCOUNT_CATEGORY_ADMIN)
+
+
+def _anki_export_serializer():
+    return URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+
+
+def _vocabulary_ids_from_request():
+    if request.method == "GET":
+        return request.args.getlist("vocabulary_ids"), None
+    if request.is_json:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return None, "Invalid request"
+        return data.get("vocabulary_ids"), None
+    return request.form.getlist("vocabulary_ids"), None
 
 
 @training_bp.route("/training", methods=["POST"])
@@ -79,24 +99,78 @@ def create_training():
     return redirect(f"/training/{training_session['id']}")
 
 
-@training_bp.route("/training/export-anki", methods=["POST"])
+@training_bp.route("/training/export-anki", methods=["GET", "POST"])
 @login_required
 def export_training_anki():
     if not _is_admin():
         return jsonify({"error": "Admin account is required"}), 403
 
-    if request.is_json:
-        data = request.get_json(silent=True)
-        if not isinstance(data, dict):
-            return jsonify({"error": "Invalid request"}), 400
-        vocabulary_ids = data.get("vocabulary_ids")
-    else:
-        vocabulary_ids = request.form.getlist("vocabulary_ids")
+    vocabulary_ids, error = _vocabulary_ids_from_request()
+    if error:
+        return jsonify({"error": error}), 400
 
     entries, error = training_service.get_selected_vocabulary_entries(vocabulary_ids)
     if error:
         return jsonify({"error": error}), 400
 
+    return _send_anki_entries(entries)
+
+
+@training_bp.route("/training/export-anki-link", methods=["GET", "POST"])
+@login_required
+def create_anki_export_link():
+    if not _is_admin():
+        return jsonify({"error": "Admin account is required"}), 403
+
+    vocabulary_ids, error = _vocabulary_ids_from_request()
+    if error:
+        return jsonify({"error": error}), 400
+
+    entries, error = training_service.get_selected_vocabulary_entries(vocabulary_ids)
+    if error:
+        return jsonify({"error": error}), 400
+
+    token = _anki_export_serializer().dumps(
+        {"vocabulary_ids": [entry["id"] for entry in entries]},
+        salt=ANKI_EXPORT_TOKEN_SALT,
+    )
+    download_url = url_for(
+        "training.download_anki_export_link",
+        token=token,
+        _external=True,
+    )
+    if request.is_json:
+        return jsonify({"download_url": download_url})
+    return render_template(
+        "anki_export_link.html",
+        download_url=download_url,
+        selected_count=len(entries),
+    )
+
+
+@training_bp.route("/training/export-anki/<token>.apkg", methods=["GET"])
+def download_anki_export_link(token):
+    try:
+        data = _anki_export_serializer().loads(
+            token,
+            salt=ANKI_EXPORT_TOKEN_SALT,
+            max_age=ANKI_EXPORT_TOKEN_MAX_AGE_SECONDS,
+        )
+    except SignatureExpired:
+        return jsonify({"error": "Anki export link has expired"}), 410
+    except BadSignature:
+        return jsonify({"error": "Anki export link is invalid"}), 404
+
+    entries, error = training_service.get_selected_vocabulary_entries(
+        data.get("vocabulary_ids"),
+    )
+    if error:
+        return jsonify({"error": error}), 400
+
+    return _send_anki_entries(entries)
+
+
+def _send_anki_entries(entries):
     try:
         package_path = anki_export_service.export_vocabulary_entries_to_file(entries)
     except RuntimeError as error:

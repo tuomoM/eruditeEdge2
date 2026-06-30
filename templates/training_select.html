@@ -76,9 +76,17 @@
                     class="button-secondary"
                     type="submit"
                     formaction="/training/export-anki"
-                    formmethod="post"
+                    formmethod="get"
                 >
                     Export Anki
+                </button>
+                <button
+                    class="button-secondary"
+                    type="submit"
+                    formaction="/training/export-anki-link"
+                    formmethod="get"
+                >
+                    Create Anki link
                 </button>
             {% endif %}
             <button class="button-primary" type="submit">Start training</button>

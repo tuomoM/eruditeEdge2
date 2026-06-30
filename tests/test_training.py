@@ -350,6 +350,9 @@ class TrainingTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Export Anki", response.data)
         self.assertIn(b'formaction="/training/export-anki"', response.data)
+        self.assertIn(b'formmethod="get"', response.data)
+        self.assertIn(b"Create Anki link", response.data)
+        self.assertIn(b'formaction="/training/export-anki-link"', response.data)
 
     def test_anki_export_requires_admin(self):
         self.login_user()
@@ -413,6 +416,67 @@ class TrainingTestCase(unittest.TestCase):
         with zipfile.ZipFile(BytesIO(response.data)) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("collection.anki2", archive.namelist())
+
+    def test_admin_anki_export_supports_get_download(self):
+        self.login_user()
+        self.make_user_admin()
+        vocabulary_ids = self.create_sample_vocabs()
+
+        response = self.client.get(
+            "/training/export-anki",
+            query_string={"vocabulary_ids": [str(vocabulary_ids[0])]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"Method Not Allowed", response.data)
+        self.assertEqual(response.data[:2], b"PK")
+        with zipfile.ZipFile(BytesIO(response.data)) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertIn("collection.anki2", archive.namelist())
+
+    def test_admin_can_create_copyable_anki_export_link(self):
+        self.login_user()
+        self.make_user_admin()
+        vocabulary_ids = self.create_sample_vocabs()
+
+        response = self.client.get(
+            "/training/export-anki-link",
+            query_string={"vocabulary_ids": [str(vocabulary_ids[0])]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Anki export link", response.data)
+        self.assertIn(b"/training/export-anki/", response.data)
+        self.assertIn(b".apkg", response.data)
+        self.assertIn(b"This signed link expires in 1 hour.", response.data)
+
+    def test_anki_export_link_download_does_not_require_login(self):
+        self.login_user()
+        self.make_user_admin()
+        vocabulary_ids = self.create_sample_vocabs()
+        link_response = self.client.get(
+            "/training/export-anki-link",
+            query_string={"vocabulary_ids": [str(vocabulary_ids[0])]},
+        )
+        html = link_response.get_data(as_text=True)
+        start = html.index('value="') + len('value="')
+        end = html.index('"', start)
+        download_url = html[start:end]
+        self.logout_user()
+
+        response = self.client.get(download_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[:2], b"PK")
+        with zipfile.ZipFile(BytesIO(response.data)) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertIn("collection.anki2", archive.namelist())
+
+    def test_anki_export_link_rejects_invalid_token(self):
+        response = self.client.get("/training/export-anki/not-a-valid-token.apkg")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json()["error"], "Anki export link is invalid")
 
     def test_admin_anki_export_reports_missing_dependency(self):
         self.login_user()
