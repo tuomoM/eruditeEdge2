@@ -1,6 +1,8 @@
-from flask import Blueprint, jsonify, redirect, render_template, request, session
+from flask import Blueprint, Response, jsonify, redirect, render_template, request, session
 
+from Services.anki_export_service import anki_export_service
 from Services.training_service import training_service
+from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_service import vocabulary_service
 from Views.vocabulary import entries_with_ownership, login_required, page_login_required
 
@@ -11,6 +13,7 @@ training_bp = Blueprint("training", __name__)
 @training_bp.route("/training/select", methods=["GET"])
 @page_login_required
 def select_training_vocabs():
+    _is_admin()
     return render_template(
         "training_select.html",
         entries=entries_with_ownership(vocabulary_service.list_entries(), session["user_id"]),
@@ -18,6 +21,13 @@ def select_training_vocabs():
             training_service.get_latest_training_vocabulary_ids(session["user_id"])
         ),
     )
+
+
+def _is_admin():
+    user = user_service.get_user(session.get("user_id"))
+    if user:
+        session["account_category"] = user["account_category"]
+    return bool(user and user["account_category"] == ACCOUNT_CATEGORY_ADMIN)
 
 
 @training_bp.route("/training", methods=["POST"])
@@ -56,6 +66,38 @@ def create_training():
     if request.is_json:
         return jsonify(training_service.get_training_quiz(training_session["id"], session["user_id"])), 201
     return redirect(f"/training/{training_session['id']}")
+
+
+@training_bp.route("/training/export-anki", methods=["POST"])
+@login_required
+def export_training_anki():
+    if not _is_admin():
+        return jsonify({"error": "Admin account is required"}), 403
+
+    if request.is_json:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid request"}), 400
+        vocabulary_ids = data.get("vocabulary_ids")
+    else:
+        vocabulary_ids = request.form.getlist("vocabulary_ids")
+
+    entries, error = training_service.get_selected_vocabulary_entries(vocabulary_ids)
+    if error:
+        return jsonify({"error": error}), 400
+
+    try:
+        package_bytes = anki_export_service.export_vocabulary_entries(entries)
+    except RuntimeError as error:
+        return jsonify({"error": str(error)}), 500
+
+    return Response(
+        package_bytes,
+        mimetype="application/octet-stream",
+        headers={
+            "Content-Disposition": 'attachment; filename="erudite-edge-vocabulary.apkg"',
+        },
+    )
 
 
 @training_bp.route("/training/<int:training_session_id>", methods=["GET"])

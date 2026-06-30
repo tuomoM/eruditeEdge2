@@ -60,6 +60,17 @@ class TrainingTestCase(unittest.TestCase):
                 ["trusted", "tuomo"],
             )
 
+    def make_user_admin(self, username="tuomo"):
+        with self.app.app_context():
+            db.execute(
+                """
+                UPDATE users
+                SET account_category = ?
+                WHERE username = ?
+                """,
+                ["admin", username],
+            )
+
     def logout_user(self):
         self.client.post("/logout", json={})
 
@@ -316,6 +327,101 @@ class TrainingTestCase(unittest.TestCase):
         self.assertNotRegex(html, rf'value="{vocabulary_ids[0]}"[^>]*checked')
         self.assertRegex(html, rf'value="{vocabulary_ids[2]}"[^>]*checked')
         self.assertRegex(html, rf'value="{vocabulary_ids[4]}"[^>]*checked')
+
+    def test_training_selection_hides_anki_export_for_trusted_user(self):
+        self.login_user()
+        self.create_sample_vocabs()
+
+        response = self.client.get("/training/select")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"Export Anki", response.data)
+        self.assertNotIn(b"/training/export-anki", response.data)
+
+    def test_training_selection_shows_anki_export_for_admin(self):
+        self.login_user()
+        self.make_user_admin()
+        self.create_sample_vocabs()
+
+        response = self.client.get("/training/select")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Export Anki", response.data)
+        self.assertIn(b'formaction="/training/export-anki"', response.data)
+
+    def test_anki_export_requires_admin(self):
+        self.login_user()
+        vocabulary_ids = self.create_sample_vocabs()
+
+        response = self.client.post(
+            "/training/export-anki",
+            json={"vocabulary_ids": vocabulary_ids[:1]},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.get_json()["error"], "Admin account is required")
+
+    def test_admin_can_export_selected_training_vocab_as_anki_package(self):
+        self.login_user()
+        self.make_user_admin()
+        vocabulary_ids = self.create_sample_vocabs()
+
+        with patch(
+            "Views.training.anki_export_service.export_vocabulary_entries",
+            return_value=b"anki-package",
+        ) as export_vocabulary_entries:
+            response = self.client.post(
+                "/training/export-anki",
+                data={"vocabulary_ids": [str(vocabulary_ids[0]), str(vocabulary_ids[2])]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, b"anki-package")
+        self.assertEqual(response.mimetype, "application/octet-stream")
+        self.assertIn(
+            'attachment; filename="erudite-edge-vocabulary.apkg"',
+            response.headers["Content-Disposition"],
+        )
+        exported_entries = export_vocabulary_entries.call_args.args[0]
+        self.assertEqual(
+            [entry["id"] for entry in exported_entries],
+            [vocabulary_ids[0], vocabulary_ids[2]],
+        )
+
+    def test_admin_anki_export_generates_real_package(self):
+        self.login_user()
+        self.make_user_admin()
+        vocabulary_ids = self.create_sample_vocabs()
+
+        response = self.client.post(
+            "/training/export-anki",
+            json={"vocabulary_ids": vocabulary_ids[:1]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(len(response.data), 100)
+        self.assertEqual(response.data[:2], b"PK")
+        self.assertEqual(response.mimetype, "application/octet-stream")
+
+    def test_admin_anki_export_reports_missing_dependency(self):
+        self.login_user()
+        self.make_user_admin()
+        vocabulary_ids = self.create_sample_vocabs()
+
+        with patch(
+            "Views.training.anki_export_service.export_vocabulary_entries",
+            side_effect=RuntimeError("Anki export dependency is not installed"),
+        ):
+            response = self.client.post(
+                "/training/export-anki",
+                json={"vocabulary_ids": vocabulary_ids[:1]},
+            )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(
+            response.get_json()["error"],
+            "Anki export dependency is not installed",
+        )
 
     def test_training_selection_marks_own_entries_without_usernames(self):
         self.login_user()

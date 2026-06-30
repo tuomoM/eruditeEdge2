@@ -71,6 +71,16 @@
         <p class="filter-empty-message" data-filter-empty hidden>No own vocabulary entries available.</p>
         <div class="training-footer">
             <span id="selected-count" class="selected-count" aria-live="polite">0 vocabulary entries selected</span>
+            {% if session.account_category == "admin" %}
+                <button
+                    class="button-secondary"
+                    type="submit"
+                    formaction="/training/export-anki"
+                    formmethod="post"
+                >
+                    Export Anki
+                </button>
+            {% endif %}
             <button class="button-primary" type="submit">Start training</button>
         </div>
     </form>

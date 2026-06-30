@@ -142,6 +142,19 @@ class TrainingService:
     def get_latest_training_vocabulary_ids(self, user_id):
         return self._training_repository.get_latest_training_vocabulary_ids(user_id)
 
+    def get_selected_vocabulary_entries(self, vocabulary_ids):
+        vocabulary_ids, error = self._clean_vocabulary_ids(vocabulary_ids)
+        if error:
+            return None, error
+
+        entries = []
+        for vocabulary_id in vocabulary_ids:
+            entry = self._vocabulary_repository.get_entry(vocabulary_id)
+            if entry is None:
+                return None, "Selected vocabulary contains unknown entries"
+            entries.append(entry)
+        return entries, None
+
     def _build_questions(self, training_session):
         vocabs_by_id = {
             vocab["vocabulary_id"]: vocab
