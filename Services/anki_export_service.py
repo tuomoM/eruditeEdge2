@@ -1,5 +1,7 @@
 import html
+import os
 import tempfile
+import zipfile
 
 
 ANKI_DECK_ID = 2059400110
@@ -65,10 +67,33 @@ class AnkiExportService:
             )
             deck.add_note(note)
 
-        with tempfile.NamedTemporaryFile(suffix=".apkg") as package_file:
-            genanki.Package(deck).write_to_file(package_file.name)
-            package_file.seek(0)
-            return package_file.read()
+        package_path = self._write_package(genanki.Package(deck))
+        try:
+            with open(package_path, "rb") as package_file:
+                package_bytes = package_file.read()
+        finally:
+            os.unlink(package_path)
+
+        self._validate_package(package_bytes)
+        return package_bytes
+
+    def _write_package(self, package):
+        descriptor, package_path = tempfile.mkstemp(suffix=".apkg")
+        os.close(descriptor)
+        package.write_to_file(package_path)
+        return package_path
+
+    def _validate_package(self, package_bytes):
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".apkg") as package_file:
+                package_file.write(package_bytes)
+                package_file.flush()
+                with zipfile.ZipFile(package_file.name) as archive:
+                    bad_file = archive.testzip()
+        except zipfile.BadZipFile as error:
+            raise RuntimeError("Generated Anki package is not a valid zip archive") from error
+        if bad_file:
+            raise RuntimeError(f"Generated Anki package contains a corrupt file: {bad_file}")
 
     def _field(self, value):
         if value is None:

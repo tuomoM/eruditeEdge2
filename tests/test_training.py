@@ -2,6 +2,8 @@ import os
 import sqlite3
 import tempfile
 import unittest
+import zipfile
+from io import BytesIO
 from unittest.mock import Mock, patch
 from datetime import datetime, timedelta, timezone
 
@@ -379,7 +381,7 @@ class TrainingTestCase(unittest.TestCase):
         self.assertEqual(response.data, b"anki-package")
         self.assertEqual(response.mimetype, "application/octet-stream")
         self.assertIn(
-            'attachment; filename="erudite-edge-vocabulary.apkg"',
+            "attachment; filename=erudite-edge-vocabulary.apkg",
             response.headers["Content-Disposition"],
         )
         exported_entries = export_vocabulary_entries.call_args.args[0]
@@ -402,6 +404,9 @@ class TrainingTestCase(unittest.TestCase):
         self.assertGreater(len(response.data), 100)
         self.assertEqual(response.data[:2], b"PK")
         self.assertEqual(response.mimetype, "application/octet-stream")
+        with zipfile.ZipFile(BytesIO(response.data)) as archive:
+            self.assertIsNone(archive.testzip())
+            self.assertIn("collection.anki2", archive.namelist())
 
     def test_admin_anki_export_reports_missing_dependency(self):
         self.login_user()

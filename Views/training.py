@@ -1,4 +1,6 @@
-from flask import Blueprint, Response, jsonify, redirect, render_template, request, session
+from io import BytesIO
+
+from flask import Blueprint, jsonify, redirect, render_template, request, send_file, session
 
 from Services.anki_export_service import anki_export_service
 from Services.training_service import training_service
@@ -91,12 +93,12 @@ def export_training_anki():
     except RuntimeError as error:
         return jsonify({"error": str(error)}), 500
 
-    return Response(
-        package_bytes,
+    return send_file(
+        BytesIO(package_bytes),
+        as_attachment=True,
+        download_name="erudite-edge-vocabulary.apkg",
         mimetype="application/octet-stream",
-        headers={
-            "Content-Disposition": 'attachment; filename="erudite-edge-vocabulary.apkg"',
-        },
+        max_age=0,
     )
 
 
