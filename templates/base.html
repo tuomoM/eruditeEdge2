@@ -3,7 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>eruditeEdge2</title>
+    <meta name="description" content="{% block meta_description %}eruditeEdge is an AI vocabulary notebook for advanced English learners. Generate vocabulary entries, practice definitions and cloze sentences, and export study sets to Anki.{% endblock %}">
+    <title>{% block title %}eruditeEdge | AI vocabulary training and Anki export{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='EE icon.png') }}">
     <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='EE icon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ed2.css') }}">

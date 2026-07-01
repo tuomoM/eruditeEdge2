@@ -471,6 +471,56 @@ button:hover,
     background: var(--color-border);
 }
 
+.landing-page {
+    max-width: 940px;
+    margin: 0 auto;
+}
+
+.landing-hero {
+    padding: var(--space-lg) 0 var(--space-xl);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.landing-kicker {
+    margin-bottom: var(--space-sm);
+    color: var(--color-accent-dark);
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.landing-hero h1 {
+    max-width: 820px;
+    margin-bottom: var(--space-md);
+}
+
+.landing-lede {
+    max-width: 760px;
+    color: var(--color-muted);
+    font-size: 1.15rem;
+}
+
+.landing-actions {
+    margin-top: var(--space-lg);
+}
+
+.landing-feature-band {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-lg);
+    padding: var(--space-xl) 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.landing-feature h2 {
+    margin-top: 0;
+}
+
+.landing-search-copy {
+    max-width: 820px;
+    padding: var(--space-xl) 0 0;
+}
+
 .toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -970,6 +1020,7 @@ button:hover,
     .form-grid,
     .account-layout,
     .entry-row,
+    .landing-feature-band,
     .review-grid {
         grid-template-columns: 1fr;
     }

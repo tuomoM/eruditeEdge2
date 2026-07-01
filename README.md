@@ -24,8 +24,8 @@ This version is almost entirely written using Open AI Codex.
 * Handling for user levels
 * Admin cockpit with possiblity to remove user and users vocabs
 * google login option
-* invite code functionality
-* ability for a user candidate to ask for invite code
+* open account registration
+* invite code administration for legacy access workflows
 
 
 # to-do's

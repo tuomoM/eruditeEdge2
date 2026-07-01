@@ -69,19 +69,16 @@ class UserService:
         if username_error:
             return None, username_error
 
-        if not invite_code:
-            return None, "Invite code is required"
-
         password_error = self.validate_password(username, password)
         if password_error:
             return None, password_error
 
         password_hash = generate_password_hash(password)
-        user_id, error = self._user_repository.create_user_with_invite_code(
+        user_id, error = self._user_repository.create_user(
             username,
             password_hash,
-            invite_code,
             ACCOUNT_CATEGORY_BASIC,
+            invite_code=invite_code,
         )
         if error:
             return None, error
@@ -89,10 +86,8 @@ class UserService:
             return None, "User id already exists"
         return user_id, None
 
-    def register_google_user(self, google_user, invite_code):
+    def register_google_user(self, google_user, invite_code=None):
         invite_code = (invite_code or "").strip()
-        if not invite_code:
-            return None, "Invite code is required"
 
         google_sub = (google_user.get("sub") or "").strip()
         google_email = (google_user.get("email") or "").strip().lower()
@@ -104,13 +99,13 @@ class UserService:
 
         username = self._username_from_google_email(google_email)
         password_hash = generate_password_hash(secrets.token_urlsafe(32))
-        user_id, error = self._user_repository.create_user_with_invite_code(
+        user_id, error = self._user_repository.create_user(
             username,
             password_hash,
-            invite_code,
             ACCOUNT_CATEGORY_BASIC,
             google_sub,
             google_email,
+            invite_code,
         )
         if error:
             return None, error

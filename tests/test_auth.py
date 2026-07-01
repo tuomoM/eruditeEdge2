@@ -133,7 +133,17 @@ class AuthTestCase(unittest.TestCase):
         self.assertIn(b"Log in or create an account", response.data)
         self.assertIn(b"Log in with Google", response.data)
         self.assertIn(b"Create account", response.data)
-        self.assertIn(b"Request invite code", response.data)
+        self.assertNotIn(b"Request invite code", response.data)
+        self.assertNotIn(b"Invite code", response.data)
+
+    def test_landing_page_describes_vocabulary_service_for_search_engines(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"AI vocabulary builder for advanced English learners", response.data)
+        self.assertIn(b"semantic domains", response.data)
+        self.assertIn(b"Anki decks", response.data)
+        self.assertIn(b'name="description"', response.data)
 
     def test_base_template_includes_browser_tab_icon(self):
         response = self.client.get("/account")
@@ -152,15 +162,15 @@ class AuthTestCase(unittest.TestCase):
         self.assertIn(b"Log out", response.data)
         self.assertNotIn(b"Create account", response.data)
 
-    def test_user_creation_requires_invite_code(self):
+    def test_user_creation_allows_registration_without_invite_code(self):
         response = self.client.post(
             "/register",
             json={"username": "tuomo", "password": "AdminSafe12!"},
             headers=self.registration_csrf_headers(),
         )
 
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.get_json()["error"], "Invite code is required")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["username"], "tuomo")
 
     def test_user_creation_requires_csrf_token(self):
         invite_code = self.create_invite_code("csrf-required-code")
@@ -195,7 +205,7 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
 
-    def test_user_creation_rejects_invalid_invite_code(self):
+    def test_user_creation_ignores_invalid_invite_code(self):
         response = self.client.post(
             "/register",
             json={
@@ -206,10 +216,10 @@ class AuthTestCase(unittest.TestCase):
             headers=self.registration_csrf_headers(),
         )
 
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.get_json()["error"], "Invite code is invalid or expired")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["username"], "tuomo")
 
-    def test_invalid_invite_code_does_not_reveal_existing_username(self):
+    def test_duplicate_user_id_is_rejected_even_with_invalid_invite_code(self):
         self.register("tuomo", "AdminSafe12!")
 
         response = self.client.post(
@@ -223,9 +233,9 @@ class AuthTestCase(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.get_json()["error"], "Invite code is invalid or expired")
+        self.assertEqual(response.get_json()["error"], "User id already exists")
 
-    def test_user_creation_rejects_expired_invite_code(self):
+    def test_user_creation_ignores_expired_invite_code(self):
         invite_code = self.create_invite_code(
             "expired-code",
             datetime.now(timezone.utc) - timedelta(seconds=1),
@@ -241,8 +251,8 @@ class AuthTestCase(unittest.TestCase):
             headers=self.registration_csrf_headers(),
         )
 
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.get_json()["error"], "Invite code is invalid or expired")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["username"], "tuomo")
 
     def test_user_creation_marks_invite_code_as_used(self):
         invite_code = self.create_invite_code("single-use-code")
@@ -271,7 +281,7 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(rows[0]["used_by_username"], "tuomo")
         self.assertIsNotNone(rows[0]["used_at"])
 
-    def test_user_creation_rejects_reused_invite_code(self):
+    def test_user_creation_allows_reused_invite_code(self):
         invite_code = self.create_invite_code("reuse-code")
 
         first_response = self.client.post(
@@ -294,18 +304,18 @@ class AuthTestCase(unittest.TestCase):
         )
 
         self.assertEqual(first_response.status_code, 201)
-        self.assertEqual(second_response.status_code, 400)
-        self.assertEqual(second_response.get_json()["error"], "Invite code is invalid or expired")
+        self.assertEqual(second_response.status_code, 201)
+        self.assertEqual(second_response.get_json()["username"], "anna")
 
-    def test_google_registration_start_requires_invite_code(self):
+    def test_google_registration_start_allows_missing_invite_code(self):
         response = self.client.post(
             "/register/google",
             json={},
             headers=self.registration_csrf_headers(),
         )
 
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.get_json()["error"], "Invite code is required")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("authorization_url", response.get_json())
 
     def test_google_registration_start_requires_csrf_token(self):
         response = self.client.post(
@@ -317,11 +327,9 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
 
     def test_google_registration_start_returns_authorization_url(self):
-        invite_code = self.create_invite_code("google-start-code")
-
         response = self.client.post(
             "/register/google",
-            json={"invite_code": invite_code},
+            json={},
             headers=self.registration_csrf_headers(),
         )
 
@@ -331,12 +339,11 @@ class AuthTestCase(unittest.TestCase):
         self.assertIn("client_id=google-client-id", authorization_url)
 
     def test_google_registration_callback_uri_uses_https_for_public_hosts(self):
-        invite_code = self.create_invite_code("google-start-https-code")
         base_url = "http://erudite-edge.example"
 
         response = self.client.post(
             "/register/google",
-            json={"invite_code": invite_code},
+            json={},
             headers=self.registration_csrf_headers(base_url),
             base_url=base_url,
         )
@@ -348,11 +355,10 @@ class AuthTestCase(unittest.TestCase):
             "https://erudite-edge.example/register/google/callback",
         )
 
-    def test_google_registration_callback_creates_user_with_invite_code(self):
-        invite_code = self.create_invite_code("google-callback-code")
+    def test_google_registration_callback_creates_user(self):
         start_response = self.client.post(
             "/register/google",
-            json={"invite_code": invite_code},
+            json={},
             headers=self.registration_csrf_headers(),
         )
         authorization_url = start_response.get_json()["authorization_url"]
@@ -385,24 +391,13 @@ class AuthTestCase(unittest.TestCase):
                 """,
                 ["google-sub-1"],
             )
-            invite_codes = db.query(
-                """
-                SELECT used_by, used_at
-                FROM invite_codes
-                WHERE code = ?
-                """,
-                [invite_code],
-            )
         self.assertEqual(users[0]["username"], "google_user")
         self.assertEqual(users[0]["google_email"], "google.user@example.com")
-        self.assertIsNotNone(invite_codes[0]["used_by"])
-        self.assertIsNotNone(invite_codes[0]["used_at"])
 
     def test_google_registration_callback_rejects_invalid_state(self):
-        self.create_invite_code("google-state-code")
         self.client.post(
             "/register/google",
-            json={"invite_code": "google-state-code"},
+            json={},
             headers=self.registration_csrf_headers(),
         )
 
@@ -416,52 +411,10 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(response.headers["Location"], "/register")
         fetch_user_info.assert_not_called()
 
-    def test_google_registration_callback_rejects_expired_invite_code(self):
-        invite_code = self.create_invite_code(
-            "google-expired-code",
-            datetime.now(timezone.utc) + timedelta(days=5),
-        )
-        start_response = self.client.post(
-            "/register/google",
-            json={"invite_code": invite_code},
-            headers=self.registration_csrf_headers(),
-        )
-        state = start_response.get_json()["authorization_url"].split("state=", 1)[1].split("&", 1)[0]
-        with self.app.app_context():
-            db.execute(
-                "UPDATE invite_codes SET expires_at = ? WHERE code = ?",
-                [(datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(), invite_code],
-            )
-
-        with patch(
-            "Views.user.google_oauth_service.fetch_user_info",
-            return_value=(
-                {
-                    "sub": "google-sub-expired",
-                    "email": "expired@example.com",
-                    "email_verified": True,
-                },
-                None,
-            ),
-        ):
-            response = self.client.get(
-                "/register/google/callback",
-                query_string={"state": state, "code": "google-code"},
-            )
-
-        self.assertEqual(response.status_code, 302)
-        with self.app.app_context():
-            users = db.query(
-                "SELECT id FROM users WHERE google_sub = ?",
-                ["google-sub-expired"],
-            )
-        self.assertEqual(users, [])
-
     def test_google_registration_callback_rejects_unverified_email(self):
-        invite_code = self.create_invite_code("google-unverified-code")
         start_response = self.client.post(
             "/register/google",
-            json={"invite_code": invite_code},
+            json={},
             headers=self.registration_csrf_headers(),
         )
         state = start_response.get_json()["authorization_url"].split("state=", 1)[1].split("&", 1)[0]
@@ -484,11 +437,11 @@ class AuthTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
-            invite_codes = db.query(
-                "SELECT used_by FROM invite_codes WHERE code = ?",
-                [invite_code],
+            users = db.query(
+                "SELECT id FROM users WHERE google_sub = ?",
+                ["google-sub-unverified"],
             )
-        self.assertIsNone(invite_codes[0]["used_by"])
+        self.assertEqual(users, [])
 
     def test_registered_user_is_basic(self):
         response = self.register("tuomo", "AdminSafe12!")

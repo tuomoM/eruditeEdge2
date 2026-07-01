@@ -12,7 +12,6 @@ GOOGLE_AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 GOOGLE_OAUTH_STATE_KEY = "_google_registration_state"
-GOOGLE_INVITE_CODE_KEY = "_google_registration_invite_code"
 GOOGLE_LOGIN_STATE_KEY = "_google_login_state"
 
 
@@ -20,10 +19,9 @@ class GoogleOAuthService:
     def __init__(self):
         self._ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-    def create_authorization_url(self, session, client_id, redirect_uri, invite_code):
+    def create_authorization_url(self, session, client_id, redirect_uri):
         state = secrets.token_urlsafe(32)
         session[GOOGLE_OAUTH_STATE_KEY] = state
-        session[GOOGLE_INVITE_CODE_KEY] = invite_code
         return self._authorization_url(client_id, redirect_uri, state)
 
     def create_login_authorization_url(self, session, client_id, redirect_uri):
@@ -31,14 +29,11 @@ class GoogleOAuthService:
         session[GOOGLE_LOGIN_STATE_KEY] = state
         return self._authorization_url(client_id, redirect_uri, state)
 
-    def consume_registration_invite_code(self, session, state):
+    def validate_registration_state(self, session, state):
         expected_state = session.pop(GOOGLE_OAUTH_STATE_KEY, None)
-        invite_code = session.pop(GOOGLE_INVITE_CODE_KEY, None)
         if not state or not expected_state or not secrets.compare_digest(state, expected_state):
-            return None, "Google registration state is invalid"
-        if not invite_code:
-            return None, "Invite code is required"
-        return invite_code, None
+            return "Google registration state is invalid"
+        return None
 
     def validate_login_state(self, session, state):
         expected_state = session.pop(GOOGLE_LOGIN_STATE_KEY, None)

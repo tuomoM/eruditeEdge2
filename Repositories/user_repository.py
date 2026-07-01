@@ -5,6 +5,53 @@ import db
 
 
 class UserRepository:
+    def create_user(
+        self,
+        username,
+        password_hash,
+        account_category="basic",
+        google_sub=None,
+        google_email=None,
+        invite_code=None,
+    ):
+        now = datetime.now(timezone.utc).isoformat()
+        connection = db.get_connection()
+        try:
+            cursor = connection.execute(
+                """
+                INSERT INTO users
+                    (
+                        username,
+                        password_hash,
+                        account_category,
+                        google_sub,
+                        google_email
+                    )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [username, password_hash, account_category, google_sub, google_email],
+            )
+            user_id = cursor.lastrowid
+            if invite_code:
+                connection.execute(
+                    """
+                    UPDATE invite_codes
+                    SET used_by = ?, used_at = ?
+                    WHERE code = ?
+                        AND used_by IS NULL
+                        AND expires_at > ?
+                    """,
+                    [user_id, now, invite_code, now],
+                )
+            connection.commit()
+            return user_id, None
+        except IntegrityError:
+            connection.rollback()
+            return None, "User id already exists"
+        except Exception:
+            connection.rollback()
+            raise
+
     def create_user_with_invite_code(
         self,
         username,

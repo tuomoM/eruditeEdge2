@@ -168,14 +168,6 @@ def register_google_start():
         if request.is_json:
             return csrf_error
         flash("Invalid CSRF token")
-        return registration_template(invite_code=data.get("invite_code", "")), 400
-
-    invite_code = (data.get("invite_code") or "").strip()
-    if not invite_code:
-        error = "Invite code is required"
-        if request.is_json:
-            return jsonify({"error": error}), 400
-        flash(error)
         return registration_template(), 400
 
     if not google_registration_enabled():
@@ -183,13 +175,12 @@ def register_google_start():
         if request.is_json:
             return jsonify({"error": error}), 400
         flash(error)
-        return registration_template(invite_code=invite_code), 400
+        return registration_template(), 400
 
     authorization_url = google_oauth_service.create_authorization_url(
         session,
         current_app.config["GOOGLE_CLIENT_ID"],
         google_redirect_uri(),
-        invite_code,
     )
     if request.is_json:
         return jsonify({"authorization_url": authorization_url})
@@ -198,7 +189,7 @@ def register_google_start():
 
 @user_bp.route("/register/google/callback", methods=["GET"])
 def register_google_callback():
-    invite_code, error = google_oauth_service.consume_registration_invite_code(
+    error = google_oauth_service.validate_registration_state(
         session,
         request.args.get("state"),
     )
@@ -216,7 +207,7 @@ def register_google_callback():
         flash(error)
         return redirect("/register")
 
-    user_id, error = user_service.register_google_user(google_user, invite_code)
+    user_id, error = user_service.register_google_user(google_user)
     if error:
         flash(error)
         return redirect("/register")

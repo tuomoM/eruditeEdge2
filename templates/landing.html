@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}eruditeEdge | AI vocabulary builder for advanced English learners{% endblock %}
+{% block meta_description %}Build a precise English vocabulary with eruditeEdge: generate definitions, domains, synonyms, examples, cloze sentences, training quizzes, and Anki decks from the words you want to learn.{% endblock %}
+
+{% block content %}
+<main class="landing-page">
+    <section class="landing-hero">
+        <div class="landing-kicker">AI vocabulary training</div>
+        <h1>Build a sharper English vocabulary, one word at a time.</h1>
+        <p class="landing-lede">
+            eruditeEdge helps advanced English learners turn difficult words into structured study material:
+            definitions, semantic domains, synonyms, example sentences, cloze practice, and Anki exports.
+        </p>
+        <div class="actions landing-actions">
+            <a class="button button-primary" href="/account">Create free account</a>
+            <a class="button button-secondary" href="/login">Log in</a>
+        </div>
+    </section>
+
+    <section class="landing-feature-band" aria-label="Vocabulary study workflow">
+        <div class="landing-feature">
+            <h2>Generate rich vocabulary entries</h2>
+            <p>
+                Add a word and use AI to draft a definition, part of speech, usage context, synonyms,
+                examples, and primary semantic domains that make the word easier to remember.
+            </p>
+        </div>
+        <div class="landing-feature">
+            <h2>Practice with definitions and cloze sentences</h2>
+            <p>
+                Select the words you want to learn and train with definition cards or sentence-based
+                cloze prompts that test whether you can use the word in context.
+            </p>
+        </div>
+        <div class="landing-feature">
+            <h2>Export study sets to Anki</h2>
+            <p>
+                Turn your selected vocabulary into shuffled Anki decks, including description cards
+                and cloze cards that can be opened from a downloadable link.
+            </p>
+        </div>
+    </section>
+
+    <section class="landing-search-copy">
+        <h2>Vocabulary learning for readers, writers, and serious language learners</h2>
+        <p>
+            eruditeEdge is built for people who collect precise words from books, articles, exams,
+            and everyday reading. Instead of saving a plain word list, you can create a searchable
+            vocabulary notebook with definitions, usage notes, semantic categories, example sentences,
+            training sessions, and Anki flashcards.
+        </p>
+    </section>
+</main>
+{% endblock %}

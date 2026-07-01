@@ -1,6 +1,6 @@
 import logging
 
-from flask import Flask, redirect, session
+from flask import Flask, redirect, render_template, session
 
 import config
 import db
@@ -41,7 +41,7 @@ def create_app(test_config=None):
     def index():
         if "user_id" in session:
             return redirect("/vocabulary")
-        return redirect("/login")
+        return render_template("landing.html")
 
     return app
 

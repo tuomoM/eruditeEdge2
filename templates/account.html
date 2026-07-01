@@ -46,7 +46,7 @@
 
         <section class="account-section">
             <h2>Create account</h2>
-            <p class="account-note">Invite code is required for new accounts.</p>
+            <p class="account-note">Start a vocabulary notebook, practice with training cards, and export Anki decks.</p>
             <form id="account-register-form" action="/register" method="post">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="field">
@@ -57,25 +57,16 @@
                     <label for="register_password">Password</label>
                     <input id="register_password" name="password" type="password" required>
                 </div>
-                <div class="field">
-                    <label for="register_invite_code">Invite code</label>
-                    <input id="register_invite_code" name="invite_code" value="{{ invite_code or '' }}" required>
-                </div>
             </form>
 
             <div class="actions account-actions">
                 <button class="button-primary" type="submit" form="account-register-form">Create account</button>
-                <a class="button button-secondary" href="/access-request">Request invite code</a>
             </div>
 
             {% if google_registration_enabled %}
                 <div class="account-divider">or</div>
                 <form action="/register/google" method="post" class="google-register-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="field">
-                        <label for="google_invite_code">Invite code for Google registration</label>
-                        <input id="google_invite_code" name="invite_code" value="{{ invite_code or '' }}" required>
-                    </div>
                     <button class="google-auth-button" type="submit">
                         <span class="google-mark" aria-hidden="true">G</span>
                         Register with Google
