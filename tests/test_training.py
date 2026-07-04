@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 import tempfile
@@ -208,6 +209,24 @@ class TrainingTestCase(unittest.TestCase):
                 connection.close()
             return [row[0].split("\x1f") for row in rows]
 
+    def anki_deck_names(self, package_bytes):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            package_path = os.path.join(temp_directory, "export.apkg")
+            with open(package_path, "wb") as output:
+                output.write(package_bytes)
+            with zipfile.ZipFile(package_path) as archive:
+                archive.extract("collection.anki2", temp_directory)
+            collection_path = os.path.join(temp_directory, "collection.anki2")
+            connection = sqlite3.connect(collection_path)
+            try:
+                decks_json = connection.execute("SELECT decks FROM col").fetchone()[0]
+            finally:
+                connection.close()
+            return [
+                deck["name"]
+                for deck in json.loads(decks_json).values()
+            ]
+
     def create_training(self, vocabulary_ids):
         return self.client.post(
             "/training",
@@ -356,6 +375,8 @@ class TrainingTestCase(unittest.TestCase):
         self.assertIn(b'formaction="/training/export-anki"', response.data)
         self.assertIn(b"Create Anki link", response.data)
         self.assertIn(b'formaction="/training/export-anki-link"', response.data)
+        self.assertIn(b'name="anki_deck_name"', response.data)
+        self.assertIn(b"Custom exports are named eE-your name", response.data)
 
     def test_training_selection_shows_anki_export_for_admin(self):
         self.login_user()
@@ -421,7 +442,10 @@ class TrainingTestCase(unittest.TestCase):
         ) as export_vocabulary_entries_to_file:
             response = self.client.post(
                 "/training/export-anki",
-                data={"vocabulary_ids": [str(vocabulary_ids[0]), str(vocabulary_ids[2])]},
+                data={
+                    "vocabulary_ids": [str(vocabulary_ids[0]), str(vocabulary_ids[2])],
+                    "anki_deck_name": "Exam list",
+                },
             )
 
         self.assertEqual(response.status_code, 200)
@@ -433,11 +457,13 @@ class TrainingTestCase(unittest.TestCase):
         )
         exported_entries = export_vocabulary_entries_to_file.call_args.args[0]
         exported_card_type = export_vocabulary_entries_to_file.call_args.args[1]
+        exported_deck_name = export_vocabulary_entries_to_file.call_args.args[2]
         self.assertEqual(
             [entry["id"] for entry in exported_entries],
             [vocabulary_ids[0], vocabulary_ids[2]],
         )
         self.assertEqual(exported_card_type, "description")
+        self.assertEqual(exported_deck_name, "eE-Exam list")
         response.close()
         self.assertFalse(os.path.exists(package_file.name))
 
@@ -464,6 +490,23 @@ class TrainingTestCase(unittest.TestCase):
         self.assertEqual(fields[0][0], self.sample_words()[0])
         self.assertEqual(fields[0][2], self.valid_entry(self.sample_words()[0])["definition"])
         self.assertIn("appears in this sentence", fields[0][6])
+        self.assertIn("Erudite Edge", self.anki_deck_names(response.data))
+
+    def test_admin_anki_export_uses_prefixed_custom_deck_name(self):
+        self.login_user()
+        self.make_user_admin()
+        vocabulary_ids = self.create_sample_vocabs()
+
+        response = self.client.post(
+            "/training/export-anki",
+            json={
+                "vocabulary_ids": vocabulary_ids[:1],
+                "anki_deck_name": "Summer reading",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("eE-Summer reading", self.anki_deck_names(response.data))
 
     def test_admin_anki_export_shuffles_cards(self):
         self.login_user()
@@ -556,6 +599,7 @@ class TrainingTestCase(unittest.TestCase):
             query_string={
                 "vocabulary_ids": [str(vocabulary_ids[0])],
                 "training_type": "cloze",
+                "anki_deck_name": "Chapter 4",
             },
         )
 
@@ -564,6 +608,7 @@ class TrainingTestCase(unittest.TestCase):
         self.assertIn(b"/training/export-anki/", response.data)
         self.assertIn(b".apkg", response.data)
         self.assertIn(b"Cloze cards", response.data)
+        self.assertIn(b"eE-Chapter 4", response.data)
         self.assertIn(b"This signed link expires in 1 hour.", response.data)
 
     def test_anki_export_link_download_does_not_require_login(self):
@@ -572,7 +617,10 @@ class TrainingTestCase(unittest.TestCase):
         vocabulary_ids = self.create_sample_vocabs()
         link_response = self.client.get(
             "/training/export-anki-link",
-            query_string={"vocabulary_ids": [str(vocabulary_ids[0])]},
+            query_string={
+                "vocabulary_ids": [str(vocabulary_ids[0])],
+                "anki_deck_name": "Phone deck",
+            },
         )
         html = link_response.get_data(as_text=True)
         start = html.index('value="') + len('value="')
@@ -587,6 +635,7 @@ class TrainingTestCase(unittest.TestCase):
         with zipfile.ZipFile(BytesIO(response.data)) as archive:
             self.assertIsNone(archive.testzip())
             self.assertIn("collection.anki2", archive.namelist())
+        self.assertIn("eE-Phone deck", self.anki_deck_names(response.data))
 
     def test_anki_export_link_rejects_invalid_token(self):
         response = self.client.get("/training/export-anki/not-a-valid-token.apkg")

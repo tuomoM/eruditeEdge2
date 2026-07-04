@@ -91,6 +91,15 @@ def _anki_card_type_from_request():
     return card_type, None
 
 
+def _anki_deck_name_from_request():
+    if request.method == "GET":
+        return request.args.get("anki_deck_name")
+    if request.is_json:
+        data = request.get_json(silent=True)
+        return data.get("anki_deck_name") if isinstance(data, dict) else None
+    return request.form.get("anki_deck_name")
+
+
 @training_bp.route("/training", methods=["POST"])
 @login_required
 def create_training():
@@ -138,12 +147,13 @@ def export_training_anki():
     card_type, error = _anki_card_type_from_request()
     if error:
         return jsonify({"error": error}), 400
+    deck_name = anki_export_service.clean_deck_name(_anki_deck_name_from_request())
 
     entries, error = training_service.get_selected_vocabulary_entries(vocabulary_ids)
     if error:
         return jsonify({"error": error}), 400
 
-    return _send_anki_entries(entries, card_type)
+    return _send_anki_entries(entries, card_type, deck_name)
 
 
 @training_bp.route("/training/export-anki-link", methods=["GET", "POST"])
@@ -155,6 +165,7 @@ def create_anki_export_link():
     card_type, error = _anki_card_type_from_request()
     if error:
         return jsonify({"error": error}), 400
+    deck_name = anki_export_service.clean_deck_name(_anki_deck_name_from_request())
 
     entries, error = training_service.get_selected_vocabulary_entries(vocabulary_ids)
     if error:
@@ -164,6 +175,7 @@ def create_anki_export_link():
         {
             "vocabulary_ids": [entry["id"] for entry in entries],
             "anki_card_type": card_type,
+            "anki_deck_name": deck_name,
         },
         salt=ANKI_EXPORT_TOKEN_SALT,
     )
@@ -179,6 +191,7 @@ def create_anki_export_link():
         download_url=download_url,
         selected_count=len(entries),
         card_type=card_type,
+        deck_name=deck_name,
     )
 
 
@@ -203,15 +216,17 @@ def download_anki_export_link(token):
     card_type = data.get("anki_card_type", ANKI_CARD_TYPE_DESCRIPTION)
     if card_type not in ANKI_CARD_TYPES:
         return jsonify({"error": "Anki card type is invalid"}), 400
+    deck_name = anki_export_service.clean_deck_name(data.get("anki_deck_name"))
 
-    return _send_anki_entries(entries, card_type)
+    return _send_anki_entries(entries, card_type, deck_name)
 
 
-def _send_anki_entries(entries, card_type):
+def _send_anki_entries(entries, card_type, deck_name):
     try:
         package_path = anki_export_service.export_vocabulary_entries_to_file(
             entries,
             card_type,
+            deck_name,
         )
     except RuntimeError as error:
         return jsonify({"error": str(error)}), 500

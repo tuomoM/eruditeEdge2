@@ -906,6 +906,28 @@ button:hover,
     font-weight: 650;
 }
 
+.anki-deck-name-field {
+    flex: 1 1 230px;
+    min-width: 210px;
+}
+
+.anki-deck-name-field label {
+    margin-bottom: 2px;
+    font-size: 0.85rem;
+}
+
+.anki-deck-name-field input {
+    max-width: none;
+    min-height: 34px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+.anki-deck-name-field .help-text {
+    margin-top: 2px;
+    font-size: 0.78rem;
+}
+
 .question-row {
     margin: 0 0 var(--space-xl);
     padding: var(--space-lg) 0;
@@ -1097,6 +1119,7 @@ button:hover,
     .account-actions .button,
     .account-actions .inline-form,
     .account-section .google-auth-button,
+    .anki-deck-name-field,
     .training-footer button,
     .training-footer .button {
         width: 100%;

@@ -11,6 +11,8 @@ ANKI_CLOZE_MODEL_ID = 2059400112
 ANKI_CARD_TYPE_DESCRIPTION = "description"
 ANKI_CARD_TYPE_CLOZE = "cloze"
 ANKI_CARD_TYPES = {ANKI_CARD_TYPE_DESCRIPTION, ANKI_CARD_TYPE_CLOZE}
+DEFAULT_ANKI_DECK_NAME = "Erudite Edge"
+ANKI_DECK_NAME_PREFIX = "eE-"
 
 
 class AnkiExportService:
@@ -18,7 +20,7 @@ class AnkiExportService:
         self,
         entries,
         card_type=ANKI_CARD_TYPE_DESCRIPTION,
-        deck_name="Erudite Edge Vocabulary",
+        deck_name=DEFAULT_ANKI_DECK_NAME,
     ):
         package_path = self.export_vocabulary_entries_to_file(entries, card_type, deck_name)
         try:
@@ -31,7 +33,7 @@ class AnkiExportService:
         self,
         entries,
         card_type=ANKI_CARD_TYPE_DESCRIPTION,
-        deck_name="Erudite Edge Vocabulary",
+        deck_name=DEFAULT_ANKI_DECK_NAME,
     ):
         try:
             import genanki
@@ -40,7 +42,7 @@ class AnkiExportService:
         if card_type not in ANKI_CARD_TYPES:
             raise RuntimeError("Anki card type is invalid")
 
-        deck = genanki.Deck(ANKI_DECK_ID, deck_name)
+        deck = genanki.Deck(ANKI_DECK_ID, self.clean_deck_name(deck_name))
         model = (
             self._cloze_model(genanki)
             if card_type == ANKI_CARD_TYPE_CLOZE
@@ -60,6 +62,16 @@ class AnkiExportService:
         package_path = self._write_package(genanki.Package(deck))
         self._validate_package_file(package_path)
         return package_path
+
+    def clean_deck_name(self, deck_name):
+        deck_name = " ".join(str(deck_name or "").split())
+        if not deck_name:
+            return DEFAULT_ANKI_DECK_NAME
+        if deck_name == DEFAULT_ANKI_DECK_NAME:
+            return DEFAULT_ANKI_DECK_NAME
+        if deck_name.startswith(ANKI_DECK_NAME_PREFIX):
+            return deck_name
+        return f"{ANKI_DECK_NAME_PREFIX}{deck_name}"
 
     def _description_model(self, genanki):
         return genanki.Model(
