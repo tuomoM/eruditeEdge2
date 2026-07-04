@@ -332,6 +332,16 @@ class VocabularyRepository:
         )
         return [self.get_entry(row["id"]) for row in rows]
 
+    def list_entry_ids(self):
+        rows = db.query(
+            """
+            SELECT id
+            FROM vocabulary_entries
+            ORDER BY id
+            """
+        )
+        return [row["id"] for row in rows]
+
     def count_created_since(self, created_since):
         result = db.query(
             """

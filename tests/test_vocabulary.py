@@ -313,6 +313,109 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(stagger_synonym["synonym"], "totter")
         self.assertEqual(stagger_synonym["linked_vocabulary_id"], totter_id)
 
+    def test_background_job_links_existing_synonym_to_new_word_with_other_links(self):
+        self.login_user()
+        obstinate_data = self.valid_entry()
+        obstinate_data["word"] = "obstinate"
+        obstinate_data["definition"] = "Stubbornly refusing to change."
+        obstinate_data["synonyms"] = []
+        obstinate_data["examples"] = ["The obstinate child refused to move."]
+        obstinate_id = self.create_entry(obstinate_data).get_json()["id"]
+        recalcitrant_data = self.valid_entry()
+        recalcitrant_data["word"] = "recalcitrant"
+        recalcitrant_data["definition"] = "Resistant to authority or control."
+        recalcitrant_data["synonyms"] = ["obstinate"]
+        recalcitrant_data["examples"] = ["The recalcitrant witness ignored the question."]
+        recalcitrant_id = self.create_entry(recalcitrant_data).get_json()["id"]
+        self.app.test_cli_runner().invoke(args=["run-background-jobs", "--limit", "10"])
+        contumacious_data = self.valid_entry()
+        contumacious_data["word"] = "contumacious"
+        contumacious_data["definition"] = "Stubbornly disobedient to authority."
+        contumacious_data["synonyms"] = ["defiant", "recalcitrant"]
+        contumacious_data["examples"] = ["The contumacious defendant refused to answer."]
+        contumacious_id = self.create_entry(contumacious_data).get_json()["id"]
+
+        result = self.app.test_cli_runner().invoke(args=["run-background-jobs", "--limit", "10"])
+
+        self.assertEqual(result.exit_code, 0)
+        with self.app.app_context():
+            recalcitrant_to_obstinate = db.query(
+                """
+                SELECT linked_vocabulary_id
+                FROM vocabulary_synonyms
+                WHERE vocabulary_id = ? AND synonym = ?
+                """,
+                [recalcitrant_id, "obstinate"],
+            )[0]
+            contumacious_to_recalcitrant = db.query(
+                """
+                SELECT linked_vocabulary_id
+                FROM vocabulary_synonyms
+                WHERE vocabulary_id = ? AND synonym = ?
+                """,
+                [contumacious_id, "recalcitrant"],
+            )[0]
+            recalcitrant_to_contumacious = db.query(
+                """
+                SELECT linked_vocabulary_id
+                FROM vocabulary_synonyms
+                WHERE vocabulary_id = ? AND synonym = ?
+                """,
+                [recalcitrant_id, "contumacious"],
+            )[0]
+        self.assertEqual(recalcitrant_to_obstinate["linked_vocabulary_id"], obstinate_id)
+        self.assertEqual(contumacious_to_recalcitrant["linked_vocabulary_id"], recalcitrant_id)
+        self.assertEqual(recalcitrant_to_contumacious["linked_vocabulary_id"], contumacious_id)
+
+    def test_background_job_runner_repairs_stale_synonym_links_without_pending_jobs(self):
+        self.login_user()
+        recalcitrant_data = self.valid_entry()
+        recalcitrant_data["word"] = "recalcitrant"
+        recalcitrant_data["definition"] = "Resistant to authority or control."
+        recalcitrant_data["synonyms"] = []
+        recalcitrant_data["examples"] = ["The recalcitrant witness ignored the question."]
+        recalcitrant_id = self.create_entry(recalcitrant_data).get_json()["id"]
+        contumacious_data = self.valid_entry()
+        contumacious_data["word"] = "contumacious"
+        contumacious_data["definition"] = "Stubbornly disobedient to authority."
+        contumacious_data["synonyms"] = ["recalcitrant"]
+        contumacious_data["examples"] = ["The contumacious defendant refused to answer."]
+        contumacious_id = self.create_entry(contumacious_data).get_json()["id"]
+        with self.app.app_context():
+            db.execute("DELETE FROM background_jobs")
+            db.execute(
+                """
+                UPDATE vocabulary_synonyms
+                SET linked_vocabulary_id = NULL
+                WHERE vocabulary_id = ? AND synonym = ?
+                """,
+                [contumacious_id, "recalcitrant"],
+            )
+
+        result = self.app.test_cli_runner().invoke(args=["run-background-jobs", "--limit", "10"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Synonym repair checked", result.output)
+        with self.app.app_context():
+            contumacious_to_recalcitrant = db.query(
+                """
+                SELECT linked_vocabulary_id
+                FROM vocabulary_synonyms
+                WHERE vocabulary_id = ? AND synonym = ?
+                """,
+                [contumacious_id, "recalcitrant"],
+            )[0]
+            recalcitrant_to_contumacious = db.query(
+                """
+                SELECT linked_vocabulary_id
+                FROM vocabulary_synonyms
+                WHERE vocabulary_id = ? AND synonym = ?
+                """,
+                [recalcitrant_id, "contumacious"],
+            )[0]
+        self.assertEqual(contumacious_to_recalcitrant["linked_vocabulary_id"], recalcitrant_id)
+        self.assertEqual(recalcitrant_to_contumacious["linked_vocabulary_id"], contumacious_id)
+
     def test_vocabulary_detail_links_linked_synonyms(self):
         self.login_user()
         stagger_data = self.valid_entry()

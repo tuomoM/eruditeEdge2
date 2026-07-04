@@ -84,6 +84,14 @@ MIGRATION_MARKERS = {
             "background_jobs_status_type_idx",
         ],
     },
+    "015_vocabulary_sources.sql": {
+        "tables": ["vocabulary_sources", "vocabulary_entry_sources"],
+        "indexes": [
+            "vocabulary_sources_name_author_idx",
+            "vocabulary_entry_sources_vocabulary_id_idx",
+            "vocabulary_entry_sources_source_id_idx",
+        ],
+    },
 }
 
 
@@ -222,6 +230,12 @@ def run_background_jobs(limit):
     click.echo(
         "Processed {processed}, completed {completed}, failed {failed}.".format(
             **summary,
+        )
+    )
+    repair_summary = vocabulary_synonym_link_service.repair_all_vocabulary_synonyms()
+    click.echo(
+        "Synonym repair checked {entries} entries, linked {linked}, ambiguous {ambiguous}.".format(
+            **repair_summary,
         )
     )
 

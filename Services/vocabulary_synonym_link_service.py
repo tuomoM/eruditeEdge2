@@ -58,5 +58,14 @@ class VocabularySynonymLinkService:
 
         return {"linked": linked_count, "ambiguous": ambiguous_count}
 
+    def repair_all_vocabulary_synonyms(self):
+        summary = {"entries": 0, "linked": 0, "ambiguous": 0}
+        for vocabulary_id in self._vocabulary_repository.list_entry_ids():
+            result = self.link_vocabulary_synonyms(vocabulary_id)
+            summary["entries"] += 1
+            summary["linked"] += result["linked"]
+            summary["ambiguous"] += result["ambiguous"]
+        return summary
+
 
 vocabulary_synonym_link_service = VocabularySynonymLinkService()
