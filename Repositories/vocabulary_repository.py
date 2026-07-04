@@ -14,6 +14,7 @@ class VocabularyRepository:
         synonyms,
         examples,
         cloze_sentences,
+        sources,
         needs_attention,
         confidence_score,
         user_id,
@@ -52,6 +53,7 @@ class VocabularyRepository:
         self._save_examples(vocabulary_id, examples)
         self._save_cloze_sentences(vocabulary_id, cloze_sentences)
         self._save_domains(vocabulary_id, domains)
+        self._save_sources(vocabulary_id, sources)
         return vocabulary_id
 
     def update_entry(
@@ -65,6 +67,7 @@ class VocabularyRepository:
         synonyms,
         examples,
         cloze_sentences,
+        sources,
     ):
         try:
             cursor = db.execute(
@@ -94,10 +97,12 @@ class VocabularyRepository:
         db.execute("DELETE FROM vocabulary_examples WHERE vocabulary_id = ?", [vocabulary_id])
         db.execute("DELETE FROM vocabulary_cloze_sentences WHERE vocabulary_id = ?", [vocabulary_id])
         db.execute("DELETE FROM vocabulary_domains WHERE vocabulary_id = ?", [vocabulary_id])
+        db.execute("DELETE FROM vocabulary_entry_sources WHERE vocabulary_id = ?", [vocabulary_id])
         self._save_synonyms(vocabulary_id, synonyms)
         self._save_examples(vocabulary_id, examples)
         self._save_cloze_sentences(vocabulary_id, cloze_sentences)
         self._save_domains(vocabulary_id, domains)
+        self._save_sources(vocabulary_id, sources)
         return True
 
     def update_cloze_data(self, vocabulary_id, part_of_speech, cloze_sentences, domains):
@@ -231,7 +236,40 @@ class VocabularyRepository:
                 [vocabulary_id],
             )
         ]
+        entry["sources"] = [
+            {
+                "id": row["source_id"],
+                "name": row["name"],
+                "author": row["author"],
+                "source_type": row["source_type"],
+                "note": row["note"],
+            }
+            for row in self._entry_source_rows(vocabulary_id)
+        ]
         return entry
+
+    def _entry_source_rows(self, vocabulary_id):
+        try:
+            return db.query(
+                """
+                SELECT
+                    vocabulary_sources.id AS source_id,
+                    vocabulary_sources.name,
+                    vocabulary_sources.author,
+                    vocabulary_sources.source_type,
+                    vocabulary_entry_sources.note
+                FROM vocabulary_entry_sources
+                JOIN vocabulary_sources
+                    ON vocabulary_sources.id = vocabulary_entry_sources.source_id
+                WHERE vocabulary_entry_sources.vocabulary_id = ?
+                ORDER BY vocabulary_entry_sources.source_order
+                """,
+                [vocabulary_id],
+            )
+        except OperationalError as error:
+            if "no such table: vocabulary_entry_sources" not in str(error):
+                raise
+            return []
 
     def _entry_synonym_rows(self, vocabulary_id):
         try:
@@ -458,6 +496,17 @@ class VocabularyRepository:
                 """,
                 [user_id],
             )
+            connection.execute(
+                """
+                DELETE FROM vocabulary_entry_sources
+                WHERE vocabulary_id IN (
+                    SELECT id
+                    FROM vocabulary_entries
+                    WHERE created_by = ?
+                )
+                """,
+                [user_id],
+            )
             cursor = connection.execute(
                 "DELETE FROM vocabulary_entries WHERE created_by = ?",
                 [user_id],
@@ -510,6 +559,47 @@ class VocabularyRepository:
                 """,
                 [vocabulary_id, domain, index],
             )
+
+    def _save_sources(self, vocabulary_id, sources):
+        for index, source in enumerate(sources, start=1):
+            source_id = self._ensure_source(
+                source["name"],
+                source.get("author"),
+                source.get("source_type") or "other",
+            )
+            db.execute(
+                """
+                INSERT INTO vocabulary_entry_sources
+                    (vocabulary_id, source_id, note, source_order)
+                VALUES (?, ?, ?, ?)
+                """,
+                [vocabulary_id, source_id, source.get("note", ""), index],
+            )
+
+    def _ensure_source(self, name, author, source_type):
+        rows = db.query(
+            """
+            SELECT id
+            FROM vocabulary_sources
+            WHERE name = ? COLLATE NOCASE
+                AND COALESCE(author, '') = COALESCE(?, '') COLLATE NOCASE
+                AND source_type = ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            [name, author, source_type],
+        )
+        if rows:
+            return rows[0]["id"]
+
+        cursor = db.execute(
+            """
+            INSERT INTO vocabulary_sources (name, author, source_type)
+            VALUES (?, ?, ?)
+            """,
+            [name, author, source_type],
+        )
+        return cursor.lastrowid
 
 
 vocabulary_repository = VocabularyRepository()

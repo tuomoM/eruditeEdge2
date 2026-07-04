@@ -25,6 +25,15 @@ ALLOWED_PARTS_OF_SPEECH = {
 }
 CLOZE_BLANK = "____"
 MAX_NEEDS_ATTENTION_LENGTH = 200
+MAX_SOURCES = 10
+MAX_SOURCE_FIELD_LENGTH = 200
+ALLOWED_SOURCE_TYPES = {
+    "book",
+    "article",
+    "film",
+    "conversation",
+    "other",
+}
 
 
 class VocabularyService:
@@ -50,6 +59,7 @@ class VocabularyService:
             values["synonyms"],
             values["examples"],
             values["cloze_sentences"],
+            values["sources"],
             values["needs_attention"],
             values["confidence_score"],
             user_id,
@@ -74,6 +84,7 @@ class VocabularyService:
             values["synonyms"],
             values["examples"],
             values["cloze_sentences"],
+            values["sources"],
         )
         if not updated:
             return None, "Vocabulary entry was not found or already exists"
@@ -177,6 +188,7 @@ class VocabularyService:
         synonyms = self._clean_list(data.get("synonyms", []))
         examples = self._clean_list(data.get("examples", []))
         cloze_sentences = self._clean_list(data.get("cloze_sentences", []))
+        sources = self._clean_sources(data.get("sources", []))
         needs_attention = self._clean_optional_text(data.get("needs_attention"))
         confidence_score = self._clean_confidence_score(data.get("confidence_score"))
 
@@ -186,6 +198,16 @@ class VocabularyService:
             + synonyms
             + examples
             + cloze_sentences
+            + [
+                value
+                for source in sources
+                for value in (
+                    source["name"],
+                    source.get("author") or "",
+                    source.get("note") or "",
+                    source.get("source_type") or "",
+                )
+            ]
             + ([needs_attention] if needs_attention else [])
         )
         unsafe_field = self._find_unsafe_field(fields)
@@ -217,6 +239,11 @@ class VocabularyService:
             return None, "Vocabulary entry must have 1-4 example sentences"
         if len(cloze_sentences) > 3:
             return None, "Vocabulary entry must have at most 3 cloze sentences"
+        if len(sources) > MAX_SOURCES:
+            return None, f"Vocabulary entry must have at most {MAX_SOURCES} sources"
+        source_error = self._validate_sources(sources)
+        if source_error:
+            return None, source_error
         cloze_error = self._validate_cloze_sentences(word, cloze_sentences)
         if cloze_error:
             return None, cloze_error
@@ -230,6 +257,7 @@ class VocabularyService:
             "synonyms": synonyms,
             "examples": examples,
             "cloze_sentences": cloze_sentences,
+            "sources": sources,
             "needs_attention": needs_attention,
             "confidence_score": confidence_score,
         }, None
@@ -268,6 +296,63 @@ class VocabularyService:
                 cleaned_values.append(cleaned_value)
                 seen_values.add(cleaned_value.lower())
         return cleaned_values
+
+    def _clean_sources(self, sources):
+        if sources is None:
+            return []
+        if isinstance(sources, str):
+            sources = [sources]
+        if not isinstance(sources, list):
+            return []
+
+        cleaned_sources = []
+        seen_sources = set()
+        for source in sources:
+            if isinstance(source, str):
+                parts = [self._clean_text(part) for part in source.split("|")]
+                name = parts[0] if parts else ""
+                author = parts[1] if len(parts) > 1 else ""
+                note = parts[2] if len(parts) > 2 else ""
+                source_type = "other"
+            elif isinstance(source, dict):
+                name = self._clean_text(source.get("name"))
+                author = self._clean_optional_text(source.get("author"))
+                note = self._clean_text(source.get("note"))
+                source_type = self._clean_text(source.get("source_type")).lower() or "other"
+            else:
+                continue
+
+            if not name:
+                continue
+
+            source_type = source_type if source_type in ALLOWED_SOURCE_TYPES else "other"
+            source_key = (
+                name.lower(),
+                (author or "").lower(),
+                source_type,
+                note.lower(),
+            )
+            if source_key in seen_sources:
+                continue
+            cleaned_sources.append(
+                {
+                    "name": name,
+                    "author": author or None,
+                    "source_type": source_type,
+                    "note": note,
+                }
+            )
+            seen_sources.add(source_key)
+        return cleaned_sources
+
+    def _validate_sources(self, sources):
+        for source in sources:
+            for key in ("name", "author", "note"):
+                if len(source.get(key) or "") > MAX_SOURCE_FIELD_LENGTH:
+                    return "Source fields must be 200 characters or fewer"
+            if source.get("source_type") not in ALLOWED_SOURCE_TYPES:
+                return "Source type is invalid"
+        return None
 
     def _clean_part_of_speech(self, value):
         value = self._clean_text(value).lower().replace(" ", "_")

@@ -197,6 +197,61 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(body["context"], "Scientific/Medical")
         self.assertEqual(body["synonyms"], ["procedure", "process"])
         self.assertEqual(len(body["examples"]), 2)
+        self.assertEqual(body["sources"], [])
+
+    def test_create_vocabulary_saves_sources_without_creator_identity(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["sources"] = [
+            {
+                "name": "The Crossing",
+                "author": "Cormac McCarthy",
+                "note": "chapter 1",
+            },
+            "Blood Meridian | Cormac McCarthy | opening pages",
+        ]
+
+        response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 201)
+        body = response.get_json()
+        self.assertEqual(
+            body["sources"],
+            [
+                {
+                    "id": body["sources"][0]["id"],
+                    "name": "The Crossing",
+                    "author": "Cormac McCarthy",
+                    "source_type": "other",
+                    "note": "chapter 1",
+                },
+                {
+                    "id": body["sources"][1]["id"],
+                    "name": "Blood Meridian",
+                    "author": "Cormac McCarthy",
+                    "source_type": "other",
+                    "note": "opening pages",
+                },
+            ],
+        )
+        self.assertNotIn("created_by", body["sources"][0])
+
+    def test_sources_are_reused_across_entries_without_showing_user_identity(self):
+        self.login_user()
+        first_data = self.valid_entry()
+        first_data["sources"] = ["The Crossing | Cormac McCarthy | chapter 1"]
+        first_source_id = self.create_entry(first_data).get_json()["sources"][0]["id"]
+        second_data = self.valid_entry()
+        second_data["word"] = "gingerly"
+        second_data["definition"] = "In a careful or cautious manner."
+        second_data["examples"] = ["He stepped gingerly over the stones."]
+        second_data["sources"] = ["the crossing | Cormac McCarthy | chapter 2"]
+
+        second_response = self.create_entry(second_data)
+
+        self.assertEqual(second_response.status_code, 201)
+        self.assertEqual(second_response.get_json()["sources"][0]["id"], first_source_id)
+        self.assertNotIn("created_by", second_response.get_json()["sources"][0])
 
     def test_create_vocabulary_queues_synonym_link_job(self):
         self.login_user()
@@ -282,6 +337,24 @@ class VocabularyTestCase(unittest.TestCase):
             response.data,
         )
 
+    def test_vocabulary_detail_shows_sources_without_user_identity(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["word"] = "gingerly"
+        data["definition"] = "In a careful or cautious manner."
+        data["examples"] = ["He stepped gingerly over the stones."]
+        data["sources"] = ["The Crossing | Cormac McCarthy | chapter 1"]
+        vocabulary_id = self.create_entry(data).get_json()["id"]
+
+        response = self.client.get(f"/vocabulary/{vocabulary_id}/page")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Sources", response.data)
+        self.assertIn(b"The Crossing", response.data)
+        self.assertIn(b"Cormac McCarthy", response.data)
+        self.assertIn(b"chapter 1", response.data)
+        self.assertNotIn(b"tuomo", response.data)
+
     def test_create_vocabulary_persists_up_to_four_domains_in_order(self):
         self.login_user()
         data = self.valid_entry()
@@ -294,6 +367,28 @@ class VocabularyTestCase(unittest.TestCase):
             response.get_json()["domains"],
             ["cognition", "communication", "society", "power"],
         )
+
+    def test_new_vocabulary_form_saves_sources(self):
+        self.login_user()
+
+        response = self.client.post(
+            "/vocabulary/new",
+            data={
+                "word": "gingerly",
+                "definition": "In a careful or cautious manner.",
+                "context": "Literary",
+                "part_of_speech": "adverb",
+                "synonyms": "carefully",
+                "examples": "He stepped gingerly over the stones.",
+                "sources": "The Crossing | Cormac McCarthy | chapter 1",
+            },
+            follow_redirects=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"The Crossing", response.data)
+        self.assertIn(b"Cormac McCarthy", response.data)
+        self.assertIn(b"chapter 1", response.data)
 
     def test_new_vocabulary_form_preserves_ordered_domain_field(self):
         self.login_user()

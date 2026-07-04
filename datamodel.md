@@ -15,7 +15,8 @@ users
   |      |--< vocabulary_synonyms
   |      |--< vocabulary_examples
   |      |--< vocabulary_cloze_sentences
-  |      `--< vocabulary_domains
+  |      |--< vocabulary_domains
+  |      `--< vocabulary_entry_sources >-- vocabulary_sources
   |
   |--< training_sessions
   |      |--< training_items >-- vocabulary_entries
@@ -47,6 +48,9 @@ Vocabulary entries use three separate classification concepts:
   review. It is assessment metadata, not a domain.
 - `confidence_score`: AI confidence from 0 to 100 for the generated entry.
   Manual edits preserve the score but mark it obsolete.
+- `sources`: Optional places where the user noticed the word, such as a book,
+  article, film, or conversation. Sources are not required for vocabulary
+  creation and may be omitted entirely.
 
 These fields must remain independent. For example, a word may have context
 `Academic`, part of speech `noun`, and domains `cognition` and `communication`.
@@ -70,7 +74,8 @@ Stores local accounts and optional Google identity information.
 ### `vocabulary_entries`
 
 Stores the core record for one vocabulary meaning. Vocabulary is global, while
-`created_by` records its original creator.
+`created_by` records its original creator for ownership and administrative
+logic. Public list/detail views must not display creator identity.
 
 | Column | Type | Rules |
 | --- | --- | --- |
@@ -177,6 +182,43 @@ The allowed domains are:
 The shared application catalog is defined in
 `Services/vocabulary_domains.py`. Keep it synchronized with the database
 constraints in `schema.sql` and the relevant migration.
+
+### `vocabulary_sources`
+
+Stores reusable source records, such as a book, article, film, or conversation
+where vocabulary was encountered. Source records are shared by content and do
+not store creator identity.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | INTEGER | Primary key, autoincrement |
+| `name` | TEXT | Required source title or name |
+| `author` | TEXT | Optional author, creator, speaker, or publication |
+| `source_type` | TEXT | Required; defaults to `other` |
+| `created_at` | TIMESTAMP | Defaults to current timestamp |
+
+The application reuses an existing source when `name`, `author`, and
+`source_type` match case-insensitively. The current allowed source types are
+`book`, `article`, `film`, `conversation`, and `other`.
+
+### `vocabulary_entry_sources`
+
+Stores the optional many-to-many relationship between vocabulary entries and
+sources. A vocabulary entry may have zero sources, one source, or many sources.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | INTEGER | Primary key, autoincrement |
+| `vocabulary_id` | INTEGER | Required reference to `vocabulary_entries.id`; cascades on delete |
+| `source_id` | INTEGER | Required reference to `vocabulary_sources.id`; cascades on delete |
+| `note` | TEXT | Optional location or note; defaults to empty text |
+| `source_order` | INTEGER | Required display order |
+| `created_at` | TIMESTAMP | Defaults to current timestamp |
+
+Each source order position may appear only once per vocabulary entry. Source
+attachments are entered manually; AI generation does not invent sources.
+Neither `vocabulary_sources` nor `vocabulary_entry_sources` stores the user who
+added the source, preserving the application’s identity-minimization rule.
 
 ### `training_sessions`
 
@@ -304,7 +346,10 @@ It records which files in `migrations/` have been applied or stamped.
 ## Deletion Rules
 
 - Deleting a vocabulary entry cascades to synonyms, examples, cloze sentences,
-  and domains.
+  domains, and source attachments.
+- Deleting a source cascades to vocabulary-source attachments. Source rows are
+  reusable shared records and are not automatically deleted merely because one
+  attachment is removed.
 - Training records reference vocabulary entries without cascading. The
   application removes affected training sessions before deleting all
   vocabulary created by a user.

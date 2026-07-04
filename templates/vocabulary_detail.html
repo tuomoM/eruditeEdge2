@@ -35,6 +35,21 @@
     </section>
 {% endif %}
 
+{% if entry.sources %}
+    <section class="detail-section">
+        <h2>Sources</h2>
+        <ul>
+            {% for source in entry.sources %}
+                <li>
+                    <strong>{{ source.name }}</strong>
+                    {% if source.author %}, {{ source.author }}{% endif %}
+                    {% if source.note %} - {{ source.note }}{% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    </section>
+{% endif %}
+
 <section class="detail-section">
     <h2>Examples</h2>
     <ol>

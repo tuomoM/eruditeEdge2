@@ -112,6 +112,7 @@ def form_to_entry_data(form):
     synonyms = [item.strip() for item in form.get("synonyms", "").split(",")]
     examples = form.get("examples", "").splitlines()
     cloze_sentences = form.get("cloze_sentences", "").splitlines()
+    sources = form.get("sources", "").splitlines()
     selected_domains = form.getlist("domains")
     ordered_domain_candidates = [
         item.strip()
@@ -137,9 +138,22 @@ def form_to_entry_data(form):
         "synonyms": synonyms,
         "examples": examples,
         "cloze_sentences": cloze_sentences,
+        "sources": sources,
         "needs_attention": form.get("needs_attention"),
         "confidence_score": form.get("confidence_score"),
     }
+
+
+def sources_to_text(sources):
+    lines = []
+    for source in sources or []:
+        parts = [source.get("name", "")]
+        if source.get("author") or source.get("note"):
+            parts.append(source.get("author") or "")
+        if source.get("note"):
+            parts.append(source.get("note"))
+        lines.append(" | ".join(parts))
+    return "\n".join(lines)
 
 
 @vocabulary_bp.route("/vocabulary", methods=["GET"])
@@ -183,6 +197,7 @@ def new_vocabulary():
             entry=form_to_entry_data(request.form),
             examples_text=request.form.get("examples", ""),
             cloze_sentences_text=request.form.get("cloze_sentences", ""),
+            sources_text=request.form.get("sources", ""),
             available_domains=VOCABULARY_DOMAINS,
             max_domains=MAX_VOCABULARY_DOMAINS,
         ), 400
@@ -233,6 +248,7 @@ def generate_vocabulary():
     if error:
         ai_quota_service.refund_generation(user)
         return jsonify({"error": error}), 400
+    values.pop("sources", None)
     return jsonify(values)
 
 
@@ -329,6 +345,7 @@ def edit_vocabulary(vocabulary_id):
             entry=entry,
             examples_text="\n".join(entry["examples"]),
             cloze_sentences_text="\n".join(entry["cloze_sentences"]),
+            sources_text=sources_to_text(entry.get("sources", [])),
             available_domains=VOCABULARY_DOMAINS,
             max_domains=MAX_VOCABULARY_DOMAINS,
         )
@@ -346,6 +363,7 @@ def edit_vocabulary(vocabulary_id):
             entry=form_entry,
             examples_text=request.form.get("examples", ""),
             cloze_sentences_text=request.form.get("cloze_sentences", ""),
+            sources_text=request.form.get("sources", ""),
             available_domains=VOCABULARY_DOMAINS,
             max_domains=MAX_VOCABULARY_DOMAINS,
         ), 400

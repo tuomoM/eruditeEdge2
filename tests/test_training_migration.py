@@ -101,6 +101,8 @@ class TrainingMigrationTestCase(unittest.TestCase):
                 "migrations/011_vocabulary_domains.sql",
                 "migrations/012_expand_vocabulary_domains.sql",
                 "migrations/013_vocabulary_ai_assessment.sql",
+                "migrations/014_vocabulary_synonym_links_and_jobs.sql",
+                "migrations/015_vocabulary_sources.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())
@@ -249,6 +251,8 @@ class TrainingMigrationLegacySessionTestCase(unittest.TestCase):
                 "migrations/011_vocabulary_domains.sql",
                 "migrations/012_expand_vocabulary_domains.sql",
                 "migrations/013_vocabulary_ai_assessment.sql",
+                "migrations/014_vocabulary_synonym_links_and_jobs.sql",
+                "migrations/015_vocabulary_sources.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())

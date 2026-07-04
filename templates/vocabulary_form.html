@@ -112,6 +112,12 @@
         <div class="help-text">0-3 sentences. Use exactly one ____ blank in each sentence.</div>
     </div>
 
+    <div class="field field-wide">
+        <label for="sources">Sources, one per line</label><br>
+        <textarea id="sources" name="sources">{{ sources_text if sources_text is defined else '' }}</textarea>
+        <div class="help-text">Optional. Use Title | Author | Location or note.</div>
+    </div>
+
     <div class="actions">
         <button class="button-primary" type="submit">Save</button>
         <a class="button button-secondary" href="/vocabulary">Cancel</a>
