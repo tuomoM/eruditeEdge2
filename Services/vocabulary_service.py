@@ -34,6 +34,15 @@ ALLOWED_SOURCE_TYPES = {
     "conversation",
     "other",
 }
+ALLOWED_FREQUENCY_BANDS = {
+    "common",
+    "uncommon",
+    "rare",
+    "very_rare",
+    "archaic_or_obsolete",
+    "specialized",
+}
+MAX_FREQUENCY_NOTE_LENGTH = 300
 
 
 class VocabularyService:
@@ -53,8 +62,11 @@ class VocabularyService:
         vocabulary_id = self._vocabulary_repository.create_entry(
             values["word"],
             values["definition"],
+            values["definition_key"],
             values["context"],
             values["part_of_speech"],
+            values["frequency_band"],
+            values["frequency_note"],
             values["domains"],
             values["synonyms"],
             values["examples"],
@@ -65,7 +77,7 @@ class VocabularyService:
             user_id,
         )
         if vocabulary_id is None:
-            return None, "Vocabulary entry already exists for this word and context"
+            return None, "Vocabulary entry already exists for this word sense"
         self._background_job_service.enqueue_vocabulary_synonym_linking(vocabulary_id)
         return self._vocabulary_repository.get_entry(vocabulary_id), None
 
@@ -78,8 +90,11 @@ class VocabularyService:
             vocabulary_id,
             values["word"],
             values["definition"],
+            values["definition_key"],
             values["context"],
             values["part_of_speech"],
+            values["frequency_band"],
+            values["frequency_note"],
             values["domains"],
             values["synonyms"],
             values["examples"],
@@ -87,7 +102,7 @@ class VocabularyService:
             values["sources"],
         )
         if not updated:
-            return None, "Vocabulary entry was not found or already exists"
+            return None, "Vocabulary entry was not found or word sense already exists"
         self._background_job_service.enqueue_vocabulary_synonym_linking(vocabulary_id)
         return self._vocabulary_repository.get_entry(vocabulary_id), None
 
@@ -184,6 +199,8 @@ class VocabularyService:
         definition = self._clean_text(data.get("definition"))
         context = self._clean_text(data.get("context"))
         part_of_speech = self._clean_part_of_speech(data.get("part_of_speech"))
+        frequency_band = self._clean_frequency_band(data.get("frequency_band"))
+        frequency_note = self._clean_optional_text(data.get("frequency_note"))
         domains = self._clean_list(data.get("domains", []))
         synonyms = self._clean_list(data.get("synonyms", []))
         examples = self._clean_list(data.get("examples", []))
@@ -193,7 +210,14 @@ class VocabularyService:
         confidence_score = self._clean_confidence_score(data.get("confidence_score"))
 
         fields = (
-            [word, definition, context, part_of_speech]
+            [
+                word,
+                definition,
+                context,
+                part_of_speech,
+                frequency_band or "",
+                frequency_note or "",
+            ]
             + domains
             + synonyms
             + examples
@@ -220,6 +244,12 @@ class VocabularyService:
             return None, "Definition is required"
         if part_of_speech not in ALLOWED_PARTS_OF_SPEECH:
             return None, "Part of speech is invalid"
+        if frequency_band and frequency_band not in ALLOWED_FREQUENCY_BANDS:
+            return None, "Frequency band is invalid"
+        if len(frequency_note or "") > MAX_FREQUENCY_NOTE_LENGTH:
+            return None, (
+                f"Frequency note must be {MAX_FREQUENCY_NOTE_LENGTH} characters or fewer"
+            )
         if len(domains) > MAX_VOCABULARY_DOMAINS:
             return None, f"Vocabulary entry must have at most {MAX_VOCABULARY_DOMAINS} domains"
         if any(domain not in VOCABULARY_DOMAINS for domain in domains):
@@ -251,8 +281,11 @@ class VocabularyService:
         return {
             "word": word,
             "definition": definition,
+            "definition_key": self._definition_key(definition),
             "context": context,
             "part_of_speech": part_of_speech,
+            "frequency_band": frequency_band,
+            "frequency_note": frequency_note,
             "domains": domains,
             "synonyms": synonyms,
             "examples": examples,
@@ -270,6 +303,13 @@ class VocabularyService:
     def _clean_optional_text(self, value):
         value = self._clean_text(value)
         return value or None
+
+    def _clean_frequency_band(self, value):
+        value = self._clean_text(value).lower().replace("-", "_").replace(" ", "_")
+        return value or None
+
+    def _definition_key(self, definition):
+        return re.sub(r"[^a-z0-9]+", " ", definition.lower()).strip()
 
     def _clean_confidence_score(self, value):
         if value is None or value == "":

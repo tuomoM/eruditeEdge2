@@ -38,9 +38,13 @@ schema_migrations
 Vocabulary entries use three separate classification concepts:
 
 - `context`: Usage setting or register, such as Academic, Medical, Formal, or
-  General. It does not describe the semantic meaning of the word.
+  General. It does not describe the semantic meaning of the word. AI should use
+  `General` only for genuinely ordinary everyday usage.
 - `part_of_speech`: Grammatical classification used by cloze training:
   `noun`, `verb`, `adjective`, `adverb`, `phrase`, or `other`.
+- `frequency_band`: How common this exact word sense is: `common`,
+  `uncommon`, `rare`, `very_rare`, `archaic_or_obsolete`, or `specialized`.
+- `frequency_note`: Optional short explanation of the frequency or register.
 - `domains`: Semantic areas represented by the word's meaning, such as
   cognition, communication, power, or rhetoric. An entry may have zero to four
   domains.
@@ -53,7 +57,8 @@ Vocabulary entries use three separate classification concepts:
   creation and may be omitted entirely.
 
 These fields must remain independent. For example, a word may have context
-`Academic`, part of speech `noun`, and domains `cognition` and `communication`.
+`Academic`, part of speech `noun`, frequency `uncommon`, and domains
+`cognition` and `communication`.
 
 ## Tables
 
@@ -82,8 +87,11 @@ logic. Public list/detail views must not display creator identity.
 | `id` | INTEGER | Primary key, autoincrement |
 | `word` | TEXT | Required |
 | `definition` | TEXT | Required |
+| `definition_key` | TEXT | Required normalized definition used for sense uniqueness; internal only |
 | `context` | TEXT | Optional usage setting or register |
 | `part_of_speech` | TEXT | Required; controlled grammatical value; defaults to `other` |
+| `frequency_band` | TEXT | Optional controlled frequency value |
+| `frequency_note` | TEXT | Optional frequency or register explanation |
 | `needs_attention` | TEXT | Optional AI review explanation; maximum 200 characters |
 | `confidence_score` | INTEGER | Optional AI confidence score; 0 through 100 |
 | `confidence_obsolete` | INTEGER | Required boolean value; defaults to 0 |
@@ -91,11 +99,18 @@ logic. Public list/detail views must not display creator identity.
 | `created_at` | TIMESTAMP | Defaults to current timestamp |
 | `updated_at` | TIMESTAMP | Defaults to current timestamp; updated by application writes |
 
-The combination of `word` and `context` is unique.
+The application supports multiple entries with the same spelling when they are
+different senses, such as noun and verb meanings of the same word. Duplicate
+senses are prevented by a unique index on `lower(word)`, `part_of_speech`, and
+`definition_key`.
 
+AI generation may receive an optional usage clue, such as a sentence with the
+target word marked in parentheses or a short hint like `a`, `noun`, or
+`riding`. The generated entry should describe the sense implied by that clue.
 AI generation returns one primary domain first, plus optional secondary and
 tertiary domains only when they are clearly represented by the meaning. It must
-not pad weakly related domains just to fill the list. A manual vocabulary or
+not pad weakly related domains just to fill the list. It also returns a
+frequency band and optional note for the exact sense. A manual vocabulary or
 maintenance edit sets `confidence_obsolete` to 1 when a confidence score exists.
 An AI maintenance refresh replaces the assessment and resets
 `confidence_obsolete` to 0.

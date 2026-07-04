@@ -92,6 +92,16 @@ MIGRATION_MARKERS = {
             "vocabulary_entry_sources_source_id_idx",
         ],
     },
+    "016_vocabulary_senses_and_frequency.sql": {
+        "columns": {
+            "vocabulary_entries": [
+                "definition_key",
+                "frequency_band",
+                "frequency_note",
+            ],
+        },
+        "indexes": ["vocabulary_entries_sense_unique_idx"],
+    },
 }
 
 

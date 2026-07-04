@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 from unittest.mock import patch
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import db
 from app import create_app
@@ -148,9 +148,9 @@ class AdminTestCase(unittest.TestCase):
                 """
                 INSERT INTO ai_generation_usage
                     (user_id, generation_date, generation_count)
-                VALUES (?, DATE('now'), ?)
+                VALUES (?, ?, ?)
                 """,
-                [user_id, generation_count],
+                [user_id, date.today().isoformat(), generation_count],
             )
 
     def ai_generation_count(self, user_id):
@@ -159,9 +159,9 @@ class AdminTestCase(unittest.TestCase):
                 """
                 SELECT generation_count
                 FROM ai_generation_usage
-                WHERE user_id = ? AND generation_date = DATE('now')
+                WHERE user_id = ? AND generation_date = ?
                 """,
-                [user_id],
+                [user_id, date.today().isoformat()],
             )
         if not rows:
             return 0

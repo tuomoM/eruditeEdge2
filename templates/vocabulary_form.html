@@ -29,6 +29,11 @@
     </div>
 
     {% if not is_edit %}
+        <div class="field field-wide">
+            <label for="usage_clue">Usage clue</label><br>
+            <textarea id="usage_clue" name="usage_clue" placeholder="He loosened the horse's (hobble)."></textarea>
+            <div class="help-text">Optional. Mark the target word with parentheses, or add a short hint such as a, noun, riding.</div>
+        </div>
         <div class="ai-panel">
             <div class="ai-actions">
                 <button class="ai-generate-button" type="button" id="generate-button">
@@ -90,6 +95,30 @@
                     <option value="{{ value }}" {% if selected_part_of_speech == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
+        </div>
+    </div>
+
+    <div class="form-grid">
+        <div class="field">
+            <label for="frequency_band">Frequency</label><br>
+            {% set selected_frequency_band = entry.frequency_band if entry and entry.frequency_band else '' %}
+            <select id="frequency_band" name="frequency_band">
+                <option value="" {% if not selected_frequency_band %}selected{% endif %}></option>
+                {% for value, label in [
+                    ('common', 'Common'),
+                    ('uncommon', 'Uncommon'),
+                    ('rare', 'Rare'),
+                    ('very_rare', 'Very rare'),
+                    ('archaic_or_obsolete', 'Archaic or obsolete'),
+                    ('specialized', 'Specialized')
+                ] %}
+                    <option value="{{ value }}" {% if selected_frequency_band == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="frequency_note">Frequency note</label><br>
+            <input id="frequency_note" name="frequency_note" value="{{ entry.frequency_note if entry and entry.frequency_note else '' }}">
         </div>
     </div>
 
@@ -160,6 +189,7 @@ document.getElementById("generate-button").addEventListener("click", async () =>
     const generateButton = document.getElementById("generate-button");
     const status = document.getElementById("generate-status");
     const word = document.getElementById("word").value;
+    const usageClue = document.getElementById("usage_clue").value;
     const csrfToken = "{{ csrf_token() }}";
     status.textContent = "Generating...";
     generateButton.disabled = true;
@@ -174,7 +204,7 @@ document.getElementById("generate-button").addEventListener("click", async () =>
                 "Content-Type": "application/json",
                 "X-CSRF-Token": csrfToken
             },
-            body: JSON.stringify({word})
+            body: JSON.stringify({word, usage_clue: usageClue})
         });
         data = await readJson(response);
         if (!response.ok) {
@@ -194,6 +224,8 @@ document.getElementById("generate-button").addEventListener("click", async () =>
         document.getElementById("definition").value = data.definition || "";
         document.getElementById("context").value = data.context || "";
         document.getElementById("part_of_speech").value = data.part_of_speech || "other";
+        document.getElementById("frequency_band").value = data.frequency_band || "";
+        document.getElementById("frequency_note").value = data.frequency_note || "";
         const generatedDomains = new Set(data.domains || []);
         document.querySelectorAll('input[name="domains"]').forEach((checkbox) => {
             checkbox.checked = generatedDomains.has(checkbox.value);

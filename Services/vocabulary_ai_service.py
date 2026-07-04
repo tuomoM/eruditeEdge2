@@ -14,13 +14,25 @@ VOCABULARY_ENTRY_MAX_OUTPUT_TOKENS = 900
 CLOZE_DATA_MAX_OUTPUT_TOKENS = 500
 USAGE_VALIDATION_MAX_OUTPUT_TOKENS = 160
 MAX_AI_VOCABULARY_DOMAINS = 3
+MAX_USAGE_CLUE_LENGTH = 500
+FREQUENCY_BANDS = [
+    "common",
+    "uncommon",
+    "rare",
+    "very_rare",
+    "archaic_or_obsolete",
+    "specialized",
+]
 ALLOWED_CONTEXT_LABELS = {
     "Academic",
+    "Archaic",
     "Business",
     "Business English",
     "Casual",
+    "Colloquial",
     "Education",
     "Emotional",
+    "Equestrian",
     "Everyday",
     "Finance",
     "Formal",
@@ -31,9 +43,13 @@ ALLOWED_CONTEXT_LABELS = {
     "Literary",
     "Medical",
     "Philosophy",
+    "Poetic",
     "Political",
     "Professional",
+    "Ranching",
+    "Regional",
     "Religious",
+    "Rural",
     "Scientific",
     "Social",
     "Technical",
@@ -59,6 +75,23 @@ VOCABULARY_SCHEMA = {
         "part_of_speech": {
             "type": "string",
             "enum": ["noun", "verb", "adjective", "adverb", "phrase", "other"],
+        },
+        "frequency_band": {
+            "type": "string",
+            "enum": FREQUENCY_BANDS,
+            "description": (
+                "How commonly this exact word sense is used in modern English. "
+                "Use specialized for domain-specific senses, very_rare for highly "
+                "unusual but current words, and archaic_or_obsolete for historical "
+                "or obsolete senses."
+            ),
+        },
+        "frequency_note": {
+            "type": "string",
+            "description": (
+                "One short note explaining frequency or register. Empty only when "
+                "frequency_band is common and no note is useful."
+            ),
         },
         "domains": {
             "type": "array",
@@ -98,6 +131,8 @@ VOCABULARY_SCHEMA = {
         "definition",
         "context",
         "part_of_speech",
+        "frequency_band",
+        "frequency_note",
         "domains",
         "synonyms",
         "examples",
@@ -162,10 +197,14 @@ class VocabularyAiService:
     def __init__(self, client=None):
         self._client = client
 
-    def generate_entry(self, word, api_key, model):
+    def generate_entry(self, word, api_key, model, usage_clue=None):
         word, error = self._validate_word(word)
         if error:
             logger.info("Vocabulary AI generation rejected input: %s", error)
+            return None, error
+        usage_clue, error = self._validate_usage_clue(usage_clue, word)
+        if error:
+            logger.info("Vocabulary AI generation rejected usage clue: %s", error)
             return None, error
         if not api_key:
             logger.warning("Vocabulary AI generation failed: missing OpenAI API key")
@@ -182,10 +221,19 @@ class VocabularyAiService:
                 instructions=(
                     "Create vocabulary entry data for the provided single word. "
                     "Return only factual dictionary-style data. Do not include HTML. "
+                    "If a usage clue is provided, generate the entry for the word "
+                    "sense implied by that clue, not the most common sense. Parentheses "
+                    "around the word mark the exact occurrence the learner encountered. "
+                    "Short hints such as 'a', 'to', 'noun', 'verb', or a subject area "
+                    "are valid clues and should influence part of speech and sense. "
                     "The context field must describe the usage setting, category, or "
                     "register, not the word's semantic meaning and not a sentence. "
                     "Examples: Formal, Casual, Medical, Philosophy, Academic, Business "
-                    "English, Business/Formal. Keep context separate from domains. "
+                    "English, Business/Formal, Literary, Historical, Technical. "
+                    "Use General only for words that are genuinely ordinary across "
+                    "everyday usage; prefer a more specific register or setting when "
+                    "the word is literary, formal, specialized, archaic, technical, "
+                    "or source-specific. Keep context separate from domains. "
                     "Domains describe semantic meaning, such as movement, cognition, "
                     "power, or rhetoric. Provide 2-4 example "
                     "sentences that use the word naturally. Identify the primary part "
@@ -195,7 +243,9 @@ class VocabularyAiService:
                     "Do not pad the domain list with weak or merely associated labels. "
                     "For physical motion words, prefer movement as the primary domain "
                     "over perception unless the meaning is actually about seeing or "
-                    "sensing. Provide 2-3 cloze training "
+                    "sensing. Classify how common this exact sense is using one "
+                    f"frequency band: {', '.join(FREQUENCY_BANDS)}. Provide a short "
+                    "frequency note when the sense is not common. Provide 2-3 cloze training "
                     "sentences. Each cloze "
                     "sentence must use exactly one ____ blank where the target word "
                     "belongs, must not include the target word elsewhere, and must be "
@@ -206,7 +256,7 @@ class VocabularyAiService:
                     "needs_attention; otherwise return an empty string. Always return "
                     "at least the primary domain even when needs_attention is not empty."
                 ),
-                input=f"Word: {word}",
+                input=self._generation_input(word, usage_clue),
                 text={
                     "format": {
                         "type": "json_schema",
@@ -239,6 +289,12 @@ class VocabularyAiService:
 
         entry["word"] = word
         entry["context"] = self._normalize_context(entry.get("context"))
+        entry["frequency_band"] = self._normalize_frequency_band(
+            entry.get("frequency_band")
+        )
+        entry["frequency_note"] = self._normalize_frequency_note(
+            entry.get("frequency_note")
+        )
         entry["domains"] = self._normalize_domains(entry.get("domains"))
         entry["examples"] = self._normalize_examples(entry.get("examples"))
         entry["cloze_sentences"] = self._normalize_cloze_sentences(
@@ -250,6 +306,9 @@ class VocabularyAiService:
             return None, "OpenAI returned invalid vocabulary data"
         if len(entry["domains"]) < 1:
             logger.warning("Vocabulary AI generation failed: no valid domains returned")
+            return None, "OpenAI returned invalid vocabulary data"
+        if not entry["frequency_band"]:
+            logger.warning("Vocabulary AI generation failed: invalid frequency band")
             return None, "OpenAI returned invalid vocabulary data"
         if assessment_error:
             logger.warning("Vocabulary AI generation failed: invalid AI assessment")
@@ -427,6 +486,30 @@ class VocabularyAiService:
             return None, "Please provide one word only"
         return word, None
 
+    def _validate_usage_clue(self, usage_clue, word):
+        usage_clue = (usage_clue or "").strip()
+        if not usage_clue:
+            return "", None
+        if len(usage_clue) > MAX_USAGE_CLUE_LENGTH:
+            return None, f"Usage clue must be {MAX_USAGE_CLUE_LENGTH} characters or fewer"
+        if re.search(r"<[^>]+>", usage_clue):
+            return None, "HTML tags are not allowed"
+
+        marked_words = re.findall(r"\(([^()]+)\)", usage_clue)
+        if marked_words:
+            normalized_word = word.lower()
+            for marked_word in marked_words:
+                candidate = marked_word.strip().strip(".,;:!?\"'").lower()
+                if candidate != normalized_word:
+                    return None, "Usage clue parentheses must mark the target word"
+        return usage_clue, None
+
+    def _generation_input(self, word, usage_clue):
+        lines = [f"Word: {word}"]
+        if usage_clue:
+            lines.append(f"Usage clue: {usage_clue}")
+        return "\n".join(lines)
+
     def _normalize_context(self, context):
         context = (context or "").strip()
         labels = [
@@ -441,6 +524,21 @@ class VocabularyAiService:
             return "/".join(labels)
         logger.info("Vocabulary AI generation replaced sentence-like context with General")
         return "General"
+
+    def _normalize_frequency_band(self, frequency_band):
+        frequency_band = (
+            str(frequency_band or "")
+            .strip()
+            .lower()
+            .replace("-", "_")
+            .replace(" ", "_")
+        )
+        if frequency_band in FREQUENCY_BANDS:
+            return frequency_band
+        return None
+
+    def _normalize_frequency_note(self, frequency_note):
+        return str(frequency_note or "").strip()[:300]
 
     def _normalize_examples(self, examples):
         if not isinstance(examples, list):

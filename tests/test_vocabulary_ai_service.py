@@ -51,6 +51,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "A planned activity or procedure.",
                 "context": "Scientific/Medical",
                 "part_of_speech": "noun",
+                "frequency_band": "common",
+                "frequency_note": "",
                 "domains": ["communication", "body", "cognition"],
                 "synonyms": ["procedure", "process"],
                 "examples": [
@@ -99,6 +101,13 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIn("Put the primary domain first", client.responses.last_request["instructions"])
         self.assertIn("Do not pad the domain list", client.responses.last_request["instructions"])
         self.assertIn("prefer movement as the primary domain", client.responses.last_request["instructions"])
+        self.assertIn("Use General only for words", client.responses.last_request["instructions"])
+        self.assertIn("frequency band", client.responses.last_request["instructions"])
+        frequency_schema = (
+            client.responses.last_request["text"]["format"]["schema"]["properties"]["frequency_band"]
+        )
+        self.assertIn("common", frequency_schema["enum"])
+        self.assertIn("specialized", frequency_schema["enum"])
         domains_schema = (
             client.responses.last_request["text"]["format"]["schema"]["properties"]["domains"]
         )
@@ -112,8 +121,42 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIn("truth", domains_schema["items"]["enum"])
         self.assertIn("independent of usage settings", domains_schema["description"])
         self.assertEqual(entry["domains"], ["communication", "body", "cognition"])
+        self.assertEqual(entry["frequency_band"], "common")
+        self.assertEqual(entry["frequency_note"], "")
         self.assertIsNone(entry["needs_attention"])
-        self.assertEqual(entry["confidence_score"], 92)
+
+    def test_generate_entry_includes_usage_clue_in_prompt(self):
+        client = FakeClient(self.valid_output())
+        service = VocabularyAiService(client=client)
+
+        entry, error = service.generate_entry(
+            "hobble",
+            "test-key",
+            "test-model",
+            "He loosened the horse's (hobble).",
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(entry["word"], "hobble")
+        self.assertEqual(
+            client.responses.last_request["input"],
+            "Word: hobble\nUsage clue: He loosened the horse's (hobble).",
+        )
+        self.assertIn("sense implied by that clue", client.responses.last_request["instructions"])
+
+    def test_generate_entry_rejects_usage_clue_marking_other_word(self):
+        client = FakeClient(self.valid_output())
+        service = VocabularyAiService(client=client)
+
+        entry, error = service.generate_entry(
+            "hobble",
+            "test-key",
+            "test-model",
+            "He loosened the horse's (bridle).",
+        )
+
+        self.assertIsNone(entry)
+        self.assertEqual(error, "Usage clue parentheses must mark the target word")
 
     def test_generate_entry_accepts_single_primary_domain(self):
         output = json.dumps(
@@ -122,6 +165,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To move in a feeble, unsteady, or shaky way.",
                 "context": "General",
                 "part_of_speech": "verb",
+                "frequency_band": "common",
+                "frequency_note": "",
                 "domains": ["movement"],
                 "synonyms": ["stagger", "wobble"],
                 "examples": [
@@ -150,6 +195,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "The excessive regulations served to stultify innovation.",
                 "part_of_speech": "verb",
+                "frequency_band": "uncommon",
+                "frequency_note": "Used less often in everyday speech.",
                 "domains": ["change", "power", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
@@ -178,6 +225,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "Business / Formal",
                 "part_of_speech": "verb",
+                "frequency_band": "uncommon",
+                "frequency_note": "Used less often in everyday speech.",
                 "domains": ["power", "change", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
@@ -206,6 +255,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "Business English",
                 "part_of_speech": "verb",
+                "frequency_band": "uncommon",
+                "frequency_note": "Used less often in everyday speech.",
                 "domains": ["power", "change", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
@@ -234,6 +285,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "definition": "To make ineffective.",
                 "context": "The regulations",
                 "part_of_speech": "verb",
+                "frequency_band": "uncommon",
+                "frequency_note": "Used less often in everyday speech.",
                 "domains": ["power", "change", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [

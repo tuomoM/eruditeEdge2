@@ -13,9 +13,22 @@ CREATE TABLE vocabulary_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     word TEXT NOT NULL,
     definition TEXT NOT NULL,
+    definition_key TEXT NOT NULL DEFAULT '',
     context TEXT,
     part_of_speech TEXT NOT NULL DEFAULT 'other'
         CHECK (part_of_speech IN ('noun', 'verb', 'adjective', 'adverb', 'phrase', 'other')),
+    frequency_band TEXT
+        CHECK (
+            frequency_band IS NULL OR frequency_band IN (
+                'common',
+                'uncommon',
+                'rare',
+                'very_rare',
+                'archaic_or_obsolete',
+                'specialized'
+            )
+        ),
+    frequency_note TEXT,
     needs_attention TEXT
         CHECK (needs_attention IS NULL OR length(needs_attention) <= 200),
     confidence_score INTEGER
@@ -24,9 +37,11 @@ CREATE TABLE vocabulary_entries (
         CHECK (confidence_obsolete IN (0, 1)),
     created_by INTEGER NOT NULL REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (word, context)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX vocabulary_entries_sense_unique_idx
+ON vocabulary_entries(lower(word), part_of_speech, definition_key);
 
 CREATE TABLE vocabulary_synonyms (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

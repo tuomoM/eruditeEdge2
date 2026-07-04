@@ -162,11 +162,14 @@ class VocabularyTestCase(unittest.TestCase):
         data["examples"] = [f"{word} appears in this sentence."]
         return self.create_entry(data)
 
-    def generate_entry(self, word, include_csrf=True):
+    def generate_entry(self, word, include_csrf=True, usage_clue=None):
         headers = self.csrf_headers() if include_csrf else {}
+        payload = {"word": word}
+        if usage_clue is not None:
+            payload["usage_clue"] = usage_clue
         return self.client.post(
             "/vocabulary/generate",
-            json={"word": word},
+            json=payload,
             headers=headers,
         )
 
@@ -624,7 +627,7 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.get_json()["error"], "Vocabulary domain is invalid")
 
-    def test_different_users_cannot_create_duplicate_global_word_and_context(self):
+    def test_different_users_cannot_create_duplicate_global_word_sense(self):
         self.login_user()
         first_response = self.create_entry()
         self.logout_user()
@@ -637,6 +640,31 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(first_response.status_code, 201)
         self.assertEqual(second_response.status_code, 400)
+        self.assertEqual(
+            second_response.get_json()["error"],
+            "Vocabulary entry already exists for this word sense",
+        )
+
+    def test_create_vocabulary_allows_same_word_with_different_sense(self):
+        self.login_user()
+        noun_data = self.valid_entry()
+        noun_data["word"] = "hobble"
+        noun_data["definition"] = "A restraint used to limit an animal's movement."
+        noun_data["part_of_speech"] = "noun"
+        noun_data["context"] = "Literary"
+        verb_data = self.valid_entry()
+        verb_data["word"] = "hobble"
+        verb_data["definition"] = "To walk in an awkward or impaired way."
+        verb_data["part_of_speech"] = "verb"
+        verb_data["context"] = "Literary"
+
+        noun_response = self.create_entry(noun_data)
+        verb_response = self.create_entry(verb_data)
+
+        self.assertEqual(noun_response.status_code, 201)
+        self.assertEqual(verb_response.status_code, 201)
+        self.assertEqual(noun_response.get_json()["word"], "hobble")
+        self.assertEqual(verb_response.get_json()["word"], "hobble")
 
     def test_create_vocabulary_allows_sql_statement_text(self):
         self.login_user()
@@ -691,6 +719,8 @@ class VocabularyTestCase(unittest.TestCase):
             {
                 **generated_entry,
                 "part_of_speech": "other",
+                "frequency_band": None,
+                "frequency_note": None,
                 "domains": [],
                 "cloze_sentences": [],
                 "needs_attention": None,
@@ -700,7 +730,8 @@ class VocabularyTestCase(unittest.TestCase):
         generate_entry.assert_called_once_with(
             "operation",
             "test-api-key",
-                "test-model",
+            "test-model",
+            None,
         )
 
     def test_generate_vocabulary_accepts_semicolons_in_generated_prose(self):
@@ -726,11 +757,40 @@ class VocabularyTestCase(unittest.TestCase):
             {
                 **generated_entry,
                 "part_of_speech": "other",
+                "frequency_band": None,
+                "frequency_note": None,
                 "domains": [],
                 "cloze_sentences": [],
                 "needs_attention": None,
                 "confidence_score": None,
             },
+        )
+
+    def test_generate_vocabulary_passes_usage_clue_to_ai(self):
+        self.login_user()
+        generated_entry = self.valid_entry()
+        generated_entry["word"] = "hobble"
+        generated_entry["part_of_speech"] = "noun"
+        generated_entry["frequency_band"] = "specialized"
+        generated_entry["frequency_note"] = "A riding-related noun sense."
+
+        with patch(
+            "Views.vocabulary.vocabulary_ai_service.generate_entry",
+            return_value=(generated_entry, None),
+        ) as generate_entry:
+            response = self.generate_entry(
+                "hobble",
+                usage_clue="He loosened the horse's (hobble).",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["part_of_speech"], "noun")
+        self.assertEqual(response.get_json()["frequency_band"], "specialized")
+        generate_entry.assert_called_once_with(
+            "hobble",
+            "test-api-key",
+            "test-model",
+            "He loosened the horse's (hobble).",
         )
 
     def test_generate_vocabulary_rejects_sql_injection(self):
@@ -757,13 +817,15 @@ class VocabularyTestCase(unittest.TestCase):
             {
                 **generated_entry,
                 "part_of_speech": "other",
+                "frequency_band": None,
+                "frequency_note": None,
                 "domains": [],
                 "cloze_sentences": [],
                 "needs_attention": None,
                 "confidence_score": None,
             },
         )
-        generate_entry.assert_called_once_with("DROP", "test-api-key", "test-model")
+        generate_entry.assert_called_once_with("DROP", "test-api-key", "test-model", None)
 
     def test_generate_vocabulary_rejects_more_than_one_word(self):
         self.login_user()

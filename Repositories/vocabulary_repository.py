@@ -8,8 +8,11 @@ class VocabularyRepository:
         self,
         word,
         definition,
+        definition_key,
         context,
         part_of_speech,
+        frequency_band,
+        frequency_note,
         domains,
         synonyms,
         examples,
@@ -26,20 +29,26 @@ class VocabularyRepository:
                     (
                         word,
                         definition,
+                        definition_key,
                         context,
                         part_of_speech,
+                        frequency_band,
+                        frequency_note,
                         needs_attention,
                         confidence_score,
                         confidence_obsolete,
                         created_by
                     )
-                VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                 """,
                 [
                     word,
                     definition,
+                    definition_key,
                     context,
                     part_of_speech,
+                    frequency_band,
+                    frequency_note,
                     needs_attention,
                     confidence_score,
                     user_id,
@@ -61,8 +70,11 @@ class VocabularyRepository:
         vocabulary_id,
         word,
         definition,
+        definition_key,
         context,
         part_of_speech,
+        frequency_band,
+        frequency_note,
         domains,
         synonyms,
         examples,
@@ -76,8 +88,11 @@ class VocabularyRepository:
                 SET
                     word = ?,
                     definition = ?,
+                    definition_key = ?,
                     context = ?,
                     part_of_speech = ?,
+                    frequency_band = ?,
+                    frequency_note = ?,
                     confidence_obsolete = CASE
                         WHEN confidence_score IS NULL THEN 0
                         ELSE 1
@@ -85,7 +100,16 @@ class VocabularyRepository:
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
-                [word, definition, context, part_of_speech, vocabulary_id],
+                [
+                    word,
+                    definition,
+                    definition_key,
+                    context,
+                    part_of_speech,
+                    frequency_band,
+                    frequency_note,
+                    vocabulary_id,
+                ],
             )
         except IntegrityError:
             return False
@@ -172,8 +196,11 @@ class VocabularyRepository:
                 id,
                 word,
                 definition,
+                definition_key,
                 context,
                 part_of_speech,
+                frequency_band,
+                frequency_note,
                 needs_attention,
                 confidence_score,
                 confidence_obsolete,
@@ -189,6 +216,7 @@ class VocabularyRepository:
             return None
 
         entry = dict(rows[0])
+        entry.pop("definition_key", None)
         synonym_rows = self._entry_synonym_rows(vocabulary_id)
         entry["synonyms"] = [row["synonym"] for row in synonym_rows]
         entry["linked_synonyms"] = [
@@ -316,7 +344,7 @@ class VocabularyRepository:
             SELECT id
             FROM vocabulary_entries
             WHERE word LIKE ? COLLATE NOCASE
-            ORDER BY word, context
+            ORDER BY word, part_of_speech, context
             """,
             [search_term],
         )
@@ -327,7 +355,7 @@ class VocabularyRepository:
             """
             SELECT id
             FROM vocabulary_entries
-            ORDER BY word, context
+            ORDER BY word, part_of_speech, context
             """
         )
         return [self.get_entry(row["id"]) for row in rows]
@@ -373,7 +401,7 @@ class VocabularyRepository:
             params.append(exclude_vocabulary_id)
         rows = db.query(
             f"""
-            SELECT id, word, context
+            SELECT id, word, context, part_of_speech, definition
             FROM vocabulary_entries
             WHERE word = ? COLLATE NOCASE
                 {exclude_clause}
@@ -442,7 +470,7 @@ class VocabularyRepository:
             """
             SELECT id
             FROM vocabulary_entries
-            ORDER BY word, context
+            ORDER BY word, part_of_speech, context
             """
         )
         entries = [self.get_entry(row["id"]) for row in rows]

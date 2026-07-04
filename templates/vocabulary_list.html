@@ -53,6 +53,10 @@
                     {% if entry.context %}
                         <span class="meta-chip">{{ entry.context }}</span>
                     {% endif %}
+                    <span class="meta-chip">{{ entry.part_of_speech }}</span>
+                    {% if entry.frequency_band %}
+                        <span class="meta-chip">{{ entry.frequency_band | replace('_', ' ') }}</span>
+                    {% endif %}
                     {% for domain in entry.domains %}
                         <span class="meta-chip">{{ domain }}</span>
                     {% endfor %}

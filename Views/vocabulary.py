@@ -134,6 +134,8 @@ def form_to_entry_data(form):
         "definition": form.get("definition"),
         "context": form.get("context"),
         "part_of_speech": form.get("part_of_speech"),
+        "frequency_band": form.get("frequency_band"),
+        "frequency_note": form.get("frequency_note"),
         "domains": domains,
         "synonyms": synonyms,
         "examples": examples,
@@ -239,6 +241,7 @@ def generate_vocabulary():
         word,
         api_key,
         current_app.config["OPENAI_MODEL"],
+        data.get("usage_clue"),
     )
     if error:
         ai_quota_service.refund_generation(user)
@@ -248,6 +251,7 @@ def generate_vocabulary():
     if error:
         ai_quota_service.refund_generation(user)
         return jsonify({"error": error}), 400
+    values.pop("definition_key", None)
     values.pop("sources", None)
     return jsonify(values)
 

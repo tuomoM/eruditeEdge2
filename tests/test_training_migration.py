@@ -103,6 +103,7 @@ class TrainingMigrationTestCase(unittest.TestCase):
                 "migrations/013_vocabulary_ai_assessment.sql",
                 "migrations/014_vocabulary_synonym_links_and_jobs.sql",
                 "migrations/015_vocabulary_sources.sql",
+                "migrations/016_vocabulary_senses_and_frequency.sql",
             ]:
                 with open(migration_path, encoding="utf-8") as migration:
                     connection.executescript(migration.read())
