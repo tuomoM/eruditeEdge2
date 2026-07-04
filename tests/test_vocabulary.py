@@ -208,7 +208,7 @@ class VocabularyTestCase(unittest.TestCase):
                 "author": "Cormac McCarthy",
                 "note": "chapter 1",
             },
-            "Blood Meridian | Cormac McCarthy | opening pages",
+            "Blood Meridian; Cormac McCarthy; opening pages",
         ]
 
         response = self.create_entry(data)
@@ -239,13 +239,13 @@ class VocabularyTestCase(unittest.TestCase):
     def test_sources_are_reused_across_entries_without_showing_user_identity(self):
         self.login_user()
         first_data = self.valid_entry()
-        first_data["sources"] = ["The Crossing | Cormac McCarthy | chapter 1"]
+        first_data["sources"] = ["The Crossing; Cormac McCarthy; chapter 1"]
         first_source_id = self.create_entry(first_data).get_json()["sources"][0]["id"]
         second_data = self.valid_entry()
         second_data["word"] = "gingerly"
         second_data["definition"] = "In a careful or cautious manner."
         second_data["examples"] = ["He stepped gingerly over the stones."]
-        second_data["sources"] = ["the crossing | Cormac McCarthy | chapter 2"]
+        second_data["sources"] = ["the crossing; Cormac McCarthy; chapter 2"]
 
         second_response = self.create_entry(second_data)
 
@@ -343,7 +343,7 @@ class VocabularyTestCase(unittest.TestCase):
         data["word"] = "gingerly"
         data["definition"] = "In a careful or cautious manner."
         data["examples"] = ["He stepped gingerly over the stones."]
-        data["sources"] = ["The Crossing | Cormac McCarthy | chapter 1"]
+        data["sources"] = ["The Crossing; Cormac McCarthy; chapter 1"]
         vocabulary_id = self.create_entry(data).get_json()["id"]
 
         response = self.client.get(f"/vocabulary/{vocabulary_id}/page")
@@ -380,7 +380,7 @@ class VocabularyTestCase(unittest.TestCase):
                 "part_of_speech": "adverb",
                 "synonyms": "carefully",
                 "examples": "He stepped gingerly over the stones.",
-                "sources": "The Crossing | Cormac McCarthy | chapter 1",
+                "sources": "The Crossing; Cormac McCarthy; chapter 1",
             },
             follow_redirects=True,
         )
@@ -389,6 +389,18 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertIn(b"The Crossing", response.data)
         self.assertIn(b"Cormac McCarthy", response.data)
         self.assertIn(b"chapter 1", response.data)
+
+    def test_source_parser_keeps_pipe_separator_compatibility(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["sources"] = ["The Crossing | Cormac McCarthy | chapter 1"]
+
+        response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["sources"][0]["name"], "The Crossing")
+        self.assertEqual(response.get_json()["sources"][0]["author"], "Cormac McCarthy")
+        self.assertEqual(response.get_json()["sources"][0]["note"], "chapter 1")
 
     def test_new_vocabulary_form_preserves_ordered_domain_field(self):
         self.login_user()

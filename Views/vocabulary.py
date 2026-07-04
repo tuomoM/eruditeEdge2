@@ -152,7 +152,7 @@ def sources_to_text(sources):
             parts.append(source.get("author") or "")
         if source.get("note"):
             parts.append(source.get("note"))
-        lines.append(" | ".join(parts))
+        lines.append("; ".join(parts))
     return "\n".join(lines)
 
 

@@ -309,7 +309,8 @@ class VocabularyService:
         seen_sources = set()
         for source in sources:
             if isinstance(source, str):
-                parts = [self._clean_text(part) for part in source.split("|")]
+                separator = ";" if ";" in source else "|"
+                parts = [self._clean_text(part) for part in source.split(separator)]
                 name = parts[0] if parts else ""
                 author = parts[1] if len(parts) > 1 else ""
                 note = parts[2] if len(parts) > 2 else ""

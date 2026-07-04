@@ -219,6 +219,9 @@ Each source order position may appear only once per vocabulary entry. Source
 attachments are entered manually; AI generation does not invent sources.
 Neither `vocabulary_sources` nor `vocabulary_entry_sources` stores the user who
 added the source, preserving the application’s identity-minimization rule.
+The user-facing multiline form uses `Title; Author; Location or note` as its
+preferred format. The parser also accepts the earlier `Title | Author | Note`
+format for compatibility.
 
 ### `training_sessions`
 
