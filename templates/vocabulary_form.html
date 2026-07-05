@@ -29,10 +29,21 @@
     </div>
 
     {% if not is_edit %}
-        <div class="field field-wide">
-            <label for="usage_clue">Usage clue</label><br>
-            <textarea id="usage_clue" name="usage_clue" placeholder="He loosened the horse's (hobble)."></textarea>
-            <div class="help-text">Optional. Mark the target word with parentheses, or add a short hint such as a, noun, riding.</div>
+        <div class="field field-wide optional-ai-example">
+            <button
+                class="button button-subtle"
+                type="button"
+                id="usage-clue-toggle"
+                aria-expanded="false"
+                aria-controls="usage-clue-panel"
+            >
+                Add optional example sentence for AI
+            </button>
+            <div id="usage-clue-panel" class="optional-ai-example-panel" hidden>
+                <label for="usage_clue">Example sentence or hint</label><br>
+                <textarea id="usage_clue" name="usage_clue" placeholder="He loosened the horse's hobble."></textarea>
+                <div class="help-text">Optional. Add the sentence where you found the word, or a short hint such as a, noun, riding. Parentheses are only needed if the sentence is ambiguous.</div>
+            </div>
         </div>
         <div class="ai-panel">
             <div class="ai-actions">
@@ -181,6 +192,19 @@ if (checkAiButton) {
                 : "OpenAI API key is missing";
         } catch (error) {
             status.textContent = `AI setup check failed: ${error.name}`;
+        }
+    });
+}
+
+const usageClueToggle = document.getElementById("usage-clue-toggle");
+const usageCluePanel = document.getElementById("usage-clue-panel");
+if (usageClueToggle && usageCluePanel) {
+    usageClueToggle.addEventListener("click", () => {
+        const isOpen = usageClueToggle.getAttribute("aria-expanded") === "true";
+        usageClueToggle.setAttribute("aria-expanded", String(!isOpen));
+        usageCluePanel.hidden = isOpen;
+        if (!isOpen) {
+            document.getElementById("usage_clue").focus();
         }
     });
 }

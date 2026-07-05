@@ -133,6 +133,25 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
             "hobble",
             "test-key",
             "test-model",
+            "He loosened the horse's hobble.",
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(entry["word"], "hobble")
+        self.assertEqual(
+            client.responses.last_request["input"],
+            "Word: hobble\nUsage clue: He loosened the horse's hobble.",
+        )
+        self.assertIn("sense implied by that clue", client.responses.last_request["instructions"])
+
+    def test_generate_entry_accepts_parentheses_to_disambiguate_usage_clue(self):
+        client = FakeClient(self.valid_output())
+        service = VocabularyAiService(client=client)
+
+        entry, error = service.generate_entry(
+            "hobble",
+            "test-key",
+            "test-model",
             "He loosened the horse's (hobble).",
         )
 
@@ -142,7 +161,6 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
             client.responses.last_request["input"],
             "Word: hobble\nUsage clue: He loosened the horse's (hobble).",
         )
-        self.assertIn("sense implied by that clue", client.responses.last_request["instructions"])
 
     def test_generate_entry_rejects_usage_clue_marking_other_word(self):
         client = FakeClient(self.valid_output())

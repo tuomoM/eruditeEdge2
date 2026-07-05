@@ -1008,6 +1008,16 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="word" name="word" value="stultify"', response.data)
 
+    def test_new_vocabulary_page_collapses_optional_ai_example_sentence(self):
+        self.login_user()
+
+        response = self.client.get("/vocabulary/new")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Add optional example sentence for AI", response.data)
+        self.assertIn(b'id="usage-clue-panel" class="optional-ai-example-panel" hidden', response.data)
+        self.assertIn(b'id="usage_clue" name="usage_clue"', response.data)
+
     def test_admin_new_vocabulary_page_renders_domain_controls(self):
         self.login_user()
         self.set_user_category("tuomo", "admin")
