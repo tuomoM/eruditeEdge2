@@ -1056,7 +1056,12 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Filters", response.data)
+        self.assertIn(b"Book or article title", response.data)
+        self.assertIn(b"Author name", response.data)
+        self.assertNotIn(b'placeholder="The Crossing"', response.data)
+        self.assertNotIn(b'placeholder="Cormac McCarthy"', response.data)
         html = response.get_data(as_text=True)
+        self.assertLess(html.index('for="frequency_band"'), html.index('for="source_name"'))
         self.assertRegex(
             html,
             r'id="advanced-filter-panel"[\s\S]*class="advanced-filter-panel"[\s\S]*hidden',

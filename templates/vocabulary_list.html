@@ -57,16 +57,17 @@
     >
         <div class="advanced-filter-grid">
             <div class="field">
-                <label for="source_name">Source</label>
-                <input id="source_name" name="source_name" value="{{ filters.source_name }}" placeholder="The Crossing">
-            </div>
-            <div class="field">
-                <label for="source_author">Author</label>
-                <input id="source_author" name="source_author" value="{{ filters.source_author }}" placeholder="Cormac McCarthy">
+                <label for="frequency_band">Frequency</label>
+                <select id="frequency_band" name="frequency_band">
+                    <option value=""></option>
+                    {% for value, label in filter_choices.frequency_bands %}
+                        <option value="{{ value }}" {% if filters.frequency_band == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="field">
                 <label for="context">Context</label>
-                <input id="context" name="context" value="{{ filters.context }}" placeholder="Literary">
+                <input id="context" name="context" value="{{ filters.context }}" placeholder="Formal">
             </div>
             <div class="field">
                 <label for="domain">Domain</label>
@@ -87,14 +88,17 @@
                 </select>
             </div>
             <div class="field">
-                <label for="frequency_band">Frequency</label>
-                <select id="frequency_band" name="frequency_band">
-                    <option value=""></option>
-                    {% for value, label in filter_choices.frequency_bands %}
-                        <option value="{{ value }}" {% if filters.frequency_band == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
+                <label for="source_name">Source</label>
+                <input id="source_name" name="source_name" value="{{ filters.source_name }}" placeholder="Book or article title">
             </div>
+            <div class="field">
+                <label for="source_author">Author</label>
+                <input id="source_author" name="source_author" value="{{ filters.source_author }}" placeholder="Author name">
+            </div>
+        </div>
+        <div class="advanced-filter-actions">
+            <button class="button-primary button-compact" type="submit">Apply filters</button>
+            <a class="button button-subtle button-compact" href="/vocabulary">Clear filters</a>
         </div>
     </div>
 </form>

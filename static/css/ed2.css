@@ -539,7 +539,9 @@ button:hover,
 }
 
 .vocabulary-toolbar {
-    gap: var(--space-md);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-sm) var(--space-md);
     align-items: end;
 }
 
@@ -571,6 +573,7 @@ button:hover,
     flex-wrap: wrap;
     gap: var(--space-sm);
     align-items: center;
+    justify-content: end;
 }
 
 .vocabulary-toolbar .toolbar-actions .button-secondary {
@@ -579,15 +582,15 @@ button:hover,
 }
 
 .advanced-filter-panel {
-    flex-basis: 100%;
-    max-width: 760px;
-    padding-top: var(--space-sm);
+    grid-column: 1 / -1;
+    width: 100%;
+    padding-top: var(--space-xs);
 }
 
 .advanced-filter-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0 var(--space-md);
+    grid-template-columns: repeat(6, minmax(120px, 1fr));
+    gap: var(--space-sm);
     padding: var(--space-md);
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
@@ -595,7 +598,31 @@ button:hover,
 }
 
 .advanced-filter-grid .field {
-    margin-bottom: var(--space-sm);
+    margin-bottom: 0;
+}
+
+.advanced-filter-grid label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--color-muted);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.advanced-filter-grid input,
+.advanced-filter-grid select {
+    min-height: 38px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    font-size: 1rem;
+}
+
+.advanced-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    justify-content: end;
+    padding-top: var(--space-sm);
 }
 
 .active-filter-list {
@@ -1070,6 +1097,7 @@ button:hover,
         gap: 6px 14px;
     }
 
+    .vocabulary-toolbar,
     .form-grid,
     .account-layout,
     .entry-row,
@@ -1077,6 +1105,16 @@ button:hover,
     .review-grid,
     .advanced-filter-grid {
         grid-template-columns: 1fr;
+    }
+
+    .toolbar-actions,
+    .advanced-filter-actions {
+        justify-content: stretch;
+    }
+
+    .toolbar-actions > *,
+    .advanced-filter-actions > * {
+        flex: 1 1 140px;
     }
 
     .selected-domain-row {
