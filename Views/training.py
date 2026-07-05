@@ -27,7 +27,14 @@ from Services.training_service import (
 )
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_service import vocabulary_service
-from Views.vocabulary import entries_with_ownership, login_required, page_login_required
+from Views.vocabulary import (
+    active_vocabulary_filters,
+    entries_with_ownership,
+    login_required,
+    page_login_required,
+    vocabulary_filter_choices,
+    vocabulary_filters_from_request,
+)
 
 
 training_bp = Blueprint("training", __name__)
@@ -43,9 +50,17 @@ ANKI_CARD_TYPE_BY_TRAINING_TYPE = {
 @page_login_required
 def select_training_vocabs():
     _is_admin()
+    filters = vocabulary_filters_from_request(request.args)
+    entries, error = vocabulary_service.search_entries(filters)
+    if error:
+        entries = []
     return render_template(
         "training_select.html",
-        entries=entries_with_ownership(vocabulary_service.list_entries(), session["user_id"]),
+        entries=entries_with_ownership(entries, session["user_id"]),
+        error=error,
+        filters=filters,
+        active_filters=active_vocabulary_filters(filters),
+        filter_choices=vocabulary_filter_choices(),
         selected_vocabulary_ids=set(
             training_service.get_latest_training_vocabulary_ids(session["user_id"])
         ),
@@ -124,6 +139,9 @@ def create_training():
         return render_template(
             "training_select.html",
             entries=entries_with_ownership(vocabulary_service.list_entries(), session["user_id"]),
+            filters=vocabulary_filters_from_request(request.args),
+            active_filters={},
+            filter_choices=vocabulary_filter_choices(),
             error=error,
             selected_vocabulary_ids={
                 int(vocabulary_id)

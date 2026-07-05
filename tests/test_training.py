@@ -713,6 +713,23 @@ class TrainingTestCase(unittest.TestCase):
         self.assertNotIn(b'data-filter-toggle', response.data)
         self.assertNotIn(b"Own</button>", response.data)
 
+    def test_training_selection_filters_by_domain(self):
+        self.login_user()
+        medical_entry = self.valid_entry("anodyne")
+        medical_entry["domains"] = ["body"]
+        literary_entry = self.valid_entry("contumacious")
+        literary_entry["domains"] = ["attitude"]
+        self.client.post("/vocabulary", json=medical_entry)
+        self.client.post("/vocabulary", json=literary_entry)
+
+        response = self.client.get("/training/select", query_string={"domain": "body"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"anodyne", response.data)
+        self.assertNotIn(b"contumacious", response.data)
+        self.assertIn(b"Filters (1)", response.data)
+        self.assertIn(b"domain: body", response.data)
+
     def test_five_vocabs_can_be_chosen_for_training(self):
         self.login_user()
         vocabulary_ids = self.create_sample_vocabs()

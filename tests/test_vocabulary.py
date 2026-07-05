@@ -1018,6 +1018,50 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertIn(b'id="usage-clue-panel" class="optional-ai-example-panel" hidden', response.data)
         self.assertIn(b'id="usage_clue" name="usage_clue"', response.data)
 
+    def test_vocabulary_page_filters_by_source_and_author(self):
+        self.login_user()
+        crossing_data = self.valid_entry()
+        crossing_data["word"] = "hobble"
+        crossing_data["definition"] = "A restraint used to limit an animal's movement."
+        crossing_data["part_of_speech"] = "noun"
+        crossing_data["sources"] = ["The Crossing; Cormac McCarthy; chapter 1"]
+        medical_data = self.valid_entry()
+        medical_data["word"] = "anodyne"
+        medical_data["definition"] = "Something that relieves pain."
+        medical_data["context"] = "Medical"
+        medical_data["sources"] = ["Medical Notes; Ada Lovelace"]
+        self.create_entry(crossing_data)
+        self.create_entry(medical_data)
+
+        response = self.client.get(
+            "/vocabulary",
+            query_string={
+                "source_name": "Crossing",
+                "source_author": "McCarthy",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"hobble", response.data)
+        self.assertNotIn(b"anodyne", response.data)
+        self.assertIn(b"Filters (2)", response.data)
+        self.assertIn(b"source name: Crossing", response.data)
+        self.assertNotIn(b'id="advanced-filter-panel" class="advanced-filter-panel" hidden', response.data)
+
+    def test_vocabulary_page_hides_advanced_filters_by_default(self):
+        self.login_user()
+        self.create_entry_with_word("operation")
+
+        response = self.client.get("/vocabulary")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Filters", response.data)
+        html = response.get_data(as_text=True)
+        self.assertRegex(
+            html,
+            r'id="advanced-filter-panel"[\s\S]*class="advanced-filter-panel"[\s\S]*hidden',
+        )
+
     def test_admin_new_vocabulary_page_renders_domain_controls(self):
         self.login_user()
         self.set_user_category("tuomo", "admin")

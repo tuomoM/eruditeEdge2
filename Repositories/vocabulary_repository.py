@@ -339,26 +339,81 @@ class VocabularyRepository:
             ]
 
     def search_by_word(self, search_term):
-        rows = db.query(
-            """
-            SELECT id
-            FROM vocabulary_entries
-            WHERE word LIKE ? COLLATE NOCASE
-            ORDER BY word, part_of_speech, context
-            """,
-            [search_term],
-        )
+        rows = self._entry_id_rows({"word": search_term})
         return [self.get_entry(row["id"]) for row in rows]
 
     def list_entries(self):
-        rows = db.query(
-            """
-            SELECT id
-            FROM vocabulary_entries
-            ORDER BY word, part_of_speech, context
-            """
-        )
+        rows = self._entry_id_rows({})
         return [self.get_entry(row["id"]) for row in rows]
+
+    def list_filtered_entries(self, filters):
+        rows = self._entry_id_rows(filters)
+        return [self.get_entry(row["id"]) for row in rows]
+
+    def _entry_id_rows(self, filters):
+        filters = filters or {}
+        joins = []
+        where = []
+        params = []
+
+        if filters.get("word"):
+            where.append("vocabulary_entries.word LIKE ? COLLATE NOCASE")
+            params.append(filters["word"])
+        if filters.get("context"):
+            where.append("vocabulary_entries.context = ? COLLATE NOCASE")
+            params.append(filters["context"])
+        if filters.get("part_of_speech"):
+            where.append("vocabulary_entries.part_of_speech = ?")
+            params.append(filters["part_of_speech"])
+        if filters.get("frequency_band"):
+            where.append("vocabulary_entries.frequency_band = ?")
+            params.append(filters["frequency_band"])
+        if filters.get("domain"):
+            where.append(
+                """
+                EXISTS (
+                    SELECT 1
+                    FROM vocabulary_domains
+                    WHERE vocabulary_domains.vocabulary_id = vocabulary_entries.id
+                        AND vocabulary_domains.domain = ?
+                )
+                """
+            )
+            params.append(filters["domain"])
+        if filters.get("source_name") or filters.get("source_author"):
+            joins.extend(
+                [
+                    """
+                    JOIN vocabulary_entry_sources
+                        ON vocabulary_entry_sources.vocabulary_id = vocabulary_entries.id
+                    """,
+                    """
+                    JOIN vocabulary_sources
+                        ON vocabulary_sources.id = vocabulary_entry_sources.source_id
+                    """,
+                ]
+            )
+            if filters.get("source_name"):
+                where.append("vocabulary_sources.name LIKE ? COLLATE NOCASE")
+                params.append(filters["source_name"])
+            if filters.get("source_author"):
+                where.append("vocabulary_sources.author LIKE ? COLLATE NOCASE")
+                params.append(filters["source_author"])
+
+        where_sql = "WHERE " + " AND ".join(where) if where else ""
+        return db.query(
+            f"""
+            SELECT DISTINCT vocabulary_entries.id
+            FROM vocabulary_entries
+            {' '.join(joins)}
+            {where_sql}
+            ORDER BY
+                vocabulary_entries.word,
+                vocabulary_entries.part_of_speech,
+                vocabulary_entries.context
+            """,
+            params,
+        )
 
     def list_entry_ids(self):
         rows = db.query(

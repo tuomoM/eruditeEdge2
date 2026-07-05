@@ -26,22 +26,86 @@
     <div class="toolbar-search">
         <label class="toolbar-label" for="word">Search by word</label>
         <div class="toolbar-search-row">
-            <input id="word" name="word" value="{{ search_word }}" placeholder="oper*, *tion, op*ion">
+            <input id="word" name="word" value="{{ filters.word }}" placeholder="oper*, *tion, op*ion">
             <button class="button-primary" type="submit">Search</button>
         </div>
     </div>
     <div class="toolbar-actions">
+        <button
+            class="button button-subtle"
+            type="button"
+            data-advanced-filter-toggle
+            aria-expanded="{{ 'true' if active_filters else 'false' }}"
+            aria-controls="advanced-filter-panel"
+        >
+            Filters{% if active_filters %} ({{ active_filters | length }}){% endif %}
+        </button>
         <a class="button button-subtle" href="/vocabulary">Show all</a>
         {% if session.account_category in ["trusted", "admin"] %}
             <a
                 class="button button-secondary"
-                href="/vocabulary/new{% if search_word %}?word={{ search_word | urlencode }}{% endif %}"
+                href="/vocabulary/new{% if filters.word %}?word={{ filters.word | urlencode }}{% endif %}"
             >
                 Add word
             </a>
         {% endif %}
     </div>
+    <div
+        id="advanced-filter-panel"
+        class="advanced-filter-panel"
+        {% if not active_filters %}hidden{% endif %}
+    >
+        <div class="advanced-filter-grid">
+            <div class="field">
+                <label for="source_name">Source</label>
+                <input id="source_name" name="source_name" value="{{ filters.source_name }}" placeholder="The Crossing">
+            </div>
+            <div class="field">
+                <label for="source_author">Author</label>
+                <input id="source_author" name="source_author" value="{{ filters.source_author }}" placeholder="Cormac McCarthy">
+            </div>
+            <div class="field">
+                <label for="context">Context</label>
+                <input id="context" name="context" value="{{ filters.context }}" placeholder="Literary">
+            </div>
+            <div class="field">
+                <label for="domain">Domain</label>
+                <select id="domain" name="domain">
+                    <option value=""></option>
+                    {% for domain in filter_choices.domains %}
+                        <option value="{{ domain }}" {% if filters.domain == domain %}selected{% endif %}>{{ domain | capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="part_of_speech">Part of speech</label>
+                <select id="part_of_speech" name="part_of_speech">
+                    <option value=""></option>
+                    {% for value, label in filter_choices.parts_of_speech %}
+                        <option value="{{ value }}" {% if filters.part_of_speech == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="frequency_band">Frequency</label>
+                <select id="frequency_band" name="frequency_band">
+                    <option value=""></option>
+                    {% for value, label in filter_choices.frequency_bands %}
+                        <option value="{{ value }}" {% if filters.frequency_band == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
 </form>
+
+{% if active_filters %}
+    <div class="active-filter-list" aria-label="Active filters">
+        {% for key, value in active_filters.items() %}
+            <span class="meta-chip">{{ key | replace('_', ' ') }}: {{ value | replace('_', ' ') }}</span>
+        {% endfor %}
+    </div>
+{% endif %}
 
 {% if entries %}
     <div class="entry-list" data-filter-list>
@@ -74,4 +138,5 @@
 {% else %}
     <p>No vocabulary entries found.</p>
 {% endif %}
+<script src="{{ url_for('static', filename='js/advanced_filters.js') }}"></script>
 {% endblock %}

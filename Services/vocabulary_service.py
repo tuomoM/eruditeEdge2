@@ -118,6 +118,12 @@ class VocabularyService:
         search_term = search_value.replace("*", "%")
         return self._vocabulary_repository.search_by_word(search_term), None
 
+    def search_entries(self, filters):
+        values, error = self._clean_search_filters(filters)
+        if error:
+            return None, error
+        return self._vocabulary_repository.list_filtered_entries(values), None
+
     def list_entries(self):
         return self._vocabulary_repository.list_entries()
 
@@ -415,6 +421,42 @@ class VocabularyService:
             if HTML_PATTERN.search(value):
                 return value
         return None
+
+    def _clean_search_filters(self, filters):
+        filters = filters or {}
+        word = self._clean_text(filters.get("word"))
+        context = self._clean_text(filters.get("context"))
+        source_name = self._clean_text(filters.get("source_name"))
+        source_author = self._clean_text(filters.get("source_author"))
+        domain = self._clean_text(filters.get("domain")).lower()
+        part_of_speech = self._clean_text(filters.get("part_of_speech")).lower()
+        frequency_band = self._clean_frequency_band(filters.get("frequency_band"))
+
+        fields = [word, context, source_name, source_author]
+        unsafe_field = self._find_unsafe_field(fields)
+        if unsafe_field:
+            return None, "HTML tags are not allowed"
+        if word:
+            search_error = self._validate_search_value(word)
+            if search_error:
+                return None, search_error
+            word = word.replace("*", "%")
+        if domain and domain not in VOCABULARY_DOMAINS:
+            return None, "Vocabulary domain is invalid"
+        if part_of_speech and part_of_speech not in ALLOWED_PARTS_OF_SPEECH:
+            return None, "Part of speech is invalid"
+        if frequency_band and frequency_band not in ALLOWED_FREQUENCY_BANDS:
+            return None, "Frequency band is invalid"
+
+        return {
+            "word": word,
+            "context": context,
+            "source_name": f"%{source_name}%" if source_name else "",
+            "source_author": f"%{source_author}%" if source_author else "",
+            "domain": domain,
+            "part_of_speech": part_of_speech,
+            "frequency_band": frequency_band,
+        }, None
 
     def _validate_search_value(self, search_value):
         if not search_value:

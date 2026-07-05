@@ -11,6 +11,22 @@ from Services.vocabulary_service import vocabulary_service
 
 
 vocabulary_bp = Blueprint("vocabulary", __name__)
+PART_OF_SPEECH_FILTERS = [
+    ("noun", "Noun"),
+    ("verb", "Verb"),
+    ("adjective", "Adjective"),
+    ("adverb", "Adverb"),
+    ("phrase", "Phrase"),
+    ("other", "Other"),
+]
+FREQUENCY_BAND_FILTERS = [
+    ("common", "Common"),
+    ("uncommon", "Uncommon"),
+    ("rare", "Rare"),
+    ("very_rare", "Very rare"),
+    ("archaic_or_obsolete", "Archaic or obsolete"),
+    ("specialized", "Specialized"),
+]
 
 
 def login_required(route_function):
@@ -158,21 +174,45 @@ def sources_to_text(sources):
     return "\n".join(lines)
 
 
+def vocabulary_filter_choices():
+    return {
+        "domains": VOCABULARY_DOMAINS,
+        "parts_of_speech": PART_OF_SPEECH_FILTERS,
+        "frequency_bands": FREQUENCY_BAND_FILTERS,
+    }
+
+
+def vocabulary_filters_from_request(args):
+    return {
+        "word": args.get("word", "").strip(),
+        "source_name": args.get("source_name", "").strip(),
+        "source_author": args.get("source_author", "").strip(),
+        "context": args.get("context", "").strip(),
+        "domain": args.get("domain", "").strip(),
+        "part_of_speech": args.get("part_of_speech", "").strip(),
+        "frequency_band": args.get("frequency_band", "").strip(),
+    }
+
+
+def active_vocabulary_filters(filters):
+    return {key: value for key, value in filters.items() if value}
+
+
 @vocabulary_bp.route("/vocabulary", methods=["GET"])
 @page_login_required
 def vocabulary_list():
-    search_word = request.args.get("word", "").strip()
-    if search_word:
-        entries, error = vocabulary_service.search_by_word(search_word)
-        if error:
-            flash(error)
-            entries = []
-    else:
-        entries = vocabulary_service.list_entries()
+    filters = vocabulary_filters_from_request(request.args)
+    entries, error = vocabulary_service.search_entries(filters)
+    if error:
+        flash(error)
+        entries = []
     return render_template(
         "vocabulary_list.html",
         entries=entries_with_ownership(entries, session["user_id"]),
-        search_word=search_word,
+        filters=filters,
+        active_filters=active_vocabulary_filters(filters),
+        filter_choices=vocabulary_filter_choices(),
+        search_word=filters["word"],
     )
 
 
