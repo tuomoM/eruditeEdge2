@@ -316,6 +316,7 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"/admin/security-report/run", response.data)
         self.assertIn(b"Run security audit", response.data)
+        self.assertIn(b"/admin/vocabulary-statistics", response.data)
 
     def test_admin_vocabulary_maintenance_requires_admin(self):
         self.register("anna")
@@ -324,6 +325,43 @@ class AdminTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Admin account is required", response.data)
+
+    def test_admin_vocabulary_statistics_requires_admin(self):
+        self.register("anna")
+
+        response = self.client.get("/admin/vocabulary-statistics", follow_redirects=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Admin account is required", response.data)
+
+    def test_admin_vocabulary_statistics_shows_domain_and_context_counts(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        first = self.valid_cloze_entry("contumacious")
+        first["context"] = "Formal"
+        first["domains"] = ["attitude", "power"]
+        second = self.valid_cloze_entry("recalcitrant")
+        second["context"] = "Formal"
+        second["domains"] = ["attitude"]
+        third = self.valid_entry("operation")
+        third["context"] = "Scientific"
+        third["domains"] = []
+        self.client.post("/vocabulary", json=first)
+        self.client.post("/vocabulary", json=second)
+        self.client.post("/vocabulary", json=third)
+
+        response = self.client.get("/admin/vocabulary-statistics")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Vocabulary statistics", response.data)
+        self.assertIn(b"3 vocabulary entries", response.data)
+        self.assertIn(b"Attitude", response.data)
+        self.assertIn(b"Power", response.data)
+        self.assertIn(b"entry has", response.data)
+        self.assertIn(b"no domain assigned", response.data)
+        self.assertIn(b"Formal", response.data)
+        self.assertIn(b"Scientific", response.data)
 
     def test_admin_vocabulary_maintenance_shows_entries_needing_cloze_data(self):
         self.create_admin("tuomo")

@@ -144,6 +144,16 @@ def vocabulary_maintenance_page():
     )
 
 
+@admin_bp.route("/admin/vocabulary-statistics", methods=["GET"])
+@page_admin_required
+def vocabulary_statistics_page():
+    statistics = vocabulary_service.usage_statistics()
+    return render_template(
+        "admin_vocabulary_statistics.html",
+        statistics=statistics,
+    )
+
+
 @admin_bp.route("/admin/vocabulary/<int:vocabulary_id>/cloze-data", methods=["POST"])
 @admin_required
 @csrf_required

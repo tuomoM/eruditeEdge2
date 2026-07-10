@@ -455,6 +455,47 @@ class VocabularyRepository:
         )
         return result[0]["count"]
 
+    def context_usage_counts(self):
+        rows = db.query(
+            """
+            SELECT
+                COALESCE(NULLIF(TRIM(context), ''), 'Unspecified') AS context,
+                COUNT(*) AS entry_count
+            FROM vocabulary_entries
+            GROUP BY COALESCE(NULLIF(TRIM(context), ''), 'Unspecified')
+            ORDER BY entry_count DESC, context COLLATE NOCASE
+            """
+        )
+        return [dict(row) for row in rows]
+
+    def domain_usage_counts(self):
+        rows = db.query(
+            """
+            SELECT
+                domain,
+                SUM(CASE WHEN domain_order = 1 THEN 1 ELSE 0 END) AS primary_count,
+                COUNT(*) AS assignment_count
+            FROM vocabulary_domains
+            GROUP BY domain
+            ORDER BY assignment_count DESC, domain COLLATE NOCASE
+            """
+        )
+        return [dict(row) for row in rows]
+
+    def count_entries_without_domains(self):
+        result = db.query(
+            """
+            SELECT COUNT(*) AS count
+            FROM vocabulary_entries
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM vocabulary_domains
+                WHERE vocabulary_domains.vocabulary_id = vocabulary_entries.id
+            )
+            """
+        )
+        return result[0]["count"]
+
     def list_synonym_rows(self, vocabulary_id):
         rows = db.query(
             """

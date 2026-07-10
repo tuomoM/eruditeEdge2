@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Vocabulary statistics</h1>
+        <div class="result-count">{{ statistics.total_entries }} vocabulary entries</div>
+    </div>
+    <a class="button button-secondary" href="/admin">Back to admin</a>
+</div>
+
+<section class="admin-section">
+    <div class="section-heading">
+        <div>
+            <h2>Domains</h2>
+            <p class="section-note">
+                Primary counts use the first selected domain. Any-position counts include secondary and tertiary domains.
+            </p>
+        </div>
+    </div>
+    <div class="usage-table-wrap">
+        <table class="usage-table">
+            <thead>
+                <tr>
+                    <th scope="col">Domain</th>
+                    <th scope="col">Primary</th>
+                    <th scope="col">Any position</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in statistics.domains %}
+                    <tr>
+                        <th scope="row">{{ row.domain | capitalize }}</th>
+                        <td>{{ row.primary_count }}</td>
+                        <td>{{ row.assignment_count }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="section-note">
+        {{ statistics.entries_without_domains }}
+        {{ "entry has" if statistics.entries_without_domains == 1 else "entries have" }}
+        no domain assigned.
+    </p>
+</section>
+
+<section class="admin-section">
+    <div class="section-heading">
+        <div>
+            <h2>Contexts</h2>
+            <p class="section-note">Counts are based on the stored context label of each vocabulary entry.</p>
+        </div>
+    </div>
+    <div class="usage-table-wrap">
+        <table class="usage-table">
+            <thead>
+                <tr>
+                    <th scope="col">Context</th>
+                    <th scope="col">Entries</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in statistics.contexts %}
+                    <tr>
+                        <th scope="row">{{ row.context }}</th>
+                        <td>{{ row.entry_count }}</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="2">No vocabulary entries yet.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

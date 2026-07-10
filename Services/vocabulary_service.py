@@ -3,6 +3,7 @@ import re
 from Repositories.vocabulary_repository import (
     vocabulary_repository as default_vocabulary_repository,
 )
+from Services.vocabulary_domains import VOCABULARY_DOMAINS
 from Services.background_job_service import (
     background_job_service as default_background_job_service,
 )
@@ -135,6 +136,38 @@ class VocabularyService:
 
     def count_entries_created_since(self, created_since):
         return self._vocabulary_repository.count_created_since(created_since)
+
+    def usage_statistics(self):
+        domain_rows = {
+            row["domain"]: row
+            for row in self._vocabulary_repository.domain_usage_counts()
+        }
+        domains = []
+        for domain in VOCABULARY_DOMAINS:
+            row = domain_rows.get(domain, {})
+            domains.append(
+                {
+                    "domain": domain,
+                    "primary_count": row.get("primary_count", 0) or 0,
+                    "assignment_count": row.get("assignment_count", 0) or 0,
+                }
+            )
+        domains.sort(
+            key=lambda row: (
+                -row["assignment_count"],
+                -row["primary_count"],
+                row["domain"],
+            )
+        )
+
+        contexts = self._vocabulary_repository.context_usage_counts()
+        total_entries = sum(row["entry_count"] for row in contexts)
+        return {
+            "total_entries": total_entries,
+            "entries_without_domains": self._vocabulary_repository.count_entries_without_domains(),
+            "contexts": contexts,
+            "domains": domains,
+        }
 
     def delete_entries_by_user(self, user_id):
         return self._vocabulary_repository.delete_entries_by_user(user_id)

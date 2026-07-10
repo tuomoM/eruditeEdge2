@@ -807,6 +807,30 @@ button:hover,
     align-items: flex-start;
 }
 
+.usage-table-wrap {
+    margin-top: var(--space-md);
+    overflow-x: auto;
+    border-top: 1px solid var(--color-border);
+}
+
+.usage-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.usage-table th,
+.usage-table td {
+    padding: var(--space-sm) var(--space-md) var(--space-sm) 0;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+    vertical-align: top;
+}
+
+.usage-table td {
+    color: var(--color-muted);
+    font-weight: 700;
+}
+
 .danger-action {
     padding-left: var(--space-sm);
     border-left: 1px solid var(--color-border);
