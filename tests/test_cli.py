@@ -214,12 +214,13 @@ class CliTestCase(unittest.TestCase):
         with patch(
             "cli.synonym_net_cloze_service._vocabulary_ai_service.generate_synonym_net_cloze_data",
             return_value=(generated_data, None),
-        ):
+        ) as generate_cloze:
             result = app.test_cli_runner().invoke(
-                args=["generate-synonym-cloze", str(contumacious["id"])],
+                args=["generate-synonym-cloze", "contumacious"],
             )
 
         self.assertEqual(result.exit_code, 0)
+        generate_cloze.assert_called_once()
         self.assertIn("Generated synonym-specific cloze data for 2 entries.", result.output)
         with app.app_context():
             updated = vocabulary_service.get_entry(contumacious["id"])
@@ -227,6 +228,109 @@ class CliTestCase(unittest.TestCase):
             updated["cloze_sentences"],
             generated_data["entries"][0]["cloze_sentences"],
         )
+
+    def test_generate_synonym_cloze_command_accepts_vocabulary_id(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["cli-admin", "not-used", "admin"],
+            ).lastrowid
+            contumacious, error = vocabulary_service.create_entry(
+                self.valid_cloze_entry(
+                    "contumacious",
+                    "Stubbornly disobedient to authority.",
+                    [],
+                ),
+                user_id,
+            )
+            self.assertIsNone(error)
+            recalcitrant, error = vocabulary_service.create_entry(
+                self.valid_cloze_entry(
+                    "recalcitrant",
+                    "Resistant to authority or control.",
+                    ["contumacious"],
+                ),
+                user_id,
+            )
+            self.assertIsNone(error)
+            vocabulary_synonym_link_service.link_vocabulary_synonyms(recalcitrant["id"])
+            generated_data = {
+                "entries": [
+                    {
+                        "vocabulary_id": contumacious["id"],
+                        "cloze_sentences": [
+                            "The ____ defendant openly defied the judge.",
+                            "Her ____ refusal challenged lawful authority.",
+                        ],
+                        "needs_attention": "",
+                        "confidence_score": 92,
+                    },
+                    {
+                        "vocabulary_id": recalcitrant["id"],
+                        "cloze_sentences": [
+                            "The ____ machine resisted every adjustment.",
+                            "The ____ witness would not comply with the order.",
+                        ],
+                        "needs_attention": "",
+                        "confidence_score": 89,
+                    },
+                ]
+            }
+
+        with patch(
+            "cli.synonym_net_cloze_service._vocabulary_ai_service.generate_synonym_net_cloze_data",
+            return_value=(generated_data, None),
+        ):
+            result = app.test_cli_runner().invoke(
+                args=["generate-synonym-cloze", str(contumacious["id"])],
+            )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Generated synonym-specific cloze data for 2 entries.", result.output)
+
+    def test_generate_synonym_cloze_command_reports_ambiguous_word(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["cli-admin", "not-used", "admin"],
+            ).lastrowid
+            noun_hobble, error = vocabulary_service.create_entry(
+                self.valid_cloze_entry(
+                    "hobble",
+                    "A restraint used for a horse.",
+                    [],
+                    part_of_speech="noun",
+                ),
+                user_id,
+            )
+            self.assertIsNone(error)
+            verb_hobble, error = vocabulary_service.create_entry(
+                self.valid_cloze_entry(
+                    "hobble",
+                    "To move awkwardly or unevenly.",
+                    [],
+                    part_of_speech="verb",
+                ),
+                user_id,
+            )
+            self.assertIsNone(error)
+
+        result = app.test_cli_runner().invoke(args=["generate-synonym-cloze", "hobble"])
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Multiple vocabulary entries match 'hobble'", result.output)
+        self.assertIn(f"#{noun_hobble['id']}: hobble (noun, Admin)", result.output)
+        self.assertIn(f"#{verb_hobble['id']}: hobble (verb, Admin)", result.output)
 
     def test_generate_synonym_cloze_command_reports_missing_entry(self):
         app = self.create_test_app()
@@ -237,12 +341,12 @@ class CliTestCase(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("Vocabulary entry was not found", result.output)
 
-    def valid_cloze_entry(self, word, definition, synonyms):
+    def valid_cloze_entry(self, word, definition, synonyms, part_of_speech="adjective"):
         return {
             "word": word,
             "definition": definition,
             "context": "Admin",
-            "part_of_speech": "adjective",
+            "part_of_speech": part_of_speech,
             "domains": ["attitude", "power"],
             "synonyms": synonyms,
             "examples": [f"The {word} response was memorable."],

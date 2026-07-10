@@ -109,6 +109,12 @@ class VocabularyService:
     def get_entry(self, vocabulary_id):
         return self._vocabulary_repository.get_entry(vocabulary_id)
 
+    def find_entries_by_exact_word(self, word):
+        word = self._clean_text(word)
+        if not word:
+            return []
+        return self._vocabulary_repository.find_entries_by_word(word)
+
     def search_by_word(self, search_value):
         search_value = self._clean_text(search_value)
         error = self._validate_search_value(search_value)

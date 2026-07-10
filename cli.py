@@ -269,12 +269,10 @@ def _run_synonym_net_cloze_job(payload):
 
 
 @click.command("generate-synonym-cloze")
-@click.argument("vocabulary_id", type=click.IntRange(1))
+@click.argument("entry")
 @with_appcontext
-def generate_synonym_cloze(vocabulary_id):
-    entry = vocabulary_service.get_entry(vocabulary_id)
-    if not entry:
-        raise click.ClickException("Vocabulary entry was not found")
+def generate_synonym_cloze(entry):
+    vocabulary_id = _resolve_vocabulary_id(entry)
 
     result, error = synonym_net_cloze_service.generate_for_vocabulary(
         vocabulary_id,
@@ -288,6 +286,34 @@ def generate_synonym_cloze(vocabulary_id):
         click.echo(f"Generated synonym-specific cloze data for {result['updated']} entries.")
     else:
         click.echo(result["skipped"])
+
+
+def _resolve_vocabulary_id(entry):
+    target = entry.strip()
+    if target.isdigit():
+        vocabulary_id = int(target)
+        if vocabulary_service.get_entry(vocabulary_id):
+            return vocabulary_id
+        raise click.ClickException("Vocabulary entry was not found")
+
+    matches = vocabulary_service.find_entries_by_exact_word(target)
+    if not matches:
+        raise click.ClickException("Vocabulary entry was not found")
+    if len(matches) == 1:
+        return matches[0]["id"]
+
+    lines = [f"Multiple vocabulary entries match '{target}'. Use one of these ids:"]
+    for match in matches:
+        lines.append(
+            "#{id}: {word} ({part_of_speech}, {context}) - {definition}".format(
+                id=match["id"],
+                word=match["word"],
+                part_of_speech=match["part_of_speech"],
+                context=match["context"],
+                definition=match["definition"],
+            )
+        )
+    raise click.ClickException("\n".join(lines))
 
 
 def _is_railway_environment():
