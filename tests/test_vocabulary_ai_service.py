@@ -4,6 +4,7 @@ import unittest
 from Services.vocabulary_ai_service import VocabularyAiService
 from Services.vocabulary_ai_service import (
     CLOZE_DATA_MAX_OUTPUT_TOKENS,
+    SYNONYM_NET_CLOZE_MAX_OUTPUT_TOKENS,
     USAGE_VALIDATION_MAX_OUTPUT_TOKENS,
     VOCABULARY_ENTRY_MAX_OUTPUT_TOKENS,
 )
@@ -124,6 +125,102 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertEqual(entry["frequency_band"], "common")
         self.assertEqual(entry["frequency_note"], "")
         self.assertIsNone(entry["needs_attention"])
+
+    def test_generate_synonym_net_cloze_data_uses_graph_prompt(self):
+        output = json.dumps(
+            {
+                "entries": [
+                    {
+                        "vocabulary_id": 1,
+                        "cloze_sentences": [
+                            "The ____ defendant refused the judge's direct order.",
+                            "Her ____ refusal challenged the court's authority.",
+                        ],
+                        "needs_attention": "",
+                        "confidence_score": 91,
+                    },
+                    {
+                        "vocabulary_id": 2,
+                        "cloze_sentences": [
+                            "The ____ equipment resisted repeated calibration attempts.",
+                            "The ____ witness would not comply with the subpoena.",
+                        ],
+                        "needs_attention": "",
+                        "confidence_score": 88,
+                    },
+                ]
+            }
+        )
+        entries = [
+            {
+                "id": 1,
+                "word": "contumacious",
+                "definition": "Stubbornly disobedient to authority.",
+                "context": "Legal",
+                "part_of_speech": "adjective",
+                "frequency_band": "rare",
+                "domains": ["attitude", "power"],
+                "examples": ["The contumacious defendant refused to answer."],
+            },
+            {
+                "id": 2,
+                "word": "recalcitrant",
+                "definition": "Resistant to authority or control.",
+                "context": "Formal",
+                "part_of_speech": "adjective",
+                "frequency_band": "uncommon",
+                "domains": ["attitude", "power"],
+                "examples": ["The recalcitrant witness ignored the question."],
+            },
+        ]
+        client = FakeClient(output)
+        service = VocabularyAiService(client=client)
+
+        result, error = service.generate_synonym_net_cloze_data(
+            entries,
+            "test-key",
+            "test-model",
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(len(result["entries"]), 2)
+        self.assertEqual(client.responses.last_request["model"], "test-model")
+        self.assertEqual(
+            client.responses.last_request["max_output_tokens"],
+            SYNONYM_NET_CLOZE_MAX_OUTPUT_TOKENS,
+        )
+        self.assertIn("linked near-synonyms", client.responses.last_request["instructions"])
+        self.assertIn("clearly favor that target word", client.responses.last_request["instructions"])
+        self.assertIn("Vocabulary ID: 1", client.responses.last_request["input"])
+        self.assertIn("Word: contumacious", client.responses.last_request["input"])
+        self.assertIn("Word: recalcitrant", client.responses.last_request["input"])
+        self.assert_avoids_unsupported_strict_schema_keywords(
+            client.responses.last_request["text"]["format"]["schema"]
+        )
+
+    def test_generate_synonym_net_cloze_data_rejects_invalid_item(self):
+        output = json.dumps(
+            {
+                "entries": [
+                    {
+                        "vocabulary_id": 1,
+                        "cloze_sentences": ["Only one ____ sentence."],
+                        "needs_attention": "",
+                        "confidence_score": 91,
+                    }
+                ]
+            }
+        )
+        service = VocabularyAiService(client=FakeClient(output))
+
+        result, error = service.generate_synonym_net_cloze_data(
+            [{"id": 1, "word": "contumacious", "definition": "Defiant."}, {"id": 2, "word": "obstinate", "definition": "Stubborn."}],
+            "test-key",
+            "test-model",
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(error, "OpenAI returned invalid synonym net cloze data")
 
     def test_generate_entry_includes_usage_clue_in_prompt(self):
         client = FakeClient(self.valid_output())

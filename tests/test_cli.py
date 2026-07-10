@@ -6,6 +6,8 @@ from unittest.mock import patch
 import db
 from app import create_app
 from db import init_db
+from Services.vocabulary_service import vocabulary_service
+from Services.vocabulary_synonym_link_service import vocabulary_synonym_link_service
 
 
 class CliTestCase(unittest.TestCase):
@@ -18,6 +20,9 @@ class CliTestCase(unittest.TestCase):
                 "TESTING": True,
                 "DATABASE": database_file.name,
                 "SECRET_KEY": "test-secret-key",
+                "OPENAI_API_KEY": "test-api-key",
+                "OPENAI_MODEL": "test-model",
+                "SYNONYM_NET_CLOZE_JOBS_ENABLED": False,
             }
         )
 
@@ -152,6 +157,102 @@ class CliTestCase(unittest.TestCase):
                 )
             ]
         self.assertEqual(domains, ["cognition", "reasoning"])
+
+    def test_generate_synonym_cloze_command_replaces_linked_net_cloze(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["cli-admin", "not-used", "admin"],
+            ).lastrowid
+            contumacious, error = vocabulary_service.create_entry(
+                self.valid_cloze_entry(
+                    "contumacious",
+                    "Stubbornly disobedient to authority.",
+                    [],
+                ),
+                user_id,
+            )
+            self.assertIsNone(error)
+            recalcitrant, error = vocabulary_service.create_entry(
+                self.valid_cloze_entry(
+                    "recalcitrant",
+                    "Resistant to authority or control.",
+                    ["contumacious"],
+                ),
+                user_id,
+            )
+            self.assertIsNone(error)
+            vocabulary_synonym_link_service.link_vocabulary_synonyms(recalcitrant["id"])
+            generated_data = {
+                "entries": [
+                    {
+                        "vocabulary_id": contumacious["id"],
+                        "cloze_sentences": [
+                            "The ____ defendant openly defied the judge.",
+                            "Her ____ refusal challenged lawful authority.",
+                        ],
+                        "needs_attention": "",
+                        "confidence_score": 92,
+                    },
+                    {
+                        "vocabulary_id": recalcitrant["id"],
+                        "cloze_sentences": [
+                            "The ____ machine resisted every adjustment.",
+                            "The ____ witness would not comply with the order.",
+                        ],
+                        "needs_attention": "",
+                        "confidence_score": 89,
+                    },
+                ]
+            }
+
+        with patch(
+            "cli.synonym_net_cloze_service._vocabulary_ai_service.generate_synonym_net_cloze_data",
+            return_value=(generated_data, None),
+        ):
+            result = app.test_cli_runner().invoke(
+                args=["generate-synonym-cloze", str(contumacious["id"])],
+            )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Generated synonym-specific cloze data for 2 entries.", result.output)
+        with app.app_context():
+            updated = vocabulary_service.get_entry(contumacious["id"])
+        self.assertEqual(
+            updated["cloze_sentences"],
+            generated_data["entries"][0]["cloze_sentences"],
+        )
+
+    def test_generate_synonym_cloze_command_reports_missing_entry(self):
+        app = self.create_test_app()
+        init_db(app)
+
+        result = app.test_cli_runner().invoke(args=["generate-synonym-cloze", "999"])
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Vocabulary entry was not found", result.output)
+
+    def valid_cloze_entry(self, word, definition, synonyms):
+        return {
+            "word": word,
+            "definition": definition,
+            "context": "Admin",
+            "part_of_speech": "adjective",
+            "domains": ["attitude", "power"],
+            "synonyms": synonyms,
+            "examples": [f"The {word} response was memorable."],
+            "cloze_sentences": [
+                "The ____ person resisted.",
+                "A ____ reply followed.",
+            ],
+            "needs_attention": "",
+            "confidence_score": 90,
+        }
 
 
 if __name__ == "__main__":

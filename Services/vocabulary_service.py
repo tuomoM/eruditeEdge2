@@ -180,13 +180,9 @@ class VocabularyService:
         if not entry:
             return None, "Vocabulary entry was not found"
 
-        merged_data = dict(entry)
-        merged_data.update(data)
-        values, error = self._validate_data(merged_data)
+        values, error = self.validate_ai_maintenance_data(entry, data)
         if error:
             return None, error
-        if values["confidence_score"] is None:
-            return None, "AI confidence score is required"
 
         updated = self._vocabulary_repository.update_ai_maintenance_data(
             vocabulary_id,
@@ -199,6 +195,16 @@ class VocabularyService:
         if not updated:
             return None, "Vocabulary entry was not found"
         return self.get_entry(vocabulary_id), None
+
+    def validate_ai_maintenance_data(self, entry, data):
+        merged_data = dict(entry)
+        merged_data.update(data)
+        values, error = self._validate_data(merged_data)
+        if error:
+            return None, error
+        if values["confidence_score"] is None:
+            return None, "AI confidence score is required"
+        return values, None
 
     def _validate_data(self, data):
         word = self._clean_text(data.get("word"))

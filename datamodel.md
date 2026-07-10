@@ -129,12 +129,18 @@ Stores the repeatable synonyms of a vocabulary entry.
 A synonym may appear only once per vocabulary entry. Synonym links are created
 by background maintenance, not during the user-facing creation/edit flow. When
 a synonym links to another vocabulary entry, the detail page renders it as a
-navigation link and the reverse synonym is maintained where missing.
+navigation link and the reverse synonym is maintained where missing. When a
+synonym link is newly created, a follow-up maintenance job may generate
+contrastive cloze prompts for the linked synonym graph.
 
 ### `background_jobs`
 
 Stores pending, running, and failed maintenance jobs. Successful jobs are
-deleted after completion so this table does not grow indefinitely.
+deleted after completion so this table does not grow indefinitely. Current
+maintenance job types include `link_vocabulary_synonyms` and
+`generate_synonym_net_cloze`; the latter replaces the cloze sentences of every
+entry in a linked synonym graph only after the AI response validates for the
+complete graph.
 
 | Column | Type | Rules |
 | --- | --- | --- |
@@ -164,6 +170,8 @@ Each order position may appear only once per vocabulary entry.
 
 Stores up to three ordered cloze prompts. Each sentence is validated by the
 application to contain exactly one `____` blank and not reveal the target word.
+For linked synonym graphs, background AI maintenance can replace these rows
+with contrastive prompts that distinguish nearby meanings.
 
 | Column | Type | Rules |
 | --- | --- | --- |

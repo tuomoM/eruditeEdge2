@@ -12,6 +12,7 @@ OPENAI_REQUEST_TIMEOUT_SECONDS = 20
 OPENAI_MAX_RETRIES = 1
 VOCABULARY_ENTRY_MAX_OUTPUT_TOKENS = 900
 CLOZE_DATA_MAX_OUTPUT_TOKENS = 500
+SYNONYM_NET_CLOZE_MAX_OUTPUT_TOKENS = 1200
 USAGE_VALIDATION_MAX_OUTPUT_TOKENS = 160
 MAX_AI_VOCABULARY_DOMAINS = 3
 MAX_USAGE_CLUE_LENGTH = 500
@@ -190,6 +191,43 @@ USAGE_VALIDATION_SCHEMA = {
         },
     },
     "required": ["result", "hint"],
+}
+
+
+SYNONYM_NET_CLOZE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "entries": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "vocabulary_id": {"type": "integer"},
+                    "cloze_sentences": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "needs_attention": {
+                        "type": "string",
+                        "description": (
+                            "Empty when no review is needed. Otherwise, a concise "
+                            "explanation of uncertainty, at most 200 characters."
+                        ),
+                    },
+                    "confidence_score": {"type": "integer"},
+                },
+                "required": [
+                    "vocabulary_id",
+                    "cloze_sentences",
+                    "needs_attention",
+                    "confidence_score",
+                ],
+            },
+        },
+    },
+    "required": ["entries"],
 }
 
 
@@ -402,6 +440,96 @@ class VocabularyAiService:
         logger.info("Cloze AI generation succeeded for word '%s'", word)
         return cloze_data, None
 
+    def generate_synonym_net_cloze_data(self, entries, api_key, model):
+        if not api_key:
+            logger.warning("Synonym net cloze generation failed: missing OpenAI API key")
+            return None, "OpenAI API key is missing"
+        if len(entries) < 2:
+            return None, "Synonym net must contain at least two entries"
+
+        logger.info(
+            "Synonym net cloze generation started for %s entries using model '%s'",
+            len(entries),
+            model,
+        )
+        try:
+            client = self._get_client(api_key)
+            started_at = time.perf_counter()
+            response = client.responses.create(
+                model=model,
+                max_output_tokens=SYNONYM_NET_CLOZE_MAX_OUTPUT_TOKENS,
+                store=False,
+                instructions=(
+                    "Create contrastive cloze training sentences for a graph of "
+                    "linked near-synonyms. Return JSON only. For each vocabulary "
+                    "entry, create 2-3 cloze sentences that clearly favor that "
+                    "target word over the other words in the synonym graph. Each "
+                    "sentence must include exactly one ____ blank where the target "
+                    "word belongs, must not include the target word elsewhere, and "
+                    "must be specific enough that a learner choosing among the graph "
+                    "words can identify the correct word by semantic nuance. Avoid "
+                    "generic sentences where several graph words fit equally well. "
+                    "Respect each entry's part of speech, definition, context, "
+                    "domains, and examples. Return one result for every input "
+                    "vocabulary_id. Return a confidence score from 0 to 100 for "
+                    "each entry. If an entry's contrastive distinction needs admin "
+                    "review, put a concise explanation of at most 200 characters in "
+                    "needs_attention; otherwise return an empty string."
+                ),
+                input=self._synonym_net_cloze_input(entries),
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "synonym_net_cloze_data",
+                        "schema": SYNONYM_NET_CLOZE_SCHEMA,
+                        "strict": True,
+                    }
+                },
+            )
+            logger.info(
+                "Synonym net cloze generation OpenAI request completed in %.2fs",
+                time.perf_counter() - started_at,
+            )
+        except ImportError:
+            logger.exception("Synonym net cloze generation failed: OpenAI package is not installed")
+            return None, "OpenAI package is not installed. Run python -m pip install -r requirements.txt"
+        except Exception as error:
+            logger.exception(
+                "Synonym net cloze generation failed during OpenAI request: %s",
+                error.__class__.__name__,
+            )
+            return None, f"OpenAI request failed: {error.__class__.__name__}"
+
+        try:
+            data = json.loads(response.output_text)
+        except (AttributeError, json.JSONDecodeError):
+            logger.exception("Synonym net cloze generation failed: invalid response format")
+            return None, "OpenAI returned invalid synonym net cloze data"
+
+        results = []
+        for item in data.get("entries", []):
+            cloze_sentences = self._normalize_cloze_sentences(item.get("cloze_sentences"))
+            normalized_item = {
+                "vocabulary_id": item.get("vocabulary_id"),
+                "cloze_sentences": cloze_sentences,
+                "needs_attention": str(item.get("needs_attention") or "").strip() or None,
+                "confidence_score": item.get("confidence_score"),
+            }
+            if (
+                not isinstance(normalized_item["vocabulary_id"], int)
+                or len(cloze_sentences) < 2
+                or len(cloze_sentences) > 3
+                or len(normalized_item["needs_attention"] or "") > 200
+                or isinstance(normalized_item["confidence_score"], bool)
+                or not isinstance(normalized_item["confidence_score"], int)
+                or not 0 <= normalized_item["confidence_score"] <= 100
+            ):
+                return None, "OpenAI returned invalid synonym net cloze data"
+            results.append(normalized_item)
+
+        logger.info("Synonym net cloze generation succeeded")
+        return {"entries": results}, None
+
     def validate_usage(self, entry, sentence, api_key, model):
         sentence = (sentence or "").strip()
         if not sentence:
@@ -508,6 +636,25 @@ class VocabularyAiService:
         lines = [f"Word: {word}"]
         if usage_clue:
             lines.append(f"Usage clue: {usage_clue}")
+        return "\n".join(lines)
+
+    def _synonym_net_cloze_input(self, entries):
+        lines = ["Synonym graph entries:"]
+        for entry in entries:
+            lines.extend(
+                [
+                    f"Vocabulary ID: {entry['id']}",
+                    f"Word: {entry['word']}",
+                    f"Part of speech: {entry.get('part_of_speech') or 'other'}",
+                    f"Definition: {entry['definition']}",
+                    f"Context: {entry.get('context') or 'General'}",
+                    f"Frequency: {entry.get('frequency_band') or 'unknown'}",
+                    "Domains: " + ", ".join(entry.get("domains", []) or ["none"]),
+                    "Examples:",
+                ]
+            )
+            lines.extend(f"- {example}" for example in entry.get("examples", []))
+            lines.append("")
         return "\n".join(lines)
 
     def _normalize_context(self, context):

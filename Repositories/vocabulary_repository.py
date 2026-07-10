@@ -189,6 +189,25 @@ class VocabularyRepository:
         self._save_domains(vocabulary_id, domains)
         return True
 
+    def list_linked_synonym_vocabulary_ids(self, vocabulary_id):
+        rows = db.query(
+            """
+            SELECT linked_vocabulary_id AS vocabulary_id
+            FROM vocabulary_synonyms
+            WHERE vocabulary_id = ?
+                AND linked_vocabulary_id IS NOT NULL
+
+            UNION
+
+            SELECT vocabulary_id
+            FROM vocabulary_synonyms
+            WHERE linked_vocabulary_id = ?
+            ORDER BY vocabulary_id
+            """,
+            [vocabulary_id, vocabulary_id],
+        )
+        return [row["vocabulary_id"] for row in rows]
+
     def get_entry(self, vocabulary_id):
         rows = db.query(
             """

@@ -7,10 +7,13 @@ from flask.cli import with_appcontext
 
 from Services.user_service import user_service
 from Services.background_job_service import (
+    GENERATE_SYNONYM_NET_CLOZE_JOB,
     LINK_VOCABULARY_SYNONYMS_JOB,
     background_job_service,
 )
+from Services.synonym_net_cloze_service import synonym_net_cloze_service
 from Services.vocabulary_synonym_link_service import vocabulary_synonym_link_service
+from Services.vocabulary_service import vocabulary_service
 from db import get_connection, init_db
 
 
@@ -112,6 +115,7 @@ def register_cli_commands(app):
     app.cli.add_command(migrate_database)
     app.cli.add_command(check_database)
     app.cli.add_command(run_background_jobs)
+    app.cli.add_command(generate_synonym_cloze)
 
 
 @click.command("create-admin")
@@ -236,6 +240,10 @@ def run_background_jobs(limit):
             payload["vocabulary_id"],
         ),
     )
+    background_job_service.register_handler(
+        GENERATE_SYNONYM_NET_CLOZE_JOB,
+        _run_synonym_net_cloze_job,
+    )
     summary = background_job_service.run_pending(limit)
     click.echo(
         "Processed {processed}, completed {completed}, failed {failed}.".format(
@@ -248,6 +256,38 @@ def run_background_jobs(limit):
             **repair_summary,
         )
     )
+
+
+def _run_synonym_net_cloze_job(payload):
+    _, error = synonym_net_cloze_service.generate_for_vocabulary(
+        payload["vocabulary_id"],
+        current_app.config["OPENAI_API_KEY"],
+        current_app.config["OPENAI_MODEL"],
+    )
+    if error:
+        raise click.ClickException(error)
+
+
+@click.command("generate-synonym-cloze")
+@click.argument("vocabulary_id", type=click.IntRange(1))
+@with_appcontext
+def generate_synonym_cloze(vocabulary_id):
+    entry = vocabulary_service.get_entry(vocabulary_id)
+    if not entry:
+        raise click.ClickException("Vocabulary entry was not found")
+
+    result, error = synonym_net_cloze_service.generate_for_vocabulary(
+        vocabulary_id,
+        current_app.config["OPENAI_API_KEY"],
+        current_app.config["OPENAI_MODEL"],
+    )
+    if error:
+        raise click.ClickException(error)
+
+    if result["updated"]:
+        click.echo(f"Generated synonym-specific cloze data for {result['updated']} entries.")
+    else:
+        click.echo(result["skipped"])
 
 
 def _is_railway_environment():

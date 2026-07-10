@@ -4,6 +4,7 @@ from Repositories.background_job_repository import (
 
 
 LINK_VOCABULARY_SYNONYMS_JOB = "link_vocabulary_synonyms"
+GENERATE_SYNONYM_NET_CLOZE_JOB = "generate_synonym_net_cloze"
 
 
 class BackgroundJobService:
@@ -21,6 +22,12 @@ class BackgroundJobService:
     def enqueue_vocabulary_synonym_linking(self, vocabulary_id):
         return self._background_job_repository.enqueue(
             LINK_VOCABULARY_SYNONYMS_JOB,
+            {"vocabulary_id": vocabulary_id},
+        )
+
+    def enqueue_synonym_net_cloze_generation(self, vocabulary_id):
+        return self._background_job_repository.enqueue(
+            GENERATE_SYNONYM_NET_CLOZE_JOB,
             {"vocabulary_id": vocabulary_id},
         )
 

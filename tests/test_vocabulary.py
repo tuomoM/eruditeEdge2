@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -8,6 +9,7 @@ import db
 from app import create_app
 from csrf import CSRF_SESSION_KEY
 from db import init_db
+from Services.synonym_net_cloze_service import synonym_net_cloze_service
 
 
 class VocabularyTestCase(unittest.TestCase):
@@ -21,6 +23,7 @@ class VocabularyTestCase(unittest.TestCase):
                 "SECRET_KEY": "test-secret-key",
                 "OPENAI_API_KEY": "test-api-key",
                 "OPENAI_MODEL": "test-model",
+                "SYNONYM_NET_CLOZE_JOBS_ENABLED": False,
                 "TRUSTED_AI_DAILY_QUOTA": 2,
             }
         )
@@ -316,6 +319,38 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(stagger_synonym["synonym"], "totter")
         self.assertEqual(stagger_synonym["linked_vocabulary_id"], totter_id)
 
+    def test_synonym_link_job_queues_synonym_net_cloze_job_when_enabled(self):
+        self.app.config["SYNONYM_NET_CLOZE_JOBS_ENABLED"] = True
+        self.login_user()
+        stagger_data = self.valid_entry()
+        stagger_data["word"] = "stagger"
+        stagger_data["definition"] = "To walk or move unsteadily."
+        stagger_data["synonyms"] = []
+        stagger_data["examples"] = ["The tired runner began to stagger."]
+        stagger_id = self.create_entry(stagger_data).get_json()["id"]
+        totter_data = self.valid_entry()
+        totter_data["word"] = "totter"
+        totter_data["definition"] = "To move in a shaky way."
+        totter_data["synonyms"] = ["stagger"]
+        totter_data["examples"] = ["The stack began to totter."]
+        totter_id = self.create_entry(totter_data).get_json()["id"]
+
+        result = self.app.test_cli_runner().invoke(args=["run-background-jobs", "--limit", "10"])
+
+        self.assertEqual(result.exit_code, 0)
+        with self.app.app_context():
+            rows = db.query(
+                """
+                SELECT job_type, status, payload
+                FROM background_jobs
+                """
+            )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_type"], "generate_synonym_net_cloze")
+        self.assertEqual(rows[0]["status"], "pending")
+        payload = json.loads(rows[0]["payload"])
+        self.assertIn(payload["vocabulary_id"], {stagger_id, totter_id})
+
     def test_background_job_links_existing_synonym_to_new_word_with_other_links(self):
         self.login_user()
         obstinate_data = self.valid_entry()
@@ -418,6 +453,115 @@ class VocabularyTestCase(unittest.TestCase):
             )[0]
         self.assertEqual(contumacious_to_recalcitrant["linked_vocabulary_id"], recalcitrant_id)
         self.assertEqual(recalcitrant_to_contumacious["linked_vocabulary_id"], contumacious_id)
+
+    def test_synonym_net_cloze_generation_replaces_whole_net_cloze_sentences(self):
+        self.login_user()
+        first = self.valid_entry()
+        first["word"] = "contumacious"
+        first["definition"] = "Stubbornly disobedient to authority."
+        first["part_of_speech"] = "adjective"
+        first["cloze_sentences"] = ["The ____ person resisted.", "A ____ reply followed."]
+        first_id = self.create_entry(first).get_json()["id"]
+        second = self.valid_entry()
+        second["word"] = "recalcitrant"
+        second["definition"] = "Resistant to authority or control."
+        second["part_of_speech"] = "adjective"
+        second["synonyms"] = ["contumacious"]
+        second["cloze_sentences"] = ["The ____ person resisted.", "A ____ reply followed."]
+        second_id = self.create_entry(second).get_json()["id"]
+        self.app.test_cli_runner().invoke(args=["run-background-jobs", "--limit", "10"])
+        generated_data = {
+            "entries": [
+                {
+                    "vocabulary_id": first_id,
+                    "cloze_sentences": [
+                        "The ____ defendant defied the judge's order.",
+                        "Her ____ refusal challenged the court's authority.",
+                    ],
+                    "needs_attention": "",
+                    "confidence_score": 90,
+                },
+                {
+                    "vocabulary_id": second_id,
+                    "cloze_sentences": [
+                        "The ____ equipment resisted every repair attempt.",
+                        "The ____ witness would not comply with the subpoena.",
+                    ],
+                    "needs_attention": "",
+                    "confidence_score": 88,
+                },
+            ]
+        }
+
+        with patch(
+            "Services.synonym_net_cloze_service.synonym_net_cloze_service._vocabulary_ai_service.generate_synonym_net_cloze_data",
+            return_value=(generated_data, None),
+        ):
+            with self.app.app_context():
+                result, error = synonym_net_cloze_service.generate_for_vocabulary(
+                    first_id,
+                    "test-key",
+                    "test-model",
+                )
+
+        self.assertIsNone(error)
+        self.assertEqual(result["updated"], 2)
+        first_entry = self.client.get(f"/vocabulary/{first_id}").get_json()
+        second_entry = self.client.get(f"/vocabulary/{second_id}").get_json()
+        self.assertEqual(first_entry["cloze_sentences"], generated_data["entries"][0]["cloze_sentences"])
+        self.assertEqual(second_entry["cloze_sentences"], generated_data["entries"][1]["cloze_sentences"])
+        self.assertEqual(first_entry["confidence_score"], 90)
+        self.assertEqual(second_entry["confidence_score"], 88)
+
+    def test_synonym_net_cloze_generation_rejects_partial_ai_output_without_replacing(self):
+        self.login_user()
+        first = self.valid_entry()
+        first["word"] = "contumacious"
+        first["definition"] = "Stubbornly disobedient to authority."
+        first["cloze_sentences"] = [
+            "The ____ person resisted.",
+            "A ____ reply followed.",
+        ]
+        first_id = self.create_entry(first).get_json()["id"]
+        second = self.valid_entry()
+        second["word"] = "recalcitrant"
+        second["definition"] = "Resistant to authority or control."
+        second["synonyms"] = ["contumacious"]
+        second["cloze_sentences"] = [
+            "The ____ witness resisted.",
+            "A ____ machine resisted.",
+        ]
+        self.create_entry(second)
+        self.app.test_cli_runner().invoke(args=["run-background-jobs", "--limit", "10"])
+        generated_data = {
+            "entries": [
+                {
+                    "vocabulary_id": first_id,
+                    "cloze_sentences": [
+                        "The ____ defendant defied the judge's order.",
+                        "Her ____ refusal challenged the court's authority.",
+                    ],
+                    "needs_attention": "",
+                    "confidence_score": 90,
+                }
+            ]
+        }
+
+        with patch(
+            "Services.synonym_net_cloze_service.synonym_net_cloze_service._vocabulary_ai_service.generate_synonym_net_cloze_data",
+            return_value=(generated_data, None),
+        ):
+            with self.app.app_context():
+                result, error = synonym_net_cloze_service.generate_for_vocabulary(
+                    first_id,
+                    "test-key",
+                    "test-model",
+                )
+
+        self.assertIsNone(result)
+        self.assertEqual(error, "OpenAI returned incomplete synonym net cloze data")
+        first_entry = self.client.get(f"/vocabulary/{first_id}").get_json()
+        self.assertEqual(first_entry["cloze_sentences"], first["cloze_sentences"])
 
     def test_vocabulary_detail_links_linked_synonyms(self):
         self.login_user()
