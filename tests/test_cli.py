@@ -329,8 +329,8 @@ class CliTestCase(unittest.TestCase):
 
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("Multiple vocabulary entries match 'hobble'", result.output)
-        self.assertIn(f"#{noun_hobble['id']}: hobble (noun, Admin)", result.output)
-        self.assertIn(f"#{verb_hobble['id']}: hobble (verb, Admin)", result.output)
+        self.assertIn(f"#{noun_hobble['id']}: hobble (noun, unspecified)", result.output)
+        self.assertIn(f"#{verb_hobble['id']}: hobble (verb, unspecified)", result.output)
 
     def test_generate_synonym_cloze_command_reports_missing_entry(self):
         app = self.create_test_app()

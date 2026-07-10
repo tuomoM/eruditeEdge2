@@ -3,6 +3,11 @@ import logging
 import re
 import time
 
+from Services.vocabulary_contexts import (
+    VOCABULARY_REGISTER_CONTEXTS,
+    VOCABULARY_USAGE_CONTEXTS,
+    normalize_context_string,
+)
 from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
 
 
@@ -24,39 +29,6 @@ FREQUENCY_BANDS = [
     "archaic_or_obsolete",
     "specialized",
 ]
-ALLOWED_CONTEXT_LABELS = {
-    "Academic",
-    "Archaic",
-    "Business",
-    "Business English",
-    "Casual",
-    "Colloquial",
-    "Education",
-    "Emotional",
-    "Equestrian",
-    "Everyday",
-    "Finance",
-    "Formal",
-    "General",
-    "Historical",
-    "Informal",
-    "Legal",
-    "Literary",
-    "Medical",
-    "Philosophy",
-    "Poetic",
-    "Political",
-    "Professional",
-    "Ranching",
-    "Regional",
-    "Religious",
-    "Rural",
-    "Scientific",
-    "Social",
-    "Technical",
-}
-
-
 VOCABULARY_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -66,11 +38,13 @@ VOCABULARY_SCHEMA = {
         "context": {
             "type": "string",
             "description": (
-                "A short usage setting, category, or register, not an example sentence. "
-                "This is separate "
-                "from semantic domains and must not describe the word's meaning. "
-                "Use 1-4 slash-separated labels such as Formal, Casual, "
-                "Medical, Philosophy, Academic, Business English, Business/Formal."
+                "Semicolon-separated context labels, not an example sentence "
+                "and separate from semantic domains. "
+                "Choose at least one register label from Informal, Formal, "
+                "Literary, Technical, Archaic, Dialectal. Then add zero or more "
+                "usage-domain labels from Academic, Business, Legal, Medical, "
+                "Biology, Science, Philosophy, Religion, Military, Geography. "
+                "Never use General and never use slash-separated values."
             ),
         },
         "part_of_speech": {
@@ -101,7 +75,7 @@ VOCABULARY_SCHEMA = {
                 "Ordered semantic areas represented by the word's meaning. The first "
                 "item is the primary domain. Add secondary and tertiary domains only "
                 "when they are clearly represented by the meaning. These are independent "
-                "of usage settings such as Academic, Medical, or General."
+                "of usage settings such as Academic, Medical, or Formal."
             ),
         },
         "synonyms": {
@@ -264,14 +238,16 @@ class VocabularyAiService:
                     "around the word mark the exact occurrence the learner encountered. "
                     "Short hints such as 'a', 'to', 'noun', 'verb', or a subject area "
                     "are valid clues and should influence part of speech and sense. "
-                    "The context field must describe the usage setting, category, or "
-                    "register, not the word's semantic meaning and not a sentence. "
-                    "Examples: Formal, Casual, Medical, Philosophy, Academic, Business "
-                    "English, Business/Formal, Literary, Historical, Technical. "
-                    "Use General only for words that are genuinely ordinary across "
-                    "everyday usage; prefer a more specific register or setting when "
-                    "the word is literary, formal, specialized, archaic, technical, "
-                    "or source-specific. Keep context separate from domains. "
+                    "The context field must describe usage settings, not the word's "
+                    "semantic meaning and not a sentence. Choose at least one "
+                    "semicolon-separated context label. Always choose at least one "
+                    "register label from this list: "
+                    f"{', '.join(VOCABULARY_REGISTER_CONTEXTS)}. Add zero or more "
+                    "usage-domain labels from this list when clearly useful: "
+                    f"{', '.join(VOCABULARY_USAGE_CONTEXTS)}. Examples: Literary, "
+                    "Formal; Legal, Technical; Medical; Biology. Never use General, "
+                    "and do not use slash-separated values. "
+                    "Keep context separate from domains. "
                     "Domains describe semantic meaning, such as movement, cognition, "
                     "power, or rhetoric. Provide 2-4 example "
                     "sentences that use the word naturally. Identify the primary part "
@@ -392,7 +368,7 @@ class VocabularyAiService:
                 input=(
                     f"Word: {word}\n"
                     f"Definition: {entry['definition']}\n"
-                    f"Context: {entry.get('context') or 'General'}\n"
+                    f"Context: {entry.get('context') or 'unspecified'}\n"
                     f"Examples:\n"
                     + "\n".join(f"- {example}" for example in entry.get("examples", []))
                 ),
@@ -559,7 +535,7 @@ class VocabularyAiService:
                 input=(
                     f"Target word: {word}\n"
                     f"Definition: {entry['definition']}\n"
-                    f"Context: {entry.get('context') or 'General'}\n"
+                    f"Context: {entry.get('context') or 'unspecified'}\n"
                     f"Example sentences:\n"
                     + "\n".join(f"- {example}" for example in entry.get("examples", []))
                     + f"\nLearner sentence: {sentence}"
@@ -647,7 +623,7 @@ class VocabularyAiService:
                     f"Word: {entry['word']}",
                     f"Part of speech: {entry.get('part_of_speech') or 'other'}",
                     f"Definition: {entry['definition']}",
-                    f"Context: {entry.get('context') or 'General'}",
+                    f"Context: {entry.get('context') or 'unspecified'}",
                     f"Frequency: {entry.get('frequency_band') or 'unknown'}",
                     "Domains: " + ", ".join(entry.get("domains", []) or ["none"]),
                     "Examples:",
@@ -658,19 +634,10 @@ class VocabularyAiService:
         return "\n".join(lines)
 
     def _normalize_context(self, context):
-        context = (context or "").strip()
-        labels = [
-            " ".join(label.strip().split())
-            for label in context.split("/")
-            if label.strip()
-        ]
-        if (
-            1 <= len(labels) <= 4
-            and all(label in ALLOWED_CONTEXT_LABELS for label in labels)
-        ):
-            return "/".join(labels)
-        logger.info("Vocabulary AI generation replaced sentence-like context with General")
-        return "General"
+        normalized = normalize_context_string(context)
+        if not normalized and str(context or "").strip():
+            logger.info("Vocabulary AI generation removed unsupported context labels")
+        return normalized
 
     def _normalize_frequency_band(self, frequency_band):
         frequency_band = (

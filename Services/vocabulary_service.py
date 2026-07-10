@@ -3,10 +3,10 @@ import re
 from Repositories.vocabulary_repository import (
     vocabulary_repository as default_vocabulary_repository,
 )
-from Services.vocabulary_domains import VOCABULARY_DOMAINS
 from Services.background_job_service import (
     background_job_service as default_background_job_service,
 )
+from Services.vocabulary_contexts import normalize_context_string, normalize_contexts
 from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
 
 
@@ -160,8 +160,24 @@ class VocabularyService:
             )
         )
 
-        contexts = self._vocabulary_repository.context_usage_counts()
-        total_entries = sum(row["entry_count"] for row in contexts)
+        context_counts = {}
+        unspecified_count = 0
+        raw_context_rows = self._vocabulary_repository.context_usage_counts()
+        for row in raw_context_rows:
+            contexts = normalize_contexts(row.get("context"))
+            if not contexts:
+                unspecified_count += 1
+                continue
+            for context in contexts:
+                context_counts[context] = context_counts.get(context, 0) + 1
+        contexts = [
+            {"context": context, "entry_count": count}
+            for context, count in context_counts.items()
+        ]
+        if unspecified_count:
+            contexts.append({"context": "Unspecified", "entry_count": unspecified_count})
+        contexts.sort(key=lambda row: (-row["entry_count"], row["context"].lower()))
+        total_entries = len(raw_context_rows)
         return {
             "total_entries": total_entries,
             "entries_without_domains": self._vocabulary_repository.count_entries_without_domains(),
@@ -248,7 +264,8 @@ class VocabularyService:
     def _validate_data(self, data):
         word = self._clean_text(data.get("word"))
         definition = self._clean_text(data.get("definition"))
-        context = self._clean_text(data.get("context"))
+        raw_context = self._clean_text(data.get("context"))
+        context = normalize_context_string(raw_context)
         part_of_speech = self._clean_part_of_speech(data.get("part_of_speech"))
         frequency_band = self._clean_frequency_band(data.get("frequency_band"))
         frequency_note = self._clean_optional_text(data.get("frequency_note"))
@@ -264,7 +281,7 @@ class VocabularyService:
             [
                 word,
                 definition,
-                context,
+                raw_context,
                 part_of_speech,
                 frequency_band or "",
                 frequency_note or "",
@@ -470,14 +487,15 @@ class VocabularyService:
     def _clean_search_filters(self, filters):
         filters = filters or {}
         word = self._clean_text(filters.get("word"))
-        context = self._clean_text(filters.get("context"))
+        raw_context = self._clean_text(filters.get("context"))
+        context = normalize_context_string(raw_context)
         source_name = self._clean_text(filters.get("source_name"))
         source_author = self._clean_text(filters.get("source_author"))
         domain = self._clean_text(filters.get("domain")).lower()
         part_of_speech = self._clean_text(filters.get("part_of_speech")).lower()
         frequency_band = self._clean_frequency_band(filters.get("frequency_band"))
 
-        fields = [word, context, source_name, source_author]
+        fields = [word, raw_context, source_name, source_author]
         unsafe_field = self._find_unsafe_field(fields)
         if unsafe_field:
             return None, "HTML tags are not allowed"

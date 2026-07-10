@@ -1,6 +1,7 @@
 from sqlite3 import IntegrityError, OperationalError
 
 import db
+from Services.vocabulary_contexts import normalize_contexts
 
 
 class VocabularyRepository:
@@ -236,6 +237,7 @@ class VocabularyRepository:
 
         entry = dict(rows[0])
         entry.pop("definition_key", None)
+        entry["contexts"] = normalize_contexts(entry.get("context"))
         synonym_rows = self._entry_synonym_rows(vocabulary_id)
         entry["synonyms"] = [row["synonym"] for row in synonym_rows]
         entry["linked_synonyms"] = [
@@ -379,8 +381,28 @@ class VocabularyRepository:
             where.append("vocabulary_entries.word LIKE ? COLLATE NOCASE")
             params.append(filters["word"])
         if filters.get("context"):
-            where.append("vocabulary_entries.context = ? COLLATE NOCASE")
-            params.append(filters["context"])
+            where.append(
+                """
+                (
+                    ';' || lower(
+                        replace(
+                            replace(
+                                replace(
+                                    replace(vocabulary_entries.context, '/', ';'),
+                                    ',',
+                                    ';'
+                                ),
+                                '; ',
+                                ';'
+                            ),
+                            ' ;',
+                            ';'
+                        )
+                    ) || ';'
+                ) LIKE ?
+                """
+            )
+            params.append(f"%;{filters['context'].lower()};%")
         if filters.get("part_of_speech"):
             where.append("vocabulary_entries.part_of_speech = ?")
             params.append(filters["part_of_speech"])
@@ -458,12 +480,9 @@ class VocabularyRepository:
     def context_usage_counts(self):
         rows = db.query(
             """
-            SELECT
-                COALESCE(NULLIF(TRIM(context), ''), 'Unspecified') AS context,
-                COUNT(*) AS entry_count
+            SELECT context
             FROM vocabulary_entries
-            GROUP BY COALESCE(NULLIF(TRIM(context), ''), 'Unspecified')
-            ORDER BY entry_count DESC, context COLLATE NOCASE
+            ORDER BY context COLLATE NOCASE
             """
         )
         return [dict(row) for row in rows]

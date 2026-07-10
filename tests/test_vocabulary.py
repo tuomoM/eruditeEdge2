@@ -147,7 +147,7 @@ class VocabularyTestCase(unittest.TestCase):
         return {
             "word": "operation",
             "definition": "A planned activity or procedure",
-            "context": "Scientific/Medical",
+            "context": "Technical; Science; Medical",
             "synonyms": ["procedure", "process"],
             "examples": [
                 "The operation required careful preparation.",
@@ -200,10 +200,37 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         body = response.get_json()
         self.assertEqual(body["word"], "operation")
-        self.assertEqual(body["context"], "Scientific/Medical")
+        self.assertEqual(body["context"], "Technical; Science; Medical")
         self.assertEqual(body["synonyms"], ["procedure", "process"])
         self.assertEqual(len(body["examples"]), 2)
         self.assertEqual(body["sources"], [])
+
+    def test_create_vocabulary_normalizes_multiple_contexts(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["context"] = "General / Formal, Literary; formal"
+
+        response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["context"], "Formal; Literary")
+        self.assertEqual(response.get_json()["contexts"], ["Formal", "Literary"])
+
+    def test_context_filter_matches_entry_with_multiple_contexts(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["word"] = "stultify"
+        data["definition"] = "To make ineffective."
+        data["context"] = "Business; Formal"
+        self.create_entry(data)
+
+        response = self.client.get(
+            "/vocabulary",
+            query_string={"context": "Formal"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"stultify", response.data)
 
     def test_create_vocabulary_saves_sources_without_creator_identity(self):
         self.login_user()
@@ -1717,7 +1744,7 @@ class VocabularyTestCase(unittest.TestCase):
         response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json()["context"], "Medical'; DROP TABLE users; --")
+        self.assertEqual(response.get_json()["context"], "")
 
     def test_update_vocabulary_rejects_html_tags(self):
         self.login_user()

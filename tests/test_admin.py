@@ -345,7 +345,7 @@ class AdminTestCase(unittest.TestCase):
         second["context"] = "Formal"
         second["domains"] = ["attitude"]
         third = self.valid_entry("operation")
-        third["context"] = "Scientific"
+        third["context"] = "Technical; Science"
         third["domains"] = []
         self.client.post("/vocabulary", json=first)
         self.client.post("/vocabulary", json=second)
@@ -361,7 +361,8 @@ class AdminTestCase(unittest.TestCase):
         self.assertIn(b"entry has", response.data)
         self.assertIn(b"no domain assigned", response.data)
         self.assertIn(b"Formal", response.data)
-        self.assertIn(b"Scientific", response.data)
+        self.assertIn(b"Technical", response.data)
+        self.assertIn(b"Science", response.data)
 
     def test_admin_vocabulary_maintenance_shows_entries_needing_cloze_data(self):
         self.create_admin("tuomo")

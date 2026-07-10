@@ -39,9 +39,9 @@
                 <div class="entry-main">
                     <div class="entry-heading">
                         <strong class="entry-word">{{ entry.word }}</strong>
-                        {% if entry.context %}
-                            <span class="meta-chip">{{ entry.context }}</span>
-                        {% endif %}
+                        {% for context in entry.contexts %}
+                            <span class="meta-chip">{{ context }}</span>
+                        {% endfor %}
                         <span class="meta-chip">{{ entry.part_of_speech }}</span>
                         {% for domain in entry.domains %}
                             <span class="meta-chip">{{ domain }}</span>

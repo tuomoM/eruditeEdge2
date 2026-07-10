@@ -309,7 +309,7 @@ def _resolve_vocabulary_id(entry):
                 id=match["id"],
                 word=match["word"],
                 part_of_speech=match["part_of_speech"],
-                context=match["context"],
+                context=match["context"] or "unspecified",
                 definition=match["definition"],
             )
         )

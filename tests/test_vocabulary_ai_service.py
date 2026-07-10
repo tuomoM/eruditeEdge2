@@ -50,7 +50,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
             {
                 "word": "operation",
                 "definition": "A planned activity or procedure.",
-                "context": "Scientific/Medical",
+                "context": "Technical; Science; Medical",
                 "part_of_speech": "noun",
                 "frequency_band": "common",
                 "frequency_note": "",
@@ -85,7 +85,15 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         )
         self.assertFalse(client.responses.last_request["store"])
         self.assertIn(
-            "context field must describe the usage setting",
+            "context field must describe usage settings",
+            client.responses.last_request["instructions"],
+        )
+        self.assertIn(
+            "Always choose at least one",
+            client.responses.last_request["instructions"],
+        )
+        self.assertIn(
+            "usage-domain labels",
             client.responses.last_request["instructions"],
         )
         self.assertIn(
@@ -102,7 +110,8 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIn("Put the primary domain first", client.responses.last_request["instructions"])
         self.assertIn("Do not pad the domain list", client.responses.last_request["instructions"])
         self.assertIn("prefer movement as the primary domain", client.responses.last_request["instructions"])
-        self.assertIn("Use General only for words", client.responses.last_request["instructions"])
+        self.assertIn("Never use General", client.responses.last_request["instructions"])
+        self.assertIn("semicolon-separated context label", client.responses.last_request["instructions"])
         self.assertIn("frequency band", client.responses.last_request["instructions"])
         frequency_schema = (
             client.responses.last_request["text"]["format"]["schema"]["properties"]["frequency_band"]
@@ -278,7 +287,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
             {
                 "word": "totter",
                 "definition": "To move in a feeble, unsteady, or shaky way.",
-                "context": "General",
+                "context": "",
                 "part_of_speech": "verb",
                 "frequency_band": "common",
                 "frequency_note": "",
@@ -303,7 +312,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(entry["domains"], ["movement"])
 
-    def test_generate_entry_normalizes_sentence_like_context_to_general(self):
+    def test_generate_entry_removes_sentence_like_context(self):
         output = json.dumps(
             {
                 "word": "stultify",
@@ -331,9 +340,9 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         entry, error = service.generate_entry("stultify", "test-key", "test-model")
 
         self.assertIsNone(error)
-        self.assertEqual(entry["context"], "General")
+        self.assertEqual(entry["context"], "")
 
-    def test_generate_entry_accepts_slash_separated_context_categories(self):
+    def test_generate_entry_canonicalizes_legacy_slash_separated_context_categories(self):
         output = json.dumps(
             {
                 "word": "stultify",
@@ -361,9 +370,9 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         entry, error = service.generate_entry("stultify", "test-key", "test-model")
 
         self.assertIsNone(error)
-        self.assertEqual(entry["context"], "Business/Formal")
+        self.assertEqual(entry["context"], "Formal; Business")
 
-    def test_generate_entry_preserves_multi_word_context_category(self):
+    def test_generate_entry_canonicalizes_legacy_multi_word_context_category(self):
         output = json.dumps(
             {
                 "word": "stultify",
@@ -391,9 +400,9 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         entry, error = service.generate_entry("stultify", "test-key", "test-model")
 
         self.assertIsNone(error)
-        self.assertEqual(entry["context"], "Business English")
+        self.assertEqual(entry["context"], "Business")
 
-    def test_generate_entry_replaces_unsupported_two_word_context_with_general(self):
+    def test_generate_entry_removes_unsupported_two_word_context(self):
         output = json.dumps(
             {
                 "word": "stultify",
@@ -421,7 +430,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         entry, error = service.generate_entry("stultify", "test-key", "test-model")
 
         self.assertIsNone(error)
-        self.assertEqual(entry["context"], "General")
+        self.assertEqual(entry["context"], "")
 
     def test_generate_entry_rejects_ai_output_with_fewer_than_two_examples(self):
         output = json.dumps(

@@ -37,9 +37,12 @@ schema_migrations
 
 Vocabulary entries use three separate classification concepts:
 
-- `context`: Usage setting or register, such as Academic, Medical, Formal, or
-  General. It does not describe the semantic meaning of the word. AI should use
-  `General` only for genuinely ordinary everyday usage.
+- `context`: Semicolon-separated usage context labels. AI should choose at
+  least one register label from `Informal`, `Formal`, `Literary`, `Technical`,
+  `Archaic`, and `Dialectal`, plus zero or more usage-domain labels from
+  `Academic`, `Business`, `Legal`, `Medical`, `Biology`, `Science`,
+  `Philosophy`, `Religion`, `Military`, and `Geography`. It does not describe
+  the semantic meaning of the word. `General` is no longer used as a fallback.
 - `part_of_speech`: Grammatical classification used by cloze training:
   `noun`, `verb`, `adjective`, `adverb`, `phrase`, or `other`.
 - `frequency_band`: How common this exact word sense is: `common`,
@@ -57,7 +60,7 @@ Vocabulary entries use three separate classification concepts:
   creation and may be omitted entirely.
 
 These fields must remain independent. For example, a word may have context
-`Academic`, part of speech `noun`, frequency `uncommon`, and domains
+`Formal; Academic`, part of speech `noun`, frequency `uncommon`, and domains
 `cognition` and `communication`.
 
 ## Tables
