@@ -212,13 +212,19 @@ class VocabularyMaintenanceService:
             "created_by": run_options["created_by"],
         }, None
 
-    def generate_domain_model_proposal(self, prepared_proposal, api_key):
+    def generate_domain_model_proposal(
+        self,
+        prepared_proposal,
+        api_key,
+        timeout_seconds=None,
+    ):
         proposal, error = self._vocabulary_ai_service.generate_domain_model(
             prepared_proposal["entries"],
             list(active_vocabulary_domains()),
             list(VOCABULARY_CONTEXTS),
             api_key,
             prepared_proposal["ai_model"],
+            timeout_seconds=timeout_seconds,
         )
         if error:
             return None, error

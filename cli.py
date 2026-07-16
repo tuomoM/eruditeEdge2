@@ -507,6 +507,9 @@ def generate_vocabulary_domain_model(
     else:
         click.echo("AI model source: OPENAI_MAINTENANCE_MODEL")
     click.echo(
+        f"OpenAI timeout: {current_app.config['OPENAI_MAINTENANCE_TIMEOUT_SECONDS']}s"
+    )
+    click.echo(
         "Estimated tokens: {input_tokens} input, {output_tokens} output".format(
             input_tokens=prepared_proposal["estimated_input_tokens"],
             output_tokens=prepared_proposal["estimated_output_tokens"],
@@ -522,6 +525,7 @@ def generate_vocabulary_domain_model(
     result, error = vocabulary_maintenance_service.generate_domain_model_proposal(
         prepared_proposal,
         current_app.config["OPENAI_API_KEY"],
+        timeout_seconds=current_app.config["OPENAI_MAINTENANCE_TIMEOUT_SECONDS"],
     )
     if error:
         raise click.ClickException(error)

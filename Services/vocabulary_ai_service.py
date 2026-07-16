@@ -665,7 +665,15 @@ class VocabularyAiService:
         logger.info("Vocabulary usage validation succeeded for word '%s'", word)
         return {"result": result["result"], "hint": hint}, None
 
-    def generate_domain_model(self, entries, current_domains, context_labels, api_key, model):
+    def generate_domain_model(
+        self,
+        entries,
+        current_domains,
+        context_labels,
+        api_key,
+        model,
+        timeout_seconds=None,
+    ):
         if not api_key:
             logger.warning("Domain model generation failed: missing OpenAI API key")
             return None, "OpenAI API key is missing"
@@ -678,7 +686,7 @@ class VocabularyAiService:
             model,
         )
         try:
-            client = self._get_client(api_key)
+            client = self._get_client(api_key, timeout_seconds=timeout_seconds)
             started_at = time.perf_counter()
             response = client.responses.create(
                 model=model,
@@ -1018,16 +1026,17 @@ class VocabularyAiService:
     def _domain_model_key(self, value):
         return re.sub(r"[^a-z0-9]+", "_", str(value or "").lower()).strip("_")
 
-    def _get_client(self, api_key):
+    def _get_client(self, api_key, timeout_seconds=None):
         if self._client is not None:
             return self._client
 
         from openai import OpenAI
 
+        timeout = timeout_seconds or OPENAI_REQUEST_TIMEOUT_SECONDS
         return OpenAI(
             api_key=api_key,
             max_retries=OPENAI_MAX_RETRIES,
-            timeout=OPENAI_REQUEST_TIMEOUT_SECONDS,
+            timeout=timeout,
         )
 
 
