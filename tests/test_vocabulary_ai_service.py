@@ -1,5 +1,6 @@
 import json
 import unittest
+from unittest.mock import patch
 
 from Services.vocabulary_ai_service import VocabularyAiService
 from Services.vocabulary_ai_service import (
@@ -134,6 +135,50 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertEqual(entry["frequency_band"], "common")
         self.assertEqual(entry["frequency_note"], "")
         self.assertIsNone(entry["needs_attention"])
+
+    def test_generate_entry_uses_active_domain_model(self):
+        output = json.dumps(
+            {
+                "word": "contumacious",
+                "definition": "Stubbornly disobedient to authority.",
+                "context": "Formal; Legal",
+                "part_of_speech": "adjective",
+                "frequency_band": "rare",
+                "frequency_note": "Mostly encountered in legal or formal prose.",
+                "domains": ["authority_resistance"],
+                "synonyms": ["defiant"],
+                "examples": [
+                    "The contumacious witness refused the judge's order.",
+                    "His contumacious reply escalated the hearing.",
+                ],
+                "cloze_sentences": [
+                    "The ____ witness refused the judge's order.",
+                    "His ____ reply escalated the hearing.",
+                ],
+                "needs_attention": "",
+                "confidence_score": 91,
+            }
+        )
+        client = FakeClient(output)
+        service = VocabularyAiService(client=client)
+
+        with patch(
+            "Services.vocabulary_ai_service.active_vocabulary_domains",
+            return_value=("authority_resistance", "physical_motion"),
+        ):
+            entry, error = service.generate_entry("contumacious", "test-key", "test-model")
+
+        self.assertIsNone(error)
+        self.assertEqual(entry["domains"], ["authority_resistance"])
+        domains_schema = (
+            client.responses.last_request["text"]["format"]["schema"]["properties"]["domains"]
+        )
+        self.assertEqual(
+            domains_schema["items"]["enum"],
+            ["authority_resistance", "physical_motion"],
+        )
+        self.assertIn("authority_resistance", client.responses.last_request["instructions"])
+        self.assertNotIn("emotion, attitude", client.responses.last_request["instructions"])
 
     def test_generate_synonym_net_cloze_data_uses_graph_prompt(self):
         output = json.dumps(

@@ -9,6 +9,7 @@ import db
 from app import create_app
 from csrf import CSRF_SESSION_KEY
 from db import init_db
+from Services.vocabulary_domains import active_vocabulary_domains
 
 
 class AdminTestCase(unittest.TestCase):
@@ -440,6 +441,101 @@ class AdminTestCase(unittest.TestCase):
         self.assertIn(b"physical_motion", detail_response.data)
         self.assertIn(b"Formal remains context", detail_response.data)
         self.assertIn(b"Too vague for graph navigation", detail_response.data)
+
+    def test_admin_can_accept_domain_model_proposal_for_new_vocabulary(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        proposal_json = {
+            "domains": [
+                {
+                    "key": "authority_resistance",
+                    "label": "Authority Resistance",
+                    "definition": "Defiance and resistance to authority.",
+                    "include": [],
+                    "exclude": [],
+                    "example_words": ["contumacious"],
+                    "replaces_current_domains": ["attitude"],
+                },
+                {
+                    "key": "physical_motion",
+                    "label": "Physical Motion",
+                    "definition": "Movement through space.",
+                    "include": [],
+                    "exclude": [],
+                    "example_words": ["totter"],
+                    "replaces_current_domains": ["movement"],
+                },
+                {
+                    "key": "material_world",
+                    "label": "Material World",
+                    "definition": "Objects and substances.",
+                    "include": [],
+                    "exclude": [],
+                    "example_words": ["loam"],
+                    "replaces_current_domains": ["body"],
+                },
+            ],
+            "domain_edges": [],
+            "retired_domains": [],
+            "context_boundary_rules": [],
+            "rationale": "Candidate active taxonomy.",
+            "review_notes": [],
+        }
+        with self.app.app_context():
+            proposal_id = db.execute(
+                """
+                INSERT INTO vocabulary_domain_model_proposals
+                    (
+                        name,
+                        selection_filter_json,
+                        selected_count,
+                        ai_model,
+                        prompt_template_version,
+                        prompt_template_hash,
+                        current_domain_snapshot_json,
+                        context_snapshot_json,
+                        proposal_json,
+                        rationale
+                    )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    "domain-model-v2",
+                    json.dumps({"scope": "all"}),
+                    42,
+                    "test-maintenance-model",
+                    "domain-model-discovery-v1",
+                    "hash",
+                    json.dumps(["attitude", "movement"]),
+                    json.dumps(["Formal", "Literary"]),
+                    json.dumps(proposal_json),
+                    proposal_json["rationale"],
+                ],
+            ).lastrowid
+
+        response = self.client.post(
+            f"/admin/domain-model-proposals/{proposal_id}/status",
+            data={
+                "csrf_token": self.csrf_token(),
+                "status": "accepted",
+            },
+            follow_redirects=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Accepted domain model proposal", response.data)
+        with self.app.app_context():
+            rows = db.query(
+                "SELECT status FROM vocabulary_domain_model_proposals WHERE id = ?",
+                [proposal_id],
+            )
+            active_domains = active_vocabulary_domains()
+        self.assertEqual(rows[0]["status"], "accepted")
+        self.assertEqual(
+            active_domains,
+            ("authority_resistance", "physical_motion", "material_world"),
+        )
 
     def test_admin_vocabulary_statistics_shows_domain_and_context_counts(self):
         self.create_admin("tuomo")

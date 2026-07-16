@@ -9,6 +9,7 @@ from Services.vocabulary_contexts import (
     normalize_context_string,
 )
 from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
+from Services.vocabulary_domains import active_vocabulary_domains
 
 
 logger = logging.getLogger(__name__)
@@ -301,6 +302,7 @@ class VocabularyAiService:
             return None, "OpenAI API key is missing"
 
         logger.info("Vocabulary AI generation started for word '%s' using model '%s'", word, model)
+        allowed_domains = active_vocabulary_domains()
         try:
             client = self._get_client(api_key)
             started_at = time.perf_counter()
@@ -331,7 +333,7 @@ class VocabularyAiService:
                     "sentences that use the word naturally. Identify the primary part "
                     "of speech for this meaning using noun, verb, adjective, adverb, "
                     "phrase, or other. Assign 1-3 ordered semantic domains using only: "
-                    f"{', '.join(VOCABULARY_DOMAINS)}. Put the primary domain first. "
+                    f"{', '.join(allowed_domains)}. Put the primary domain first. "
                     "Do not pad the domain list with weak or merely associated labels. "
                     "For physical motion words, prefer movement as the primary domain "
                     "over perception unless the meaning is actually about seeing or "
@@ -353,7 +355,7 @@ class VocabularyAiService:
                     "format": {
                         "type": "json_schema",
                         "name": "vocabulary_entry",
-                        "schema": VOCABULARY_SCHEMA,
+                        "schema": self._vocabulary_schema(allowed_domains),
                         "strict": True,
                     }
                 },
@@ -387,7 +389,7 @@ class VocabularyAiService:
         entry["frequency_note"] = self._normalize_frequency_note(
             entry.get("frequency_note")
         )
-        entry["domains"] = self._normalize_domains(entry.get("domains"))
+        entry["domains"] = self._normalize_domains(entry.get("domains"), allowed_domains)
         entry["examples"] = self._normalize_examples(entry.get("examples"))
         entry["cloze_sentences"] = self._normalize_cloze_sentences(
             entry.get("cloze_sentences")
@@ -418,6 +420,7 @@ class VocabularyAiService:
 
         word = entry["word"]
         logger.info("Cloze AI generation started for word '%s' using model '%s'", word, model)
+        allowed_domains = active_vocabulary_domains()
         try:
             client = self._get_client(api_key)
             started_at = time.perf_counter()
@@ -430,7 +433,7 @@ class VocabularyAiService:
                     "Return JSON only. Identify the primary part of speech for the "
                     "given meaning using noun, verb, adjective, adverb, phrase, or other. "
                     "Assign 1-3 ordered semantic domains using only: "
-                    f"{', '.join(VOCABULARY_DOMAINS)}. The first item is the primary "
+                    f"{', '.join(allowed_domains)}. The first item is the primary "
                     "domain. Add secondary and tertiary domains only when clearly "
                     "represented by the meaning. Domains describe meaning and are "
                     "separate from usage context such as Academic or Medical. "
@@ -454,7 +457,7 @@ class VocabularyAiService:
                     "format": {
                         "type": "json_schema",
                         "name": "cloze_data",
-                        "schema": CLOZE_DATA_SCHEMA,
+                        "schema": self._cloze_data_schema(allowed_domains),
                         "strict": True,
                     }
                 },
@@ -483,7 +486,10 @@ class VocabularyAiService:
         cloze_data["cloze_sentences"] = self._normalize_cloze_sentences(
             cloze_data.get("cloze_sentences")
         )
-        cloze_data["domains"] = self._normalize_domains(cloze_data.get("domains"))
+        cloze_data["domains"] = self._normalize_domains(
+            cloze_data.get("domains"),
+            allowed_domains,
+        )
         assessment_error = self._normalize_ai_assessment(cloze_data)
         if len(cloze_data["cloze_sentences"]) < 2:
             return None, "OpenAI returned invalid cloze data"
@@ -730,6 +736,16 @@ class VocabularyAiService:
     def validate_word(self, word):
         return self._validate_word(word)
 
+    def _vocabulary_schema(self, allowed_domains):
+        schema = json.loads(json.dumps(VOCABULARY_SCHEMA))
+        schema["properties"]["domains"]["items"]["enum"] = list(allowed_domains)
+        return schema
+
+    def _cloze_data_schema(self, allowed_domains):
+        schema = json.loads(json.dumps(CLOZE_DATA_SCHEMA))
+        schema["properties"]["domains"]["items"]["enum"] = list(allowed_domains)
+        return schema
+
     def _validate_word(self, word):
         word = (word or "").strip()
         if not WORD_PATTERN.fullmatch(word):
@@ -837,15 +853,16 @@ class VocabularyAiService:
             if str(example).strip()
         ][:4]
 
-    def _normalize_domains(self, domains):
+    def _normalize_domains(self, domains, allowed_domains=None):
         if not isinstance(domains, list):
             return []
 
+        allowed_domains = tuple(allowed_domains or active_vocabulary_domains())
         normalized_domains = []
         for domain in domains:
             normalized_domain = str(domain).strip().lower()
             if (
-                normalized_domain in VOCABULARY_DOMAINS
+                normalized_domain in allowed_domains
                 and normalized_domain not in normalized_domains
             ):
                 normalized_domains.append(normalized_domain)

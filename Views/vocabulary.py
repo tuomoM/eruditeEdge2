@@ -6,7 +6,7 @@ from csrf import csrf_required
 from Services.ai_quota_service import ai_quota_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, ACCOUNT_CATEGORY_TRUSTED, user_service
 from Services.vocabulary_ai_service import vocabulary_ai_service
-from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
+from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, active_vocabulary_domains
 from Services.vocabulary_service import vocabulary_service
 
 
@@ -176,7 +176,7 @@ def sources_to_text(sources):
 
 def vocabulary_filter_choices():
     return {
-        "domains": VOCABULARY_DOMAINS,
+        "domains": active_vocabulary_domains(),
         "parts_of_speech": PART_OF_SPEECH_FILTERS,
         "frequency_bands": FREQUENCY_BAND_FILTERS,
     }
@@ -224,7 +224,7 @@ def new_vocabulary():
             "vocabulary_form.html",
             entry=None,
             prefill_word=request.args.get("word", "").strip(),
-            available_domains=VOCABULARY_DOMAINS,
+            available_domains=active_vocabulary_domains(),
             max_domains=MAX_VOCABULARY_DOMAINS,
         )
 
@@ -240,7 +240,7 @@ def new_vocabulary():
             examples_text=request.form.get("examples", ""),
             cloze_sentences_text=request.form.get("cloze_sentences", ""),
             sources_text=request.form.get("sources", ""),
-            available_domains=VOCABULARY_DOMAINS,
+            available_domains=active_vocabulary_domains(),
             max_domains=MAX_VOCABULARY_DOMAINS,
         ), 400
     return redirect(f"/vocabulary/{entry['id']}/page")
@@ -390,7 +390,7 @@ def edit_vocabulary(vocabulary_id):
             examples_text="\n".join(entry["examples"]),
             cloze_sentences_text="\n".join(entry["cloze_sentences"]),
             sources_text=sources_to_text(entry.get("sources", [])),
-            available_domains=VOCABULARY_DOMAINS,
+            available_domains=active_vocabulary_domains(),
             max_domains=MAX_VOCABULARY_DOMAINS,
         )
 
@@ -408,7 +408,7 @@ def edit_vocabulary(vocabulary_id):
             examples_text=request.form.get("examples", ""),
             cloze_sentences_text=request.form.get("cloze_sentences", ""),
             sources_text=request.form.get("sources", ""),
-            available_domains=VOCABULARY_DOMAINS,
+            available_domains=active_vocabulary_domains(),
             max_domains=MAX_VOCABULARY_DOMAINS,
         ), 400
     return redirect(f"/vocabulary/{updated_entry['id']}/page")

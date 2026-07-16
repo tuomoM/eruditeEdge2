@@ -7,7 +7,10 @@ from Services.background_job_service import (
     background_job_service as default_background_job_service,
 )
 from Services.vocabulary_contexts import normalize_context_string, normalize_contexts
-from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
+from Services.vocabulary_domains import (
+    MAX_VOCABULARY_DOMAINS,
+    active_vocabulary_domains,
+)
 
 
 HTML_PATTERN = re.compile(r"<[^>]+>")
@@ -143,7 +146,7 @@ class VocabularyService:
             for row in self._vocabulary_repository.domain_usage_counts()
         }
         domains = []
-        for domain in VOCABULARY_DOMAINS:
+        for domain in active_vocabulary_domains():
             row = domain_rows.get(domain, {})
             domains.append(
                 {
@@ -320,7 +323,7 @@ class VocabularyService:
             )
         if len(domains) > MAX_VOCABULARY_DOMAINS:
             return None, f"Vocabulary entry must have at most {MAX_VOCABULARY_DOMAINS} domains"
-        if any(domain not in VOCABULARY_DOMAINS for domain in domains):
+        if any(domain not in active_vocabulary_domains() for domain in domains):
             return None, "Vocabulary domain is invalid"
         if len(needs_attention or "") > MAX_NEEDS_ATTENTION_LENGTH:
             return None, (
@@ -504,7 +507,7 @@ class VocabularyService:
             if search_error:
                 return None, search_error
             word = word.replace("*", "%")
-        if domain and domain not in VOCABULARY_DOMAINS:
+        if domain and domain not in active_vocabulary_domains():
             return None, "Vocabulary domain is invalid"
         if part_of_speech and part_of_speech not in ALLOWED_PARTS_OF_SPEECH:
             return None, "Part of speech is invalid"

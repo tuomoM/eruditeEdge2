@@ -10,7 +10,7 @@ from Services.invite_code_service import invite_code_service
 from Services.security_report_service import security_report_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_ai_service import vocabulary_ai_service
-from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
+from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, active_vocabulary_domains
 from Services.vocabulary_maintenance_service import vocabulary_maintenance_service
 from Services.vocabulary_service import vocabulary_service
 from Services.vocabulary_synonym_link_service import vocabulary_synonym_link_service
@@ -140,7 +140,7 @@ def vocabulary_maintenance_page():
         "admin_vocabulary_maintenance.html",
         entries=entries,
         selected_view=selected_view,
-        available_domains=VOCABULARY_DOMAINS,
+        available_domains=active_vocabulary_domains(),
         max_domains=MAX_VOCABULARY_DOMAINS,
     )
 
@@ -181,6 +181,43 @@ def domain_model_proposal_detail_page(proposal_id):
         "admin_domain_model_proposal_detail.html",
         proposal=proposal,
     )
+
+
+@admin_bp.route("/admin/domain-model-proposals/<int:proposal_id>/status", methods=["POST"])
+@admin_required
+@csrf_required
+def update_domain_model_proposal_status(proposal_id):
+    status = request.form.get("status")
+    review_note = request.form.get("review_note", "")
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        status = data.get("status")
+        review_note = data.get("review_note", "")
+
+    proposal, error = vocabulary_maintenance_service.update_domain_model_proposal_status(
+        proposal_id,
+        status,
+        session["user_id"],
+        review_note,
+    )
+    if error:
+        if request.is_json:
+            return jsonify({"error": error}), 400
+        flash(error)
+        return redirect(f"/admin/domain-model-proposals/{proposal_id}")
+
+    if request.is_json:
+        return jsonify(
+            {
+                "id": proposal["id"],
+                "status": proposal["status"],
+            }
+        )
+    if proposal["status"] == "accepted":
+        flash("Accepted domain model proposal. New AI vocabulary generation will use this domain model.")
+    else:
+        flash("Rejected domain model proposal.")
+    return redirect(f"/admin/domain-model-proposals/{proposal_id}")
 
 
 @admin_bp.route("/admin/vocabulary/<int:vocabulary_id>/cloze-data", methods=["POST"])

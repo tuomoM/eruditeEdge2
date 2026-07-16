@@ -5,7 +5,7 @@ from Repositories.vocabulary_maintenance_repository import (
 )
 from Services.vocabulary_contexts import normalize_context_string
 from Services.vocabulary_contexts import VOCABULARY_CONTEXTS
-from Services.vocabulary_domains import VOCABULARY_DOMAINS
+from Services.vocabulary_domains import active_vocabulary_domains
 from Services.vocabulary_ai_service import (
     vocabulary_ai_service as default_vocabulary_ai_service,
 )
@@ -215,7 +215,7 @@ class VocabularyMaintenanceService:
     def generate_domain_model_proposal(self, prepared_proposal, api_key):
         proposal, error = self._vocabulary_ai_service.generate_domain_model(
             prepared_proposal["entries"],
-            list(VOCABULARY_DOMAINS),
+            list(active_vocabulary_domains()),
             list(VOCABULARY_CONTEXTS),
             api_key,
             prepared_proposal["ai_model"],
@@ -230,7 +230,7 @@ class VocabularyMaintenanceService:
             "ai_model": prepared_proposal["ai_model"],
             "prompt_template_version": DOMAIN_MODEL_PROMPT_TEMPLATE_VERSION,
             "prompt_template_hash": domain_model_prompt_template_hash(),
-            "current_domain_snapshot_json": stable_json(list(VOCABULARY_DOMAINS)),
+            "current_domain_snapshot_json": stable_json(list(active_vocabulary_domains())),
             "context_snapshot_json": stable_json(list(VOCABULARY_CONTEXTS)),
             "proposal_json": stable_json(proposal),
             "rationale": proposal["rationale"],
@@ -263,6 +263,30 @@ class VocabularyMaintenanceService:
         )
         proposal["review_notes"] = proposal_data.get("review_notes", [])
         return proposal
+
+    def update_domain_model_proposal_status(
+        self,
+        proposal_id,
+        status,
+        reviewed_by=None,
+        review_note=None,
+    ):
+        if status not in {"accepted", "rejected"}:
+            return None, "Domain model proposal status is invalid"
+        proposal = self.get_domain_model_proposal(proposal_id)
+        if not proposal:
+            return None, "Domain model proposal was not found"
+        if proposal["status"] == status:
+            return proposal, None
+        updated = self._vocabulary_maintenance_repository.update_domain_model_proposal_status(
+            proposal_id,
+            status,
+            reviewed_by,
+            review_note,
+        )
+        if not updated:
+            return None, "Domain model proposal was not found"
+        return self.get_domain_model_proposal(proposal_id), None
 
     def _clean_run_options(
         self,
@@ -303,7 +327,7 @@ class VocabularyMaintenanceService:
             filters["missing_domains"] = True
         elif scope == "domain":
             domain = str(domain or "").strip().lower()
-            if domain not in VOCABULARY_DOMAINS:
+            if domain not in active_vocabulary_domains():
                 return None, "A valid --domain is required for domain scope"
             filters["domain"] = domain
             selection_filter["domain"] = domain

@@ -437,6 +437,11 @@ or production vocabulary entries. The proposal should keep semantic domains
 separate from context labels and include graph edges that can later support
 semantic navigation.
 
+The latest proposal with status `accepted` is the active domain catalog for new
+AI vocabulary generation, manual domain validation, and admin domain controls.
+If no proposal is accepted, the application falls back to the built-in domain
+catalog.
+
 | Column | Type | Rules |
 | --- | --- | --- |
 | `id` | INTEGER | Primary key, autoincrement |

@@ -24,6 +24,25 @@
         </div>
     </div>
     <p class="entry-definition">{{ proposal.rationale }}</p>
+    <div class="actions">
+        {% if proposal.status != "accepted" %}
+            <form action="/admin/domain-model-proposals/{{ proposal.id }}/status" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="accepted">
+                <button class="button-primary" type="submit">Accept for new vocabulary</button>
+            </form>
+        {% endif %}
+        {% if proposal.status != "rejected" %}
+            <form action="/admin/domain-model-proposals/{{ proposal.id }}/status" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="rejected">
+                <button class="button-secondary" type="submit">Reject</button>
+            </form>
+        {% endif %}
+    </div>
+    {% if proposal.review_note %}
+        <p class="entry-definition muted">{{ proposal.review_note }}</p>
+    {% endif %}
     <div class="entry-list">
         <div class="entry-row">
             <div class="entry-main">

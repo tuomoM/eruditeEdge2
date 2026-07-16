@@ -261,6 +261,27 @@ class VocabularyMaintenanceRepository:
             proposal[key.replace("_json", "")] = json.loads(proposal[key])
         return proposal
 
+    def update_domain_model_proposal_status(
+        self,
+        proposal_id,
+        status,
+        reviewed_by=None,
+        review_note=None,
+    ):
+        cursor = db.execute(
+            """
+            UPDATE vocabulary_domain_model_proposals
+            SET
+                status = ?,
+                reviewed_by = ?,
+                reviewed_at = CURRENT_TIMESTAMP,
+                review_note = ?
+            WHERE id = ?
+            """,
+            [status, reviewed_by, review_note, proposal_id],
+        )
+        return cursor.rowcount > 0
+
     def _snapshot_from_row(self, entry):
         vocabulary_id = entry["id"]
         snapshot = {
