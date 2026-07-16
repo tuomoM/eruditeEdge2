@@ -14,6 +14,7 @@ from Services.background_job_service import (
 from Services.synonym_net_cloze_service import synonym_net_cloze_service
 from Services.vocabulary_synonym_link_service import vocabulary_synonym_link_service
 from Services.vocabulary_service import vocabulary_service
+from Services.vocabulary_maintenance_service import vocabulary_maintenance_service
 from db import get_connection, init_db
 
 
@@ -105,6 +106,23 @@ MIGRATION_MARKERS = {
         },
         "indexes": ["vocabulary_entries_sense_unique_idx"],
     },
+    "017_vocabulary_maintenance_runs.sql": {
+        "tables": [
+            "vocabulary_maintenance_runs",
+            "vocabulary_maintenance_items",
+            "vocabulary_maintenance_promotions",
+        ],
+        "indexes": [
+            "vocabulary_maintenance_runs_status_idx",
+            "vocabulary_maintenance_items_run_status_idx",
+            "vocabulary_maintenance_items_vocabulary_idx",
+            "vocabulary_maintenance_promotions_run_idx",
+        ],
+    },
+    "018_vocabulary_domain_model_proposals.sql": {
+        "tables": ["vocabulary_domain_model_proposals"],
+        "indexes": ["vocabulary_domain_model_proposals_status_idx"],
+    },
 }
 
 
@@ -116,6 +134,8 @@ def register_cli_commands(app):
     app.cli.add_command(check_database)
     app.cli.add_command(run_background_jobs)
     app.cli.add_command(generate_synonym_cloze)
+    app.cli.add_command(create_vocabulary_maintenance_run)
+    app.cli.add_command(generate_vocabulary_domain_model)
 
 
 @click.command("create-admin")
@@ -286,6 +306,229 @@ def generate_synonym_cloze(entry):
         click.echo(f"Generated synonym-specific cloze data for {result['updated']} entries.")
     else:
         click.echo(result["skipped"])
+
+
+@click.command("create-vocabulary-maintenance-run")
+@click.option("--name", required=True, help="Run name, such as domain-frequency-v2.")
+@click.option(
+    "--scope",
+    required=True,
+    type=click.Choice(
+        [
+            "all",
+            "missing-domains",
+            "domain",
+            "context",
+            "frequency-band",
+            "created-after",
+            "ids",
+            "source",
+        ]
+    ),
+)
+@click.option("--domain", help="Domain filter for --scope domain.")
+@click.option("--context", help="Context filter for --scope context.")
+@click.option("--frequency-band", help="Frequency filter for --scope frequency-band.")
+@click.option("--created-after", help="Created-at lower bound for --scope created-after.")
+@click.option("--ids", help="Comma-separated vocabulary ids for --scope ids.")
+@click.option("--source-name", help="Source title filter for --scope source.")
+@click.option("--source-author", help="Source author filter for --scope source.")
+@click.option("--max-items", type=click.IntRange(1), help="Maximum selected entries.")
+@click.option(
+    "--max-estimated-cost",
+    type=click.FloatRange(0),
+    help="Maximum accepted estimated processing cost.",
+)
+@click.option("--dry-run", is_flag=True, help="Preview without creating a run.")
+@click.option(
+    "--confirm-production",
+    is_flag=True,
+    help="Required for non-dry-run creation outside local/test environments.",
+)
+@with_appcontext
+def create_vocabulary_maintenance_run(
+    name,
+    scope,
+    domain,
+    context,
+    frequency_band,
+    created_after,
+    ids,
+    source_name,
+    source_author,
+    max_items,
+    max_estimated_cost,
+    dry_run,
+    confirm_production,
+):
+    app_env = current_app.config["APP_ENV"]
+    if (
+        not dry_run
+        and app_env not in {"development", "dev", "local", "testing", "test"}
+        and not confirm_production
+    ):
+        raise click.ClickException(
+            "Use --confirm-production to create a maintenance run in this environment"
+        )
+
+    maintenance_model = current_app.config.get("OPENAI_MAINTENANCE_MODEL")
+    model = maintenance_model or current_app.config["OPENAI_MODEL"]
+    prepared_run, error = vocabulary_maintenance_service.prepare_run(
+        name=name,
+        scope=scope,
+        ai_model=model,
+        max_items=max_items,
+        max_estimated_cost=max_estimated_cost,
+        domain=domain,
+        context=context,
+        frequency_band=frequency_band,
+        created_after=created_after,
+        ids=ids,
+        source_name=source_name,
+        source_author=source_author,
+    )
+    if error:
+        raise click.ClickException(error)
+
+    click.echo(f"Environment: {app_env}")
+    click.echo(f"Database: {current_app.config['DATABASE']}")
+    click.echo(f"Selected entries: {prepared_run['selected_count']}")
+    click.echo(f"AI model: {model}")
+    if not maintenance_model:
+        click.echo("AI model source: OPENAI_MODEL fallback")
+    else:
+        click.echo("AI model source: OPENAI_MAINTENANCE_MODEL")
+    click.echo(
+        "Estimated tokens: {input_tokens} input, {output_tokens} output".format(
+            input_tokens=prepared_run["estimated_input_tokens"],
+            output_tokens=prepared_run["estimated_output_tokens"],
+        )
+    )
+    click.echo(f"Estimated cost: {prepared_run['estimated_cost']:.2f}")
+    click.echo(f"Mode: {'dry-run' if dry_run else 'create'}")
+
+    if dry_run:
+        click.echo("No maintenance run created.")
+        return
+
+    run_id = vocabulary_maintenance_service.create_run(prepared_run)
+    click.echo(f"Created vocabulary maintenance run #{run_id}.")
+
+
+@click.command("generate-vocabulary-domain-model")
+@click.option("--name", required=True, help="Proposal name, such as domain-model-v2.")
+@click.option(
+    "--scope",
+    default="all",
+    show_default=True,
+    type=click.Choice(
+        [
+            "all",
+            "missing-domains",
+            "domain",
+            "context",
+            "frequency-band",
+            "created-after",
+            "ids",
+            "source",
+        ]
+    ),
+)
+@click.option("--domain", help="Domain filter for --scope domain.")
+@click.option("--context", help="Context filter for --scope context.")
+@click.option("--frequency-band", help="Frequency filter for --scope frequency-band.")
+@click.option("--created-after", help="Created-at lower bound for --scope created-after.")
+@click.option("--ids", help="Comma-separated vocabulary ids for --scope ids.")
+@click.option("--source-name", help="Source title filter for --scope source.")
+@click.option("--source-author", help="Source author filter for --scope source.")
+@click.option("--max-items", type=click.IntRange(1), help="Maximum selected entries.")
+@click.option(
+    "--max-estimated-cost",
+    type=click.FloatRange(0),
+    help="Maximum accepted estimated processing cost.",
+)
+@click.option("--dry-run", is_flag=True, help="Preview without calling AI.")
+@click.option(
+    "--confirm-production",
+    is_flag=True,
+    help="Required for non-dry-run generation outside local/test environments.",
+)
+@with_appcontext
+def generate_vocabulary_domain_model(
+    name,
+    scope,
+    domain,
+    context,
+    frequency_band,
+    created_after,
+    ids,
+    source_name,
+    source_author,
+    max_items,
+    max_estimated_cost,
+    dry_run,
+    confirm_production,
+):
+    app_env = current_app.config["APP_ENV"]
+    if (
+        not dry_run
+        and app_env not in {"development", "dev", "local", "testing", "test"}
+        and not confirm_production
+    ):
+        raise click.ClickException(
+            "Use --confirm-production to generate a domain model in this environment"
+        )
+
+    maintenance_model = current_app.config.get("OPENAI_MAINTENANCE_MODEL")
+    model = maintenance_model or current_app.config["OPENAI_MODEL"]
+    prepared_proposal, error = vocabulary_maintenance_service.prepare_domain_model_proposal(
+        name=name,
+        scope=scope,
+        ai_model=model,
+        max_items=max_items,
+        max_estimated_cost=max_estimated_cost,
+        domain=domain,
+        context=context,
+        frequency_band=frequency_band,
+        created_after=created_after,
+        ids=ids,
+        source_name=source_name,
+        source_author=source_author,
+    )
+    if error:
+        raise click.ClickException(error)
+
+    click.echo(f"Environment: {app_env}")
+    click.echo(f"Database: {current_app.config['DATABASE']}")
+    click.echo(f"Selected entries: {prepared_proposal['selected_count']}")
+    click.echo(f"AI model: {model}")
+    if not maintenance_model:
+        click.echo("AI model source: OPENAI_MODEL fallback")
+    else:
+        click.echo("AI model source: OPENAI_MAINTENANCE_MODEL")
+    click.echo(
+        "Estimated tokens: {input_tokens} input, {output_tokens} output".format(
+            input_tokens=prepared_proposal["estimated_input_tokens"],
+            output_tokens=prepared_proposal["estimated_output_tokens"],
+        )
+    )
+    click.echo(f"Estimated cost: {prepared_proposal['estimated_cost']:.2f}")
+    click.echo(f"Mode: {'dry-run' if dry_run else 'generate'}")
+
+    if dry_run:
+        click.echo("No AI request made and no domain model proposal created.")
+        return
+
+    result, error = vocabulary_maintenance_service.generate_domain_model_proposal(
+        prepared_proposal,
+        current_app.config["OPENAI_API_KEY"],
+    )
+    if error:
+        raise click.ClickException(error)
+
+    click.echo(f"Created vocabulary domain model proposal #{result['id']}.")
+    click.echo(f"Proposed domains: {len(result['proposal']['domains'])}")
+    click.echo(f"Proposed graph edges: {len(result['proposal']['domain_edges'])}")
 
 
 def _resolve_vocabulary_id(entry):

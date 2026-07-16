@@ -334,6 +334,113 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Admin account is required", response.data)
 
+    def test_admin_domain_model_proposals_require_admin(self):
+        self.register("anna")
+
+        response = self.client.get("/admin/domain-model-proposals", follow_redirects=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Admin account is required", response.data)
+
+    def test_admin_page_links_domain_model_proposals(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Domain model proposals", response.data)
+
+    def test_admin_can_review_domain_model_proposal(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+        proposal_json = {
+            "domains": [
+                {
+                    "key": "authority_resistance",
+                    "label": "Authority Resistance",
+                    "definition": "Defiance and resistance to authority.",
+                    "include": ["defiance"],
+                    "exclude": ["formal register"],
+                    "example_words": ["contumacious"],
+                    "replaces_current_domains": ["attitude", "power"],
+                },
+                {
+                    "key": "physical_motion",
+                    "label": "Physical Motion",
+                    "definition": "Movement through space.",
+                    "include": ["unstable movement"],
+                    "exclude": ["visual perception"],
+                    "example_words": ["totter"],
+                    "replaces_current_domains": ["movement"],
+                },
+            ],
+            "domain_edges": [
+                {
+                    "source_key": "authority_resistance",
+                    "target_key": "physical_motion",
+                    "relation": "contrast",
+                    "rationale": "Control and movement are distinct semantic neighborhoods.",
+                }
+            ],
+            "retired_domains": [
+                {
+                    "current_domain": "degree",
+                    "reason": "Too vague for graph navigation.",
+                    "replacement_keys": ["authority_resistance"],
+                }
+            ],
+            "context_boundary_rules": ["Formal remains context, not domain."],
+            "rationale": "This model separates semantic meaning from context.",
+            "review_notes": ["Review motion split later."],
+        }
+        with self.app.app_context():
+            proposal_id = db.execute(
+                """
+                INSERT INTO vocabulary_domain_model_proposals
+                    (
+                        name,
+                        selection_filter_json,
+                        selected_count,
+                        ai_model,
+                        prompt_template_version,
+                        prompt_template_hash,
+                        current_domain_snapshot_json,
+                        context_snapshot_json,
+                        proposal_json,
+                        rationale
+                    )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    "domain-model-v2",
+                    json.dumps({"scope": "all"}),
+                    42,
+                    "test-maintenance-model",
+                    "domain-model-discovery-v1",
+                    "hash",
+                    json.dumps(["attitude", "movement"]),
+                    json.dumps(["Formal", "Literary"]),
+                    json.dumps(proposal_json),
+                    proposal_json["rationale"],
+                ],
+            ).lastrowid
+
+        list_response = self.client.get("/admin/domain-model-proposals")
+        detail_response = self.client.get(f"/admin/domain-model-proposals/{proposal_id}")
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertIn(b"domain-model-v2", list_response.data)
+        self.assertIn(b"42 entries", list_response.data)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertIn(b"Authority Resistance", detail_response.data)
+        self.assertIn(b"authority_resistance", detail_response.data)
+        self.assertIn(b"physical_motion", detail_response.data)
+        self.assertIn(b"Formal remains context", detail_response.data)
+        self.assertIn(b"Too vague for graph navigation", detail_response.data)
+
     def test_admin_vocabulary_statistics_shows_domain_and_context_counts(self):
         self.create_admin("tuomo")
         self.logout()

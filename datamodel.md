@@ -333,6 +333,130 @@ Tracks daily AI generation quota consumption per user.
 
 There is one row per user and generation date.
 
+### `vocabulary_maintenance_runs`
+
+Stores admin-created categorization reassessment runs. A run freezes its
+selection filter, taxonomy snapshot, frequency rubric, prompt/schema versions,
+AI model, and budget estimates before any AI processing happens. Creating or
+processing a run does not modify production vocabulary values.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | INTEGER | Primary key, autoincrement |
+| `name` | TEXT | Required admin label |
+| `status` | TEXT | Required run state; starts as `ready` for CLI-created runs |
+| `selection_filter_json` | TEXT | Required frozen JSON selection criteria |
+| `selected_count` | INTEGER | Required materialized item count |
+| `taxonomy_snapshot_json` | TEXT | Required frozen domain/context taxonomy |
+| `frequency_rubric_snapshot_json` | TEXT | Required frozen frequency rubric |
+| `prompt_template_version` | TEXT | Required prompt version |
+| `prompt_template_hash` | TEXT | Required prompt content hash |
+| `response_schema_version` | TEXT | Required AI response schema version |
+| `validator_version` | TEXT | Required semantic validator version |
+| `ai_model` | TEXT | Required maintenance model name |
+| `max_items` | INTEGER | Optional item cap |
+| `max_estimated_cost` | REAL | Optional estimated cost ceiling |
+| `estimated_input_tokens` | INTEGER | Required estimate |
+| `estimated_output_tokens` | INTEGER | Required estimate |
+| `actual_input_tokens` | INTEGER | Required; starts at 0 |
+| `actual_output_tokens` | INTEGER | Required; starts at 0 |
+| `actual_cost` | REAL | Required; starts at 0 |
+| `created_by` | INTEGER | Optional reference to `users.id` |
+| `created_at` | TIMESTAMP | Defaults to current timestamp |
+| `started_at` | TIMESTAMP | Optional processing start |
+| `completed_at` | TIMESTAMP | Optional processing completion |
+| `promoted_at` | TIMESTAMP | Optional promotion timestamp |
+| `error_summary` | TEXT | Optional run failure summary |
+
+### `vocabulary_maintenance_items`
+
+Stores one materialized vocabulary entry snapshot inside a maintenance run plus
+any generated proposal and review state. The snapshot hash is later used for
+conflict-aware promotion.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | INTEGER | Primary key, autoincrement |
+| `run_id` | INTEGER | Required reference to `vocabulary_maintenance_runs.id`; cascades on delete |
+| `vocabulary_id` | INTEGER | Required reference to `vocabulary_entries.id`; cascades on delete |
+| `item_status` | TEXT | Required item state; starts as `pending` |
+| `source_snapshot_json` | TEXT | Required frozen source vocabulary snapshot |
+| `source_snapshot_hash` | TEXT | Required SHA-256 hash of the snapshot |
+| `source_updated_at` | TIMESTAMP | Production `updated_at` captured at selection time |
+| `proposed_context` | TEXT | Optional generated proposal |
+| `proposed_frequency_band` | TEXT | Optional generated proposal |
+| `proposed_frequency_note` | TEXT | Optional generated proposal |
+| `proposed_domains_json` | TEXT | Optional ordered domain proposal |
+| `proposed_needs_attention` | TEXT | Optional review warning |
+| `model_confidence` | INTEGER | Optional AI confidence, 0 through 100 |
+| `review_priority` | INTEGER | Optional application-computed review priority |
+| `rationale` | TEXT | Optional model rationale |
+| `alternate_domains_json` | TEXT | Optional alternate domain candidates |
+| `needs_sense_review` | INTEGER | Required boolean flag |
+| `sense_note` | TEXT | Optional sense ambiguity note |
+| `raw_response_excerpt` | TEXT | Optional audit excerpt |
+| `parsed_response_json` | TEXT | Optional parsed AI response |
+| `validation_errors_json` | TEXT | Optional validation errors |
+| `failure_type` | TEXT | Optional classified processing failure |
+| `attempts` | INTEGER | Required processing attempt count |
+| `claimed_by` | TEXT | Optional worker id |
+| `claimed_at` | TIMESTAMP | Optional claim time |
+| `lease_expires_at` | TIMESTAMP | Optional claim lease expiry |
+| `generated_at` | TIMESTAMP | Optional generation time |
+| `reviewed_by` | INTEGER | Optional reference to `users.id` |
+| `reviewed_at` | TIMESTAMP | Optional review time |
+| `rejection_note` | TEXT | Optional admin rejection note |
+| `promoted_at` | TIMESTAMP | Optional item promotion timestamp |
+| `created_at` | TIMESTAMP | Defaults to current timestamp |
+
+Each `(run_id, vocabulary_id)` pair is unique.
+
+### `vocabulary_maintenance_promotions`
+
+Stores audit records for explicit promotion and later rollback of accepted
+maintenance proposals.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | INTEGER | Primary key, autoincrement |
+| `run_id` | INTEGER | Required reference to `vocabulary_maintenance_runs.id`; cascades on delete |
+| `item_id` | INTEGER | Required reference to `vocabulary_maintenance_items.id`; cascades on delete |
+| `vocabulary_id` | INTEGER | Required reference to `vocabulary_entries.id`; cascades on delete |
+| `before_json` | TEXT | Required production values before promotion |
+| `after_json` | TEXT | Required promoted values |
+| `promoted_by` | INTEGER | Optional reference to `users.id` |
+| `promoted_at` | TIMESTAMP | Defaults to current timestamp |
+| `rolled_back_by` | INTEGER | Optional reference to `users.id` |
+| `rolled_back_at` | TIMESTAMP | Optional rollback timestamp |
+
+### `vocabulary_domain_model_proposals`
+
+Stores AI-generated proposals for a revised semantic domain model. These
+records are taxonomy candidates only: they do not modify `vocabulary_domains`
+or production vocabulary entries. The proposal should keep semantic domains
+separate from context labels and include graph edges that can later support
+semantic navigation.
+
+| Column | Type | Rules |
+| --- | --- | --- |
+| `id` | INTEGER | Primary key, autoincrement |
+| `name` | TEXT | Required admin label |
+| `status` | TEXT | Required; `generated`, `accepted`, or `rejected` |
+| `selection_filter_json` | TEXT | Required frozen JSON selection criteria |
+| `selected_count` | INTEGER | Required count of analyzed entries |
+| `ai_model` | TEXT | Required maintenance model name |
+| `prompt_template_version` | TEXT | Required prompt version |
+| `prompt_template_hash` | TEXT | Required prompt content hash |
+| `current_domain_snapshot_json` | TEXT | Required snapshot of current semantic domains |
+| `context_snapshot_json` | TEXT | Required snapshot of reserved context labels |
+| `proposal_json` | TEXT | Required proposed domain model, definitions, retired domains, and graph edges |
+| `rationale` | TEXT | Optional copied model rationale |
+| `created_by` | INTEGER | Optional reference to `users.id` |
+| `created_at` | TIMESTAMP | Defaults to current timestamp |
+| `reviewed_by` | INTEGER | Optional reference to `users.id` |
+| `reviewed_at` | TIMESTAMP | Optional review timestamp |
+| `review_note` | TEXT | Optional admin review note |
+
 ### `invite_codes`
 
 Stores invitation codes and their optional redemption information.

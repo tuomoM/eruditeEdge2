@@ -22,6 +22,7 @@ class CliTestCase(unittest.TestCase):
                 "SECRET_KEY": "test-secret-key",
                 "OPENAI_API_KEY": "test-api-key",
                 "OPENAI_MODEL": "test-model",
+                "OPENAI_MAINTENANCE_MODEL": "test-maintenance-model",
                 "SYNONYM_NET_CLOZE_JOBS_ENABLED": False,
             }
         )
@@ -90,8 +91,8 @@ class CliTestCase(unittest.TestCase):
                 ORDER BY filename
                 """
             )
-        self.assertEqual(len(rows), 16)
-        self.assertEqual(rows[-1]["filename"], "016_vocabulary_senses_and_frequency.sql")
+        self.assertEqual(len(rows), 18)
+        self.assertEqual(rows[-1]["filename"], "018_vocabulary_domain_model_proposals.sql")
 
     def test_migrate_skips_recorded_migrations(self):
         app = self.create_test_app()
@@ -157,6 +158,298 @@ class CliTestCase(unittest.TestCase):
                 )
             ]
         self.assertEqual(domains, ["cognition", "reasoning"])
+
+    def test_create_vocabulary_maintenance_run_dry_run_materializes_nothing(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["cli-admin", "not-used", "admin"],
+            ).lastrowid
+            vocabulary_service.create_entry(
+                self.valid_cloze_entry("awning", "A rooflike cover.", []),
+                user_id,
+            )
+
+        result = app.test_cli_runner().invoke(
+            args=[
+                "create-vocabulary-maintenance-run",
+                "--name",
+                "domain-frequency-v2",
+                "--scope",
+                "all",
+                "--max-estimated-cost",
+                "10",
+                "--dry-run",
+            ]
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Selected entries: 1", result.output)
+        self.assertIn("AI model: test-maintenance-model", result.output)
+        self.assertIn("Mode: dry-run", result.output)
+        self.assertIn("No maintenance run created.", result.output)
+        with app.app_context():
+            run_count = db.query(
+                "SELECT COUNT(*) AS count FROM vocabulary_maintenance_runs"
+            )[0]["count"]
+        self.assertEqual(run_count, 0)
+
+    def test_create_vocabulary_maintenance_run_creates_items_with_snapshots(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["cli-admin", "not-used", "admin"],
+            ).lastrowid
+            vocabulary_service.create_entry(
+                self.valid_cloze_entry("awning", "A rooflike cover.", []),
+                user_id,
+            )
+            vocabulary_service.create_entry(
+                self.valid_cloze_entry("loam", "Rich soil.", []),
+                user_id,
+            )
+
+        result = app.test_cli_runner().invoke(
+            args=[
+                "create-vocabulary-maintenance-run",
+                "--name",
+                "domain-frequency-v2",
+                "--scope",
+                "all",
+                "--max-items",
+                "1",
+                "--max-estimated-cost",
+                "10",
+            ]
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Created vocabulary maintenance run #1.", result.output)
+        with app.app_context():
+            runs = db.query("SELECT * FROM vocabulary_maintenance_runs")
+            items = db.query("SELECT * FROM vocabulary_maintenance_items")
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0]["status"], "ready")
+        self.assertEqual(runs[0]["selected_count"], 1)
+        self.assertEqual(runs[0]["ai_model"], "test-maintenance-model")
+        self.assertIn("domain-frequency-v2", runs[0]["name"])
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["item_status"], "pending")
+        self.assertIn('"word":"awning"', items[0]["source_snapshot_json"])
+        self.assertEqual(len(items[0]["source_snapshot_hash"]), 64)
+
+    def test_create_vocabulary_maintenance_run_can_use_context_scope(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["cli-admin", "not-used", "admin"],
+            ).lastrowid
+            literary = self.valid_cloze_entry("loam", "Rich soil.", [])
+            literary["context"] = "Literary; Geography"
+            vocabulary_service.create_entry(literary, user_id)
+            technical = self.valid_cloze_entry("procedure", "An established method.", [])
+            technical["context"] = "Technical; Medical"
+            vocabulary_service.create_entry(technical, user_id)
+
+        result = app.test_cli_runner().invoke(
+            args=[
+                "create-vocabulary-maintenance-run",
+                "--name",
+                "literary-only",
+                "--scope",
+                "context",
+                "--context",
+                "Literary",
+                "--max-estimated-cost",
+                "10",
+            ]
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Selected entries: 1", result.output)
+        with app.app_context():
+            item = db.query("SELECT source_snapshot_json FROM vocabulary_maintenance_items")[0]
+        self.assertIn('"word":"loam"', item["source_snapshot_json"])
+
+    def test_create_vocabulary_maintenance_run_enforces_cost_limit(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["cli-admin", "not-used", "admin"],
+            ).lastrowid
+            vocabulary_service.create_entry(
+                self.valid_cloze_entry("awning", "A rooflike cover.", []),
+                user_id,
+            )
+
+        result = app.test_cli_runner().invoke(
+            args=[
+                "create-vocabulary-maintenance-run",
+                "--name",
+                "too-cheap",
+                "--scope",
+                "all",
+                "--max-estimated-cost",
+                "0",
+            ]
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Estimated cost", result.output)
+
+    def test_generate_vocabulary_domain_model_dry_run_does_not_call_ai(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["cli-admin", "not-used", "admin"],
+            ).lastrowid
+            vocabulary_service.create_entry(
+                self.valid_cloze_entry("contumacious", "Defiant toward authority.", []),
+                user_id,
+            )
+
+        with patch(
+            "cli.vocabulary_maintenance_service._vocabulary_ai_service.generate_domain_model"
+        ) as generate_domain_model:
+            result = app.test_cli_runner().invoke(
+                args=[
+                    "generate-vocabulary-domain-model",
+                    "--name",
+                    "domain-model-v2",
+                    "--scope",
+                    "all",
+                    "--max-estimated-cost",
+                    "10",
+                    "--dry-run",
+                ]
+            )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Selected entries: 1", result.output)
+        self.assertIn("Mode: dry-run", result.output)
+        self.assertIn("No AI request made", result.output)
+        generate_domain_model.assert_not_called()
+        with app.app_context():
+            proposal_count = db.query(
+                "SELECT COUNT(*) AS count FROM vocabulary_domain_model_proposals"
+            )[0]["count"]
+        self.assertEqual(proposal_count, 0)
+
+    def test_generate_vocabulary_domain_model_stores_ai_proposal(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["cli-admin", "not-used", "admin"],
+            ).lastrowid
+            vocabulary_service.create_entry(
+                self.valid_cloze_entry("contumacious", "Defiant toward authority.", []),
+                user_id,
+            )
+            vocabulary_service.create_entry(
+                self.valid_cloze_entry("totter", "To move unsteadily.", []),
+                user_id,
+            )
+        proposal = {
+            "domains": [
+                {
+                    "key": "authority_resistance",
+                    "label": "Authority Resistance",
+                    "definition": "Defiance and resistance to authority.",
+                    "include": ["defiance"],
+                    "exclude": ["formal register"],
+                    "example_words": ["contumacious"],
+                    "replaces_current_domains": ["attitude", "power"],
+                },
+                {
+                    "key": "physical_motion",
+                    "label": "Physical Motion",
+                    "definition": "Movement and bodily motion.",
+                    "include": ["unstable movement"],
+                    "exclude": ["visual perception"],
+                    "example_words": ["totter"],
+                    "replaces_current_domains": ["movement"],
+                },
+                {
+                    "key": "evaluation_quality",
+                    "label": "Evaluation Quality",
+                    "definition": "Judgments of qualities and traits.",
+                    "include": ["qualities"],
+                    "exclude": ["register"],
+                    "example_words": ["sturdy"],
+                    "replaces_current_domains": ["quality"],
+                },
+            ],
+            "domain_edges": [
+                {
+                    "source_key": "authority_resistance",
+                    "target_key": "evaluation_quality",
+                    "relation": "near",
+                    "rationale": "Traits can express social resistance.",
+                }
+            ],
+            "retired_domains": [],
+            "context_boundary_rules": ["Formal is a context label."],
+            "rationale": "A graphable semantic model.",
+            "review_notes": [],
+        }
+
+        with patch(
+            "cli.vocabulary_maintenance_service._vocabulary_ai_service.generate_domain_model",
+            return_value=(proposal, None),
+        ) as generate_domain_model:
+            result = app.test_cli_runner().invoke(
+                args=[
+                    "generate-vocabulary-domain-model",
+                    "--name",
+                    "domain-model-v2",
+                    "--scope",
+                    "all",
+                    "--max-estimated-cost",
+                    "10",
+                ]
+            )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Created vocabulary domain model proposal #1.", result.output)
+        self.assertIn("Proposed domains: 3", result.output)
+        generate_domain_model.assert_called_once()
+        with app.app_context():
+            rows = db.query("SELECT * FROM vocabulary_domain_model_proposals")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "domain-model-v2")
+        self.assertEqual(rows[0]["selected_count"], 2)
+        self.assertEqual(rows[0]["ai_model"], "test-maintenance-model")
+        self.assertIn("authority_resistance", rows[0]["proposal_json"])
 
     def test_generate_synonym_cloze_command_replaces_linked_net_cloze(self):
         app = self.create_test_app()
@@ -329,8 +622,8 @@ class CliTestCase(unittest.TestCase):
 
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("Multiple vocabulary entries match 'hobble'", result.output)
-        self.assertIn(f"#{noun_hobble['id']}: hobble (noun, unspecified)", result.output)
-        self.assertIn(f"#{verb_hobble['id']}: hobble (verb, unspecified)", result.output)
+        self.assertIn(f"#{noun_hobble['id']}: hobble (noun, Formal)", result.output)
+        self.assertIn(f"#{verb_hobble['id']}: hobble (verb, Formal)", result.output)
 
     def test_generate_synonym_cloze_command_reports_missing_entry(self):
         app = self.create_test_app()
@@ -345,7 +638,7 @@ class CliTestCase(unittest.TestCase):
         return {
             "word": word,
             "definition": definition,
-            "context": "Admin",
+            "context": "Formal",
             "part_of_speech": part_of_speech,
             "domains": ["attitude", "power"],
             "synonyms": synonyms,

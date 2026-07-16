@@ -231,6 +231,147 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(error, "OpenAI returned invalid synonym net cloze data")
 
+    def test_generate_domain_model_proposes_semantic_graph(self):
+        output = json.dumps(
+            {
+                "domains": [
+                    {
+                        "key": "authority_resistance",
+                        "label": "Authority Resistance",
+                        "definition": "Defiance, compliance, and resistance to control.",
+                        "include": ["rebellion", "refusal"],
+                        "exclude": ["general formality"],
+                        "example_words": ["contumacious", "recalcitrant"],
+                        "replaces_current_domains": ["attitude", "power"],
+                    },
+                    {
+                        "key": "physical_motion",
+                        "label": "Physical Motion",
+                        "definition": "Movement through space or bodily motion.",
+                        "include": ["walking", "falling"],
+                        "exclude": ["visual perception"],
+                        "example_words": ["totter"],
+                        "replaces_current_domains": ["movement"],
+                    },
+                    {
+                        "key": "material_world",
+                        "label": "Material World",
+                        "definition": "Objects, substances, terrain, and physical things.",
+                        "include": ["soil", "shelter"],
+                        "exclude": ["social status"],
+                        "example_words": ["loam", "awning"],
+                        "replaces_current_domains": ["body", "quality"],
+                    },
+                ],
+                "domain_edges": [
+                    {
+                        "source_key": "authority_resistance",
+                        "target_key": "physical_motion",
+                        "relation": "contrast",
+                        "rationale": "Agency and control contrast with physical movement.",
+                    }
+                ],
+                "retired_domains": [
+                    {
+                        "current_domain": "degree",
+                        "reason": "Too grammatical and vague for semantic graphing.",
+                        "replacement_keys": ["material_world"],
+                    }
+                ],
+                "context_boundary_rules": [
+                    "Formal and Literary are context labels, not semantic domains."
+                ],
+                "rationale": "The proposed model groups words by semantic learning neighborhoods.",
+                "review_notes": ["Review whether material_world should split later."],
+            }
+        )
+        entries = [
+            {
+                "id": 1,
+                "word": "contumacious",
+                "definition": "Stubbornly disobedient to authority.",
+                "context": "Formal; Legal",
+                "part_of_speech": "adjective",
+                "frequency_band": "rare",
+                "domains": ["attitude", "power"],
+                "examples": ["The contumacious defendant refused."],
+            }
+        ]
+        client = FakeClient(output)
+        service = VocabularyAiService(client=client)
+
+        proposal, error = service.generate_domain_model(
+            entries,
+            ["attitude", "power", "movement"],
+            ["Formal", "Literary", "Legal"],
+            "test-key",
+            "test-model",
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(proposal["domains"][0]["key"], "authority_resistance")
+        self.assertEqual(proposal["domain_edges"][0]["relation"], "contrast")
+        self.assertEqual(client.responses.last_request["model"], "test-model")
+        self.assertIn("semantic domain model", client.responses.last_request["instructions"])
+        self.assertIn("must not become domain keys", client.responses.last_request["instructions"])
+        self.assertIn("Reserved context labels", client.responses.last_request["input"])
+        self.assertIn("Word: contumacious", client.responses.last_request["input"])
+        self.assert_avoids_unsupported_strict_schema_keywords(
+            client.responses.last_request["text"]["format"]["schema"]
+        )
+
+    def test_generate_domain_model_rejects_context_overlap(self):
+        output = json.dumps(
+            {
+                "domains": [
+                    {
+                        "key": "formal",
+                        "label": "Formal",
+                        "definition": "Wrongly uses a context label.",
+                        "include": [],
+                        "exclude": [],
+                        "example_words": ["contumacious"],
+                        "replaces_current_domains": ["attitude"],
+                    },
+                    {
+                        "key": "movement",
+                        "label": "Movement",
+                        "definition": "Motion.",
+                        "include": [],
+                        "exclude": [],
+                        "example_words": ["totter"],
+                        "replaces_current_domains": ["movement"],
+                    },
+                    {
+                        "key": "object_world",
+                        "label": "Object World",
+                        "definition": "Objects.",
+                        "include": [],
+                        "exclude": [],
+                        "example_words": ["awning"],
+                        "replaces_current_domains": ["body"],
+                    },
+                ],
+                "domain_edges": [],
+                "retired_domains": [],
+                "context_boundary_rules": [],
+                "rationale": "Bad overlap.",
+                "review_notes": [],
+            }
+        )
+        service = VocabularyAiService(client=FakeClient(output))
+
+        proposal, error = service.generate_domain_model(
+            [{"id": 1, "word": "contumacious", "definition": "Defiant."}],
+            ["attitude"],
+            ["Formal", "Literary"],
+            "test-key",
+            "test-model",
+        )
+
+        self.assertIsNone(proposal)
+        self.assertEqual(error, "OpenAI returned invalid domain model data")
+
     def test_generate_entry_includes_usage_clue_in_prompt(self):
         client = FakeClient(self.valid_output())
         service = VocabularyAiService(client=client)

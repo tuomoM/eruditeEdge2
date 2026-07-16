@@ -11,6 +11,7 @@ from Services.security_report_service import security_report_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
 from Services.vocabulary_ai_service import vocabulary_ai_service
 from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
+from Services.vocabulary_maintenance_service import vocabulary_maintenance_service
 from Services.vocabulary_service import vocabulary_service
 from Services.vocabulary_synonym_link_service import vocabulary_synonym_link_service
 
@@ -151,6 +152,34 @@ def vocabulary_statistics_page():
     return render_template(
         "admin_vocabulary_statistics.html",
         statistics=statistics,
+    )
+
+
+@admin_bp.route("/admin/domain-model-proposals", methods=["GET"])
+@page_admin_required
+def domain_model_proposals_page():
+    proposals = vocabulary_maintenance_service.list_domain_model_proposals()
+    for proposal in proposals:
+        proposal["created_at_label"] = format_admin_timestamp(proposal.get("created_at"))
+        proposal["reviewed_at_label"] = format_admin_timestamp(proposal.get("reviewed_at"))
+    return render_template(
+        "admin_domain_model_proposals.html",
+        proposals=proposals,
+    )
+
+
+@admin_bp.route("/admin/domain-model-proposals/<int:proposal_id>", methods=["GET"])
+@page_admin_required
+def domain_model_proposal_detail_page(proposal_id):
+    proposal = vocabulary_maintenance_service.get_domain_model_proposal(proposal_id)
+    if not proposal:
+        flash("Domain model proposal was not found")
+        return redirect("/admin/domain-model-proposals")
+    proposal["created_at_label"] = format_admin_timestamp(proposal.get("created_at"))
+    proposal["reviewed_at_label"] = format_admin_timestamp(proposal.get("reviewed_at"))
+    return render_template(
+        "admin_domain_model_proposal_detail.html",
+        proposal=proposal,
     )
 
 

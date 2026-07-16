@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ proposal.name }}</h1>
+        <div class="result-count">
+            {{ proposal.selected_count }} entries analyzed with {{ proposal.ai_model }}
+        </div>
+    </div>
+    <div class="actions">
+        <a class="button button-secondary" href="/admin/domain-model-proposals">Back to proposals</a>
+        <a class="button button-secondary" href="/admin">Back to admin</a>
+    </div>
+</div>
+
+<section class="admin-section">
+    <div class="section-heading">
+        <div>
+            <h2>Summary</h2>
+            <p class="section-note">
+                Status {{ proposal.status }}. Created {{ proposal.created_at_label }}.
+            </p>
+        </div>
+    </div>
+    <p class="entry-definition">{{ proposal.rationale }}</p>
+    <div class="entry-list">
+        <div class="entry-row">
+            <div class="entry-main">
+                <div class="entry-heading">
+                    <strong class="entry-word">Selection</strong>
+                </div>
+                <p class="entry-definition">
+                    Scope {{ proposal.selection_filter.scope }}{% if proposal.selection_filter.max_items %},
+                    max {{ proposal.selection_filter.max_items }} entries{% endif %}.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="admin-section">
+    <div class="section-heading">
+        <div>
+            <h2>Proposed domains</h2>
+            <p class="section-note">Semantic categories only; context labels remain separate.</p>
+        </div>
+    </div>
+    <div class="entry-list">
+        {% for domain in proposal.domains %}
+            <div class="entry-row">
+                <div class="entry-main">
+                    <div class="entry-heading">
+                        <strong class="entry-word">{{ domain.label }}</strong>
+                        <span class="meta-chip">{{ domain.key }}</span>
+                    </div>
+                    <p class="entry-definition">{{ domain.definition }}</p>
+                    {% if domain.example_words %}
+                        <p class="entry-definition">
+                            Examples: {{ domain.example_words | join(", ") }}
+                        </p>
+                    {% endif %}
+                    {% if domain.include %}
+                        <p class="entry-definition">Include: {{ domain.include | join("; ") }}</p>
+                    {% endif %}
+                    {% if domain.exclude %}
+                        <p class="entry-definition">Exclude: {{ domain.exclude | join("; ") }}</p>
+                    {% endif %}
+                    {% if domain.replaces_current_domains %}
+                        <p class="entry-definition muted">
+                            Replaces current: {{ domain.replaces_current_domains | join(", ") }}
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            <p class="muted">No proposed domains.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="admin-section">
+    <div class="section-heading">
+        <div>
+            <h2>Graph edges</h2>
+            <p class="section-note">Relationships proposed for semantic navigation.</p>
+        </div>
+    </div>
+    <div class="usage-table-wrap">
+        <table class="usage-table">
+            <thead>
+                <tr>
+                    <th scope="col">Source</th>
+                    <th scope="col">Relation</th>
+                    <th scope="col">Target</th>
+                    <th scope="col">Rationale</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for edge in proposal.domain_edges %}
+                    <tr>
+                        <td>{{ edge.source_key }}</td>
+                        <td>{{ edge.relation }}</td>
+                        <td>{{ edge.target_key }}</td>
+                        <td>{{ edge.rationale }}</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="4">No graph edges proposed.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="admin-section">
+    <div class="section-heading">
+        <div>
+            <h2>Retired domains</h2>
+            <p class="section-note">Current domains the model suggests replacing or removing.</p>
+        </div>
+    </div>
+    <div class="usage-table-wrap">
+        <table class="usage-table">
+            <thead>
+                <tr>
+                    <th scope="col">Current domain</th>
+                    <th scope="col">Replacement</th>
+                    <th scope="col">Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for domain in proposal.retired_domains %}
+                    <tr>
+                        <td>{{ domain.current_domain }}</td>
+                        <td>{{ domain.replacement_keys | join(", ") }}</td>
+                        <td>{{ domain.reason }}</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="3">No retired domains proposed.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="admin-section">
+    <div class="section-heading">
+        <h2>Boundaries and notes</h2>
+    </div>
+    <div class="entry-list">
+        <div class="entry-row">
+            <div class="entry-main">
+                <div class="entry-heading">
+                    <strong class="entry-word">Context boundary rules</strong>
+                </div>
+                {% for rule in proposal.context_boundary_rules %}
+                    <p class="entry-definition">{{ rule }}</p>
+                {% else %}
+                    <p class="muted">No boundary rules provided.</p>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="entry-row">
+            <div class="entry-main">
+                <div class="entry-heading">
+                    <strong class="entry-word">Review notes</strong>
+                </div>
+                {% for note in proposal.review_notes %}
+                    <p class="entry-definition">{{ note }}</p>
+                {% else %}
+                    <p class="muted">No review notes.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Domain model proposals</h1>
+        <div class="result-count">{{ proposals | length }} proposals</div>
+    </div>
+    <a class="button button-secondary" href="/admin">Back to admin</a>
+</div>
+
+<section class="admin-section">
+    <div class="entry-list">
+        {% for proposal in proposals %}
+            <div class="entry-row">
+                <div class="entry-main">
+                    <div class="entry-heading">
+                        <strong class="entry-word">{{ proposal.name }}</strong>
+                        <span class="meta-chip">{{ proposal.status }}</span>
+                        <span class="meta-chip">{{ proposal.selected_count }} entries</span>
+                    </div>
+                    <p class="entry-definition">
+                        Model {{ proposal.ai_model }}. Created {{ proposal.created_at_label }}.
+                    </p>
+                    {% if proposal.reviewed_at_label %}
+                        <p class="entry-definition muted">Reviewed {{ proposal.reviewed_at_label }}</p>
+                    {% endif %}
+                </div>
+                <div class="actions admin-row-actions">
+                    <a class="button button-secondary button-compact" href="/admin/domain-model-proposals/{{ proposal.id }}">Review</a>
+                </div>
+            </div>
+        {% else %}
+            <p class="muted">No domain model proposals yet.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

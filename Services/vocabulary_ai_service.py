@@ -19,6 +19,7 @@ VOCABULARY_ENTRY_MAX_OUTPUT_TOKENS = 900
 CLOZE_DATA_MAX_OUTPUT_TOKENS = 500
 SYNONYM_NET_CLOZE_MAX_OUTPUT_TOKENS = 1200
 USAGE_VALIDATION_MAX_OUTPUT_TOKENS = 160
+DOMAIN_MODEL_MAX_OUTPUT_TOKENS = 3200
 MAX_AI_VOCABULARY_DOMAINS = 3
 MAX_USAGE_CLUE_LENGTH = 500
 FREQUENCY_BANDS = [
@@ -202,6 +203,83 @@ SYNONYM_NET_CLOZE_SCHEMA = {
         },
     },
     "required": ["entries"],
+}
+
+
+DOMAIN_MODEL_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "domains": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "key": {"type": "string"},
+                    "label": {"type": "string"},
+                    "definition": {"type": "string"},
+                    "include": {"type": "array", "items": {"type": "string"}},
+                    "exclude": {"type": "array", "items": {"type": "string"}},
+                    "example_words": {"type": "array", "items": {"type": "string"}},
+                    "replaces_current_domains": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": [
+                    "key",
+                    "label",
+                    "definition",
+                    "include",
+                    "exclude",
+                    "example_words",
+                    "replaces_current_domains",
+                ],
+            },
+        },
+        "domain_edges": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "source_key": {"type": "string"},
+                    "target_key": {"type": "string"},
+                    "relation": {
+                        "type": "string",
+                        "enum": ["near", "contrast", "parent", "child"],
+                    },
+                    "rationale": {"type": "string"},
+                },
+                "required": ["source_key", "target_key", "relation", "rationale"],
+            },
+        },
+        "retired_domains": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "current_domain": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "replacement_keys": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["current_domain", "reason", "replacement_keys"],
+            },
+        },
+        "context_boundary_rules": {"type": "array", "items": {"type": "string"}},
+        "rationale": {"type": "string"},
+        "review_notes": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "domains",
+        "domain_edges",
+        "retired_domains",
+        "context_boundary_rules",
+        "rationale",
+        "review_notes",
+    ],
 }
 
 
@@ -581,6 +659,74 @@ class VocabularyAiService:
         logger.info("Vocabulary usage validation succeeded for word '%s'", word)
         return {"result": result["result"], "hint": hint}, None
 
+    def generate_domain_model(self, entries, current_domains, context_labels, api_key, model):
+        if not api_key:
+            logger.warning("Domain model generation failed: missing OpenAI API key")
+            return None, "OpenAI API key is missing"
+        if not entries:
+            return None, "At least one vocabulary entry is required"
+
+        logger.info(
+            "Domain model generation started for %s entries using model '%s'",
+            len(entries),
+            model,
+        )
+        try:
+            client = self._get_client(api_key)
+            started_at = time.perf_counter()
+            response = client.responses.create(
+                model=model,
+                max_output_tokens=DOMAIN_MODEL_MAX_OUTPUT_TOKENS,
+                store=False,
+                instructions=(
+                    "Analyze the vocabulary entries and propose a better semantic "
+                    "domain model for learning and future graph creation. Return JSON "
+                    "only. Domains must describe meaning, not usage setting, register, "
+                    "source type, academic field label, or frequency. The context labels "
+                    "provided are reserved for context and must not become domain keys "
+                    "or labels. Prefer a compact domain set with clear boundaries, low "
+                    "overlap, and enough specificity to distinguish semantically nearby "
+                    "words. Include graph edges between domains when they are useful "
+                    "for semantic navigation. Explain which current domains are replaced "
+                    "or retired. Use snake_case keys."
+                ),
+                input=self._domain_model_input(entries, current_domains, context_labels),
+                text={
+                    "format": {
+                        "type": "json_schema",
+                        "name": "domain_model_proposal",
+                        "schema": DOMAIN_MODEL_SCHEMA,
+                        "strict": True,
+                    }
+                },
+            )
+            logger.info(
+                "Domain model generation OpenAI request completed in %.2fs",
+                time.perf_counter() - started_at,
+            )
+        except ImportError:
+            logger.exception("Domain model generation failed: OpenAI package is not installed")
+            return None, "OpenAI package is not installed. Run python -m pip install -r requirements.txt"
+        except Exception as error:
+            logger.exception(
+                "Domain model generation failed during OpenAI request: %s",
+                error.__class__.__name__,
+            )
+            return None, f"OpenAI request failed: {error.__class__.__name__}"
+
+        try:
+            proposal = json.loads(response.output_text)
+        except (AttributeError, json.JSONDecodeError):
+            logger.exception("Domain model generation failed: invalid response format")
+            return None, "OpenAI returned invalid domain model data"
+
+        normalized, error = self._normalize_domain_model(proposal, context_labels)
+        if error:
+            logger.warning("Domain model generation failed: %s", error)
+            return None, "OpenAI returned invalid domain model data"
+        logger.info("Domain model generation succeeded")
+        return normalized, None
+
     def validate_word(self, word):
         return self._validate_word(word)
 
@@ -630,6 +776,34 @@ class VocabularyAiService:
                 ]
             )
             lines.extend(f"- {example}" for example in entry.get("examples", []))
+            lines.append("")
+        return "\n".join(lines)
+
+    def _domain_model_input(self, entries, current_domains, context_labels):
+        lines = [
+            "Current semantic domains:",
+            ", ".join(current_domains),
+            "",
+            "Reserved context labels, not semantic domains:",
+            ", ".join(context_labels),
+            "",
+            "Vocabulary entries:",
+        ]
+        for entry in entries:
+            lines.extend(
+                [
+                    f"ID: {entry['id']}",
+                    f"Word: {entry['word']}",
+                    f"Part of speech: {entry.get('part_of_speech') or 'other'}",
+                    f"Definition: {entry['definition']}",
+                    f"Current context: {entry.get('context') or 'unspecified'}",
+                    "Current domains: " + ", ".join(entry.get("domains", []) or ["none"]),
+                    f"Frequency: {entry.get('frequency_band') or 'unknown'}",
+                ]
+            )
+            if entry.get("examples"):
+                lines.append("Examples:")
+                lines.extend(f"- {example}" for example in entry["examples"][:2])
             lines.append("")
         return "\n".join(lines)
 
@@ -700,6 +874,132 @@ class VocabularyAiService:
             for sentence in cloze_sentences
             if str(sentence).strip()
         ][:3]
+
+    def _normalize_domain_model(self, proposal, context_labels):
+        if not isinstance(proposal, dict):
+            return None, "response must be an object"
+        context_label_keys = {
+            self._domain_model_key(label)
+            for label in context_labels
+        }
+        domains = []
+        domain_keys = set()
+        for raw_domain in proposal.get("domains", []):
+            if not isinstance(raw_domain, dict):
+                return None, "domain must be an object"
+            key = self._domain_model_key(raw_domain.get("key"))
+            label = str(raw_domain.get("label") or "").strip()
+            if (
+                not key
+                or key in domain_keys
+                or key in context_label_keys
+                or self._domain_model_key(label) in context_label_keys
+            ):
+                return None, "domain key overlaps context or is invalid"
+            domains.append(
+                {
+                    "key": key,
+                    "label": label or key.replace("_", " ").title(),
+                    "definition": str(raw_domain.get("definition") or "").strip()[:500],
+                    "include": self._normalize_string_list(raw_domain.get("include"), 8),
+                    "exclude": self._normalize_string_list(raw_domain.get("exclude"), 8),
+                    "example_words": self._normalize_string_list(
+                        raw_domain.get("example_words"),
+                        12,
+                    ),
+                    "replaces_current_domains": self._normalize_string_list(
+                        raw_domain.get("replaces_current_domains"),
+                        8,
+                    ),
+                }
+            )
+            domain_keys.add(key)
+        if len(domains) < 3:
+            return None, "at least three domains are required"
+
+        edges = []
+        for raw_edge in proposal.get("domain_edges", []):
+            if not isinstance(raw_edge, dict):
+                return None, "domain edge must be an object"
+            source_key = self._domain_model_key(raw_edge.get("source_key"))
+            target_key = self._domain_model_key(raw_edge.get("target_key"))
+            relation = str(raw_edge.get("relation") or "").strip()
+            if (
+                source_key not in domain_keys
+                or target_key not in domain_keys
+                or source_key == target_key
+                or relation not in {"near", "contrast", "parent", "child"}
+            ):
+                return None, "domain edge references invalid domains"
+            edges.append(
+                {
+                    "source_key": source_key,
+                    "target_key": target_key,
+                    "relation": relation,
+                    "rationale": str(raw_edge.get("rationale") or "").strip()[:300],
+                }
+            )
+
+        normalized = {
+            "domains": domains,
+            "domain_edges": edges,
+            "retired_domains": self._normalize_retired_domains(
+                proposal.get("retired_domains"),
+                domain_keys,
+            ),
+            "context_boundary_rules": self._normalize_string_list(
+                proposal.get("context_boundary_rules"),
+                12,
+            ),
+            "rationale": str(proposal.get("rationale") or "").strip()[:1500],
+            "review_notes": self._normalize_string_list(proposal.get("review_notes"), 12),
+        }
+        if normalized["retired_domains"] is None or not normalized["rationale"]:
+            return None, "rationale and retired domain data are required"
+        return normalized, None
+
+    def _normalize_retired_domains(self, retired_domains, domain_keys):
+        if not isinstance(retired_domains, list):
+            return None
+        normalized = []
+        for raw_domain in retired_domains:
+            if not isinstance(raw_domain, dict):
+                return None
+            replacement_keys = [
+                self._domain_model_key(key)
+                for key in raw_domain.get("replacement_keys", [])
+            ]
+            replacement_keys = [
+                key
+                for key in replacement_keys
+                if key in domain_keys
+            ]
+            normalized.append(
+                {
+                    "current_domain": str(raw_domain.get("current_domain") or "").strip(),
+                    "reason": str(raw_domain.get("reason") or "").strip()[:300],
+                    "replacement_keys": replacement_keys,
+                }
+            )
+        return normalized
+
+    def _normalize_string_list(self, values, limit):
+        if not isinstance(values, list):
+            return []
+        strings = []
+        seen = set()
+        for value in values:
+            text = str(value or "").strip()
+            key = text.lower()
+            if text and key not in seen:
+                strings.append(text[:200])
+                seen.add(key)
+            if len(strings) >= limit:
+                break
+        return strings
+
+    def _domain_model_key(self, value):
+        return re.sub(r"[^a-z0-9]+", "_", str(value or "").lower()).strip("_")
 
     def _get_client(self, api_key):
         if self._client is not None:
