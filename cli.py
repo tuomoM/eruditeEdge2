@@ -510,6 +510,10 @@ def generate_vocabulary_domain_model(
         f"OpenAI timeout: {current_app.config['OPENAI_MAINTENANCE_TIMEOUT_SECONDS']}s"
     )
     click.echo(
+        "OpenAI max output tokens: "
+        f"{current_app.config['OPENAI_DOMAIN_MODEL_MAX_OUTPUT_TOKENS']}"
+    )
+    click.echo(
         "Estimated tokens: {input_tokens} input, {output_tokens} output".format(
             input_tokens=prepared_proposal["estimated_input_tokens"],
             output_tokens=prepared_proposal["estimated_output_tokens"],
@@ -526,6 +530,7 @@ def generate_vocabulary_domain_model(
         prepared_proposal,
         current_app.config["OPENAI_API_KEY"],
         timeout_seconds=current_app.config["OPENAI_MAINTENANCE_TIMEOUT_SECONDS"],
+        max_output_tokens=current_app.config["OPENAI_DOMAIN_MODEL_MAX_OUTPUT_TOKENS"],
     )
     if error:
         raise click.ClickException(error)

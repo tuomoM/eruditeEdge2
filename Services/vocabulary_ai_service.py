@@ -20,7 +20,7 @@ VOCABULARY_ENTRY_MAX_OUTPUT_TOKENS = 900
 CLOZE_DATA_MAX_OUTPUT_TOKENS = 500
 SYNONYM_NET_CLOZE_MAX_OUTPUT_TOKENS = 1200
 USAGE_VALIDATION_MAX_OUTPUT_TOKENS = 160
-DOMAIN_MODEL_MAX_OUTPUT_TOKENS = 3200
+DOMAIN_MODEL_MAX_OUTPUT_TOKENS = 12000
 MAX_AI_VOCABULARY_DOMAINS = 3
 MAX_USAGE_CLUE_LENGTH = 500
 FREQUENCY_BANDS = [
@@ -673,6 +673,7 @@ class VocabularyAiService:
         api_key,
         model,
         timeout_seconds=None,
+        max_output_tokens=None,
     ):
         if not api_key:
             logger.warning("Domain model generation failed: missing OpenAI API key")
@@ -690,7 +691,7 @@ class VocabularyAiService:
             started_at = time.perf_counter()
             response = client.responses.create(
                 model=model,
-                max_output_tokens=DOMAIN_MODEL_MAX_OUTPUT_TOKENS,
+                max_output_tokens=max_output_tokens or DOMAIN_MODEL_MAX_OUTPUT_TOKENS,
                 store=False,
                 instructions=(
                     "Analyze the vocabulary entries and propose a better semantic "
@@ -730,7 +731,17 @@ class VocabularyAiService:
 
         try:
             proposal = json.loads(response.output_text)
-        except (AttributeError, json.JSONDecodeError):
+        except AttributeError:
+            logger.exception("Domain model generation failed: invalid response format")
+            return None, "OpenAI returned invalid domain model data"
+        except json.JSONDecodeError:
+            incomplete_reason = self._response_incomplete_reason(response)
+            if incomplete_reason:
+                logger.exception(
+                    "Domain model generation failed: incomplete response (%s)",
+                    incomplete_reason,
+                )
+                return None, "OpenAI returned incomplete domain model data"
             logger.exception("Domain model generation failed: invalid response format")
             return None, "OpenAI returned invalid domain model data"
 
@@ -1025,6 +1036,14 @@ class VocabularyAiService:
 
     def _domain_model_key(self, value):
         return re.sub(r"[^a-z0-9]+", "_", str(value or "").lower()).strip("_")
+
+    def _response_incomplete_reason(self, response):
+        if getattr(response, "status", None) != "incomplete":
+            return ""
+        incomplete_details = getattr(response, "incomplete_details", None)
+        if isinstance(incomplete_details, dict):
+            return incomplete_details.get("reason") or "incomplete"
+        return getattr(incomplete_details, "reason", None) or "incomplete"
 
     def _get_client(self, api_key, timeout_seconds=None):
         if self._client is not None:

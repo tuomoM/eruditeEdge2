@@ -5,6 +5,7 @@ from unittest.mock import patch
 from Services.vocabulary_ai_service import VocabularyAiService
 from Services.vocabulary_ai_service import (
     CLOZE_DATA_MAX_OUTPUT_TOKENS,
+    DOMAIN_MODEL_MAX_OUTPUT_TOKENS,
     SYNONYM_NET_CLOZE_MAX_OUTPUT_TOKENS,
     USAGE_VALIDATION_MAX_OUTPUT_TOKENS,
     VOCABULARY_ENTRY_MAX_OUTPUT_TOKENS,
@@ -24,6 +25,16 @@ class FakeResponses:
 class FakeClient:
     def __init__(self, output_text):
         self.responses = FakeResponses(output_text)
+
+
+class FakeIncompleteResponses(FakeResponses):
+    status = "incomplete"
+    incomplete_details = {"reason": "max_output_tokens"}
+
+
+class FakeIncompleteClient:
+    def __init__(self, output_text):
+        self.responses = FakeIncompleteResponses(output_text)
 
 
 class VocabularyAiServiceTestCase(unittest.TestCase):
@@ -361,9 +372,27 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIn("must not become domain keys", client.responses.last_request["instructions"])
         self.assertIn("Reserved context labels", client.responses.last_request["input"])
         self.assertIn("Word: contumacious", client.responses.last_request["input"])
+        self.assertEqual(
+            client.responses.last_request["max_output_tokens"],
+            DOMAIN_MODEL_MAX_OUTPUT_TOKENS,
+        )
         self.assert_avoids_unsupported_strict_schema_keywords(
             client.responses.last_request["text"]["format"]["schema"]
         )
+
+    def test_generate_domain_model_reports_incomplete_response(self):
+        service = VocabularyAiService(client=FakeIncompleteClient('{"domains": [{"key": "'))
+
+        proposal, error = service.generate_domain_model(
+            [{"id": 1, "word": "contumacious", "definition": "Defiant."}],
+            ["attitude"],
+            ["Formal", "Literary"],
+            "test-key",
+            "test-model",
+        )
+
+        self.assertIsNone(proposal)
+        self.assertEqual(error, "OpenAI returned incomplete domain model data")
 
     def test_generate_domain_model_rejects_context_overlap(self):
         output = json.dumps(

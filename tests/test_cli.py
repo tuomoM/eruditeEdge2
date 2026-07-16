@@ -24,6 +24,7 @@ class CliTestCase(unittest.TestCase):
                 "OPENAI_MODEL": "test-model",
                 "OPENAI_MAINTENANCE_MODEL": "test-maintenance-model",
                 "OPENAI_MAINTENANCE_TIMEOUT_SECONDS": 123,
+                "OPENAI_DOMAIN_MODEL_MAX_OUTPUT_TOKENS": 7777,
                 "SYNONYM_NET_CLOZE_JOBS_ENABLED": False,
             }
         )
@@ -353,6 +354,7 @@ class CliTestCase(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Selected entries: 1", result.output)
         self.assertIn("OpenAI timeout: 123s", result.output)
+        self.assertIn("OpenAI max output tokens: 7777", result.output)
         self.assertIn("Mode: dry-run", result.output)
         self.assertIn("No AI request made", result.output)
         generate_domain_model.assert_not_called()
@@ -446,6 +448,7 @@ class CliTestCase(unittest.TestCase):
         self.assertIn("Proposed domains: 3", result.output)
         generate_domain_model.assert_called_once()
         self.assertEqual(generate_domain_model.call_args.kwargs["timeout_seconds"], 123)
+        self.assertEqual(generate_domain_model.call_args.kwargs["max_output_tokens"], 7777)
         with app.app_context():
             rows = db.query("SELECT * FROM vocabulary_domain_model_proposals")
         self.assertEqual(len(rows), 1)

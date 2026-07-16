@@ -217,6 +217,7 @@ class VocabularyMaintenanceService:
         prepared_proposal,
         api_key,
         timeout_seconds=None,
+        max_output_tokens=None,
     ):
         proposal, error = self._vocabulary_ai_service.generate_domain_model(
             prepared_proposal["entries"],
@@ -225,6 +226,7 @@ class VocabularyMaintenanceService:
             api_key,
             prepared_proposal["ai_model"],
             timeout_seconds=timeout_seconds,
+            max_output_tokens=max_output_tokens,
         )
         if error:
             return None, error
