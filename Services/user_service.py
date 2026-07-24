@@ -3,6 +3,9 @@ import secrets
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from Services.app_settings_service import (
+    app_settings_service as default_app_settings_service,
+)
 from Repositories.user_repository import user_repository as default_user_repository
 
 
@@ -24,8 +27,13 @@ ADMIN_MANAGED_ACCOUNT_CATEGORIES = {
 
 
 class UserService:
-    def __init__(self, user_repository=default_user_repository):
+    def __init__(
+        self,
+        user_repository=default_user_repository,
+        app_settings_service=default_app_settings_service,
+    ):
         self._user_repository = user_repository
+        self._app_settings_service = app_settings_service
 
     def validate_username(self, username):
         if username is None:
@@ -77,7 +85,7 @@ class UserService:
         user_id, error = self._user_repository.create_user(
             username,
             password_hash,
-            ACCOUNT_CATEGORY_BASIC,
+            self._new_user_account_category(),
             invite_code=invite_code,
         )
         if error:
@@ -102,7 +110,7 @@ class UserService:
         user_id, error = self._user_repository.create_user(
             username,
             password_hash,
-            ACCOUNT_CATEGORY_BASIC,
+            self._new_user_account_category(),
             google_sub,
             google_email,
             invite_code,
@@ -141,6 +149,11 @@ class UserService:
         if len(username) < 2:
             username = f"user_{username}"
         return username[:40]
+
+    def _new_user_account_category(self):
+        if self._app_settings_service.auto_trust_new_users_enabled():
+            return ACCOUNT_CATEGORY_TRUSTED
+        return ACCOUNT_CATEGORY_BASIC
 
     def get_user(self, user_id):
         return self._user_repository.find_by_id(user_id)

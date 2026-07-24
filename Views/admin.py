@@ -6,6 +6,7 @@ from flask import Blueprint, current_app, flash, jsonify, redirect, render_templ
 from csrf import validate_csrf_token
 from Services.access_request_service import access_request_service
 from Services.ai_quota_service import ai_quota_service
+from Services.app_settings_service import app_settings_service
 from Services.invite_code_service import invite_code_service
 from Services.security_report_service import security_report_service
 from Services.user_service import ACCOUNT_CATEGORY_ADMIN, user_service
@@ -120,6 +121,7 @@ def admin_page():
         "admin.html",
         users=users,
         admin_summary=admin_summary,
+        auto_trust_new_users=app_settings_service.auto_trust_new_users_enabled(),
         invite_codes=invite_codes,
         access_requests=access_requests,
         security_report=security_report,
@@ -438,6 +440,32 @@ def update_user_category(user_id):
         )
     flash(f"Updated {user['username']} to {user['account_category']}.")
     return redirect("/admin")
+
+
+@admin_bp.route("/admin/settings/auto-trust-new-users", methods=["POST"])
+@admin_required
+@csrf_required
+def update_auto_trust_new_users():
+    enabled = request.form.get("enabled") == "true"
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        enabled = parse_boolean_setting(data.get("enabled"))
+
+    current_value = app_settings_service.set_auto_trust_new_users_enabled(enabled)
+    if request.is_json:
+        return jsonify({"auto_trust_new_users": current_value})
+
+    if current_value:
+        flash("New users will become trusted automatically.")
+    else:
+        flash("New users will start as basic users.")
+    return redirect("/admin")
+
+
+def parse_boolean_setting(value):
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 @admin_bp.route("/admin/users/<int:user_id>/vocabs/delete/confirm", methods=["GET"])

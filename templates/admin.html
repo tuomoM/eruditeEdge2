@@ -4,19 +4,11 @@
 <div class="page-header">
     <div>
         <h1>Admin</h1>
-        <div class="result-count">{{ users | length }} users</div>
+        <div class="result-count">Operations and site controls</div>
     </div>
 </div>
 
 <section class="admin-summary" aria-label="Admin summary">
-    <div class="summary-metric">
-        <span class="summary-label">Pending requests</span>
-        <strong>{{ admin_summary.pending_access_requests }}</strong>
-    </div>
-    <div class="summary-metric">
-        <span class="summary-label">Active invite codes</span>
-        <strong>{{ admin_summary.active_invite_codes }}</strong>
-    </div>
     <div class="summary-metric">
         <span class="summary-label">Security vulnerabilities</span>
         <strong>{{ admin_summary.vulnerability_count }}</strong>
@@ -45,78 +37,98 @@
 
 <section class="admin-section">
     <div class="section-heading">
-        <h2>Invite code requests</h2>
-    </div>
-    <div class="entry-list">
-        {% for access_request in access_requests %}
-            <div class="entry-row">
-                <div class="entry-main">
-                    <div class="entry-heading">
-                        <strong class="entry-word">{{ access_request.name }}</strong>
-                        <span class="meta-chip">{{ access_request.email }}</span>
-                    </div>
-                    <p class="entry-definition">{{ access_request.message }}</p>
-                    <p class="entry-definition muted">Requested {{ access_request.created_at_label }}</p>
-                </div>
-                <div class="actions admin-row-actions">
-                    <a class="button button-secondary button-compact" href="mailto:{{ access_request.email }}">Email</a>
-                    <form action="/admin/invite-codes" method="post">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="button-primary button-compact" type="submit">Generate invite</button>
-                    </form>
-                    <form action="/admin/access-requests/{{ access_request.id }}/delete" method="post" class="danger-action">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button class="button-danger button-compact" type="submit">Mark handled</button>
-                    </form>
-                </div>
-            </div>
-        {% else %}
-            <p class="muted">No invite code requests.</p>
-        {% endfor %}
-    </div>
-</section>
-
-<section class="admin-section">
-    <div class="section-heading">
         <div>
-            <h2>Invite codes</h2>
-            <p class="section-note">Codes are single-use, valid for 5 days, and only active unused codes are shown.</p>
+            <h2>Registration</h2>
+            <p class="section-note">
+                {% if auto_trust_new_users %}
+                    New users become trusted automatically.
+                {% else %}
+                    New users start as basic users.
+                {% endif %}
+            </p>
         </div>
-        <form action="/admin/invite-codes" method="post">
+        <form action="/admin/settings/auto-trust-new-users" method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="button-primary" type="submit">Generate invite code</button>
+            {% if auto_trust_new_users %}
+                <input type="hidden" name="enabled" value="false">
+                <button class="button-secondary" type="submit">Switch off auto-trust</button>
+            {% else %}
+                <input type="hidden" name="enabled" value="true">
+                <button class="button-primary" type="submit">Switch on auto-trust</button>
+            {% endif %}
         </form>
     </div>
-    <div class="entry-list">
-        {% for invite_code in invite_codes %}
-            <div class="entry-row">
-                <div class="entry-main">
-                    <div class="entry-heading">
-                        <strong class="entry-word">{{ invite_code.code }}</strong>
-                        <button class="button-secondary button-small copy-code-button" type="button" data-code="{{ invite_code.code }}">
-                            Copy
-                        </button>
-                        <span class="copy-status muted" aria-live="polite"></span>
-                    </div>
-                    <p class="entry-definition">
-                        Valid until {{ invite_code.expires_at_label }}.
-                        Created by {{ invite_code.created_by_username }}.
-                    </p>
-                </div>
-            </div>
-        {% else %}
-            <p class="muted">No invite codes yet.</p>
-        {% endfor %}
-    </div>
 </section>
 
 <section class="admin-section">
     <div class="section-heading">
-        <div>
-            <h2>Users</h2>
-            <p class="section-note">{{ users | length }} users, sorted by user id.</p>
+        <h2>Maintenance</h2>
+        <div class="actions">
+            <a class="button button-secondary" href="/admin/vocabulary-maintenance">Vocabulary maintenance</a>
+            <a class="button button-secondary" href="/admin/vocabulary-statistics">Vocabulary statistics</a>
+            <a class="button button-secondary" href="/admin/domain-model-proposals">Domain model proposals</a>
+            <form action="/admin/security-report/run" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="button-secondary" type="submit">Run security audit</button>
+            </form>
         </div>
     </div>
+    <div class="security-report-summary">
+        {% if security_report.last_run_at %}
+            <p class="entry-definition">Dependency security report last run {{ security_report.last_run_label }}</p>
+        {% else %}
+            <p class="entry-definition">{{ security_report.message }}</p>
+        {% endif %}
+        <p class="entry-definition">
+            {{ security_report.dependency_count }} dependencies checked.
+            {{ security_report.vulnerability_count }} vulnerabilities found.
+        </p>
+    </div>
+    <div class="entry-list">
+        {% for dependency in security_report.vulnerable_dependencies %}
+            <div class="entry-row security-report-row">
+                <div class="entry-main">
+                    <div class="entry-heading">
+                        <strong class="entry-word">{{ dependency.name }}</strong>
+                        <span class="meta-chip">{{ dependency.version }}</span>
+                    </div>
+                    {% for vulnerability in dependency.vulnerabilities %}
+                        <div class="security-vulnerability">
+                            <div class="security-vulnerability-heading">
+                                <strong>{{ vulnerability.id }}</strong>
+                                {% if vulnerability.fix_versions %}
+                                    <span class="meta-chip">
+                                        Fix: {{ vulnerability.fix_versions | join(", ") }}
+                                    </span>
+                                {% endif %}
+                            </div>
+                            {% if vulnerability.description %}
+                                <p class="entry-definition">{{ vulnerability.description }}</p>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% else %}
+            {% if security_report.status == "ok" %}
+                <p class="muted">No dependency vulnerabilities in the latest report.</p>
+            {% endif %}
+        {% endfor %}
+    </div>
+</section>
+
+<details class="admin-section admin-users-details">
+    <summary class="admin-users-summary">
+        <div>
+            <h2>Users</h2>
+            <p class="section-note">User roles, quotas, and vocabulary cleanup.</p>
+        </div>
+        <span class="button button-secondary admin-users-toggle">
+            Show {{ users | length }} users,
+            {{ admin_summary.users_today }} new today,
+            {{ admin_summary.users_week }} new in the last 7 days
+        </span>
+    </summary>
     <div class="toolbar admin-user-toolbar">
         <div class="field toolbar-search">
             <label class="toolbar-label" for="admin-user-search">Search users</label>
@@ -199,95 +211,9 @@
         {% endfor %}
         <p class="filter-empty-message" id="admin-user-empty" hidden>No users match the current filters.</p>
     </div>
-</section>
-
-<section class="admin-section">
-    <div class="section-heading">
-        <h2>Maintenance</h2>
-        <div class="actions">
-            <a class="button button-secondary" href="/admin/vocabulary-maintenance">Vocabulary maintenance</a>
-            <a class="button button-secondary" href="/admin/vocabulary-statistics">Vocabulary statistics</a>
-            <a class="button button-secondary" href="/admin/domain-model-proposals">Domain model proposals</a>
-            <form action="/admin/security-report/run" method="post">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="button-secondary" type="submit">Run security audit</button>
-            </form>
-        </div>
-    </div>
-    <div class="security-report-summary">
-        {% if security_report.last_run_at %}
-            <p class="entry-definition">Dependency security report last run {{ security_report.last_run_label }}</p>
-        {% else %}
-            <p class="entry-definition">{{ security_report.message }}</p>
-        {% endif %}
-        <p class="entry-definition">
-            {{ security_report.dependency_count }} dependencies checked.
-            {{ security_report.vulnerability_count }} vulnerabilities found.
-        </p>
-    </div>
-    <div class="entry-list">
-        {% for dependency in security_report.vulnerable_dependencies %}
-            <div class="entry-row security-report-row">
-                <div class="entry-main">
-                    <div class="entry-heading">
-                        <strong class="entry-word">{{ dependency.name }}</strong>
-                        <span class="meta-chip">{{ dependency.version }}</span>
-                    </div>
-                    {% for vulnerability in dependency.vulnerabilities %}
-                        <div class="security-vulnerability">
-                            <div class="security-vulnerability-heading">
-                                <strong>{{ vulnerability.id }}</strong>
-                                {% if vulnerability.fix_versions %}
-                                    <span class="meta-chip">
-                                        Fix: {{ vulnerability.fix_versions | join(", ") }}
-                                    </span>
-                                {% endif %}
-                            </div>
-                            {% if vulnerability.description %}
-                                <p class="entry-definition">{{ vulnerability.description }}</p>
-                            {% endif %}
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-        {% else %}
-            {% if security_report.status == "ok" %}
-                <p class="muted">No dependency vulnerabilities in the latest report.</p>
-            {% endif %}
-        {% endfor %}
-    </div>
-</section>
+</details>
 
 <script>
-document.querySelectorAll(".copy-code-button").forEach((button) => {
-    button.addEventListener("click", async () => {
-        const code = button.dataset.code;
-        const status = button.parentElement.querySelector(".copy-status");
-
-        try {
-            if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(code);
-            } else {
-                const input = document.createElement("textarea");
-                input.value = code;
-                input.setAttribute("readonly", "");
-                input.style.position = "fixed";
-                input.style.opacity = "0";
-                document.body.appendChild(input);
-                input.select();
-                document.execCommand("copy");
-                document.body.removeChild(input);
-            }
-            status.textContent = "Copied";
-            window.setTimeout(() => {
-                status.textContent = "";
-            }, 1800);
-        } catch (error) {
-            status.textContent = "Copy failed";
-        }
-    });
-});
-
 const userSearch = document.getElementById("admin-user-search");
 const roleFilter = document.getElementById("admin-role-filter");
 const sortSelect = document.getElementById("admin-sort");

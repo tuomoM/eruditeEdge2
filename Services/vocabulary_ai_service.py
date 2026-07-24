@@ -2,6 +2,8 @@ import json
 import logging
 import re
 import time
+from collections import Counter
+from collections import defaultdict
 
 from Services.vocabulary_contexts import (
     VOCABULARY_REGISTER_CONTEXTS,
@@ -703,7 +705,10 @@ class VocabularyAiService:
                     "overlap, and enough specificity to distinguish semantically nearby "
                     "words. Include graph edges between domains when they are useful "
                     "for semantic navigation. Explain which current domains are replaced "
-                    "or retired. Use snake_case keys."
+                    "or retired. Use snake_case keys. Do not return per-entry analysis. "
+                    "Return roughly 8 to 16 domains unless the corpus clearly needs "
+                    "fewer or more. Keep definitions, include/exclude lists, rationales, "
+                    "and review notes concise."
                 ),
                 input=self._domain_model_input(entries, current_domains, context_labels),
                 text={
@@ -815,32 +820,95 @@ class VocabularyAiService:
         return "\n".join(lines)
 
     def _domain_model_input(self, entries, current_domains, context_labels):
+        domain_counts = Counter()
+        primary_domain_counts = Counter()
+        context_counts = Counter()
+        frequency_counts = Counter()
+        part_of_speech_counts = Counter()
+        samples_by_domain = defaultdict(list)
+        all_samples = []
+
+        for entry in entries:
+            domains = entry.get("domains") or ["none"]
+            primary_domain_counts[domains[0]] += 1
+            for domain in domains:
+                domain_counts[domain] += 1
+                if len(samples_by_domain[domain]) < 5:
+                    samples_by_domain[domain].append(
+                        self._domain_model_entry_sample(entry)
+                    )
+
+            context_values = [
+                value.strip()
+                for value in str(entry.get("context") or "unspecified").split(";")
+                if value.strip()
+            ] or ["unspecified"]
+            context_counts.update(context_values)
+            frequency_counts[entry.get("frequency_band") or "unknown"] += 1
+            part_of_speech_counts[entry.get("part_of_speech") or "other"] += 1
+            if len(all_samples) < 40:
+                all_samples.append(self._domain_model_entry_sample(entry))
+
         lines = [
+            "Corpus summary for semantic domain model proposal:",
+            f"Total entries: {len(entries)}",
+            "",
             "Current semantic domains:",
             ", ".join(current_domains),
             "",
             "Reserved context labels, not semantic domains:",
             ", ".join(context_labels),
             "",
-            "Vocabulary entries:",
+            "Distribution by current domain:",
+            self._domain_model_counter_lines(domain_counts),
+            "",
+            "Distribution by current primary domain:",
+            self._domain_model_counter_lines(primary_domain_counts),
+            "",
+            "Distribution by context/register labels:",
+            self._domain_model_counter_lines(context_counts),
+            "",
+            "Distribution by frequency:",
+            self._domain_model_counter_lines(frequency_counts),
+            "",
+            "Distribution by part of speech:",
+            self._domain_model_counter_lines(part_of_speech_counts),
+            "",
+            "Representative samples by current domain:",
         ]
-        for entry in entries:
-            lines.extend(
-                [
-                    f"ID: {entry['id']}",
-                    f"Word: {entry['word']}",
-                    f"Part of speech: {entry.get('part_of_speech') or 'other'}",
-                    f"Definition: {entry['definition']}",
-                    f"Current context: {entry.get('context') or 'unspecified'}",
-                    "Current domains: " + ", ".join(entry.get("domains", []) or ["none"]),
-                    f"Frequency: {entry.get('frequency_band') or 'unknown'}",
-                ]
-            )
-            if entry.get("examples"):
-                lines.append("Examples:")
-                lines.extend(f"- {example}" for example in entry["examples"][:2])
+        for domain in sorted(samples_by_domain):
+            lines.append(f"{domain} ({domain_counts[domain]}):")
+            lines.extend(f"- {sample}" for sample in samples_by_domain[domain])
             lines.append("")
+
+        lines.extend(
+            [
+                "Cross-corpus sample for spotting missing semantic clusters:",
+                *[f"- {sample}" for sample in all_samples],
+            ]
+        )
         return "\n".join(lines)
+
+    def _domain_model_counter_lines(self, counter):
+        if not counter:
+            return "- none"
+        return "\n".join(
+            f"- {key}: {count}"
+            for key, count in counter.most_common()
+        )
+
+    def _domain_model_entry_sample(self, entry):
+        definition = " ".join(str(entry.get("definition") or "").split())
+        if len(definition) > 160:
+            definition = definition[:157].rstrip() + "..."
+        domains = ", ".join(entry.get("domains") or ["none"])
+        return (
+            f"{entry.get('word') or 'unknown'} "
+            f"({entry.get('part_of_speech') or 'other'}, "
+            f"{entry.get('frequency_band') or 'unknown'}, "
+            f"{entry.get('context') or 'unspecified'}, domains: {domains}) - "
+            f"{definition}"
+        )
 
     def _normalize_context(self, context):
         normalized = normalize_context_string(context)

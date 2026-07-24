@@ -26,7 +26,9 @@ from Services.vocabulary_service import ALLOWED_FREQUENCY_BANDS
 MAINTENANCE_ESTIMATED_INPUT_TOKENS_PER_ITEM = 900
 MAINTENANCE_ESTIMATED_OUTPUT_TOKENS_PER_ITEM = 350
 DOMAIN_MODEL_ESTIMATED_INPUT_TOKENS_PER_ITEM = 450
-DOMAIN_MODEL_ESTIMATED_OUTPUT_TOKENS = 3200
+DOMAIN_MODEL_AGGREGATED_BASE_INPUT_TOKENS = 4000
+DOMAIN_MODEL_AGGREGATED_MAX_INPUT_TOKENS = 22000
+DOMAIN_MODEL_ESTIMATED_OUTPUT_TOKENS = 12000
 MAINTENANCE_ESTIMATED_COST_PER_1K_TOKENS = 0.01
 MAINTENANCE_SCOPES = {
     "all",
@@ -182,7 +184,11 @@ class VocabularyMaintenanceService:
             run_options["max_items"],
         )
         selected_count = len(item_snapshots)
-        estimated_input_tokens = selected_count * DOMAIN_MODEL_ESTIMATED_INPUT_TOKENS_PER_ITEM
+        estimated_input_tokens = min(
+            DOMAIN_MODEL_AGGREGATED_BASE_INPUT_TOKENS
+            + selected_count * DOMAIN_MODEL_ESTIMATED_INPUT_TOKENS_PER_ITEM,
+            DOMAIN_MODEL_AGGREGATED_MAX_INPUT_TOKENS,
+        )
         estimated_output_tokens = DOMAIN_MODEL_ESTIMATED_OUTPUT_TOKENS
         estimated_cost = self._estimate_cost(
             estimated_input_tokens,

@@ -9,6 +9,7 @@ import db
 from app import create_app
 from csrf import CSRF_SESSION_KEY
 from db import init_db
+from Services.app_settings_service import app_settings_service
 from Services.user_service import user_service
 from werkzeug.security import generate_password_hash
 
@@ -81,6 +82,10 @@ class AuthTestCase(unittest.TestCase):
                 """,
                 [username, generate_password_hash("AdminSafe12!"), "trusted"],
             )
+
+    def set_auto_trust_new_users(self, enabled):
+        with self.app.app_context():
+            app_settings_service.set_auto_trust_new_users_enabled(enabled)
 
     def invite_creator_id(self):
         with self.app.app_context():
@@ -443,16 +448,24 @@ class AuthTestCase(unittest.TestCase):
             )
         self.assertEqual(users, [])
 
-    def test_registered_user_is_basic(self):
+    def test_registered_user_is_trusted_by_default(self):
         response = self.register("tuomo", "AdminSafe12!")
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.get_json()["account_category"], "basic")
+        self.assertEqual(response.get_json()["account_category"], "trusted")
 
-    def test_later_registered_users_are_basic(self):
+    def test_later_registered_users_are_trusted_by_default(self):
         self.register("tuomo", "AdminSafe12!")
 
         response = self.register("anna", "AdminSafe12!")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["account_category"], "trusted")
+
+    def test_registered_user_is_basic_when_auto_trust_is_off(self):
+        self.set_auto_trust_new_users(False)
+
+        response = self.register("tuomo", "AdminSafe12!")
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.get_json()["account_category"], "basic")
@@ -489,7 +502,7 @@ class AuthTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["username"], "tuomo")
-        self.assertEqual(response.get_json()["account_category"], "basic")
+        self.assertEqual(response.get_json()["account_category"], "trusted")
 
     def test_login_fails_with_incorrect_password(self):
         self.register("tuomo", "AdminSafe12!")
@@ -720,7 +733,7 @@ class AuthTestCase(unittest.TestCase):
                 ["tuomo"],
             )
 
-        self.assertEqual(rows[0]["account_category"], "basic")
+        self.assertEqual(rows[0]["account_category"], "trusted")
 
     def test_create_admin_command_aborts_when_admin_already_exists(self):
         runner = self.app.test_cli_runner()
@@ -751,7 +764,7 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(
             self.user_categories(),
             {
-                "anna": "basic",
+                "anna": "trusted",
                 "tuomo": "admin",
             },
         )
@@ -813,7 +826,7 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(
             self.user_categories(),
             {
-                "anna": "basic",
+                "anna": "trusted",
                 "invite_issuer": "admin",
             },
         )

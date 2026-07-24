@@ -123,6 +123,9 @@ MIGRATION_MARKERS = {
         "tables": ["vocabulary_domain_model_proposals"],
         "indexes": ["vocabulary_domain_model_proposals_status_idx"],
     },
+    "020_app_settings.sql": {
+        "tables": ["app_settings"],
+    },
 }
 
 

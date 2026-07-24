@@ -9,6 +9,7 @@ import db
 from app import create_app
 from csrf import CSRF_SESSION_KEY
 from db import init_db
+from Services.app_settings_service import app_settings_service
 from Services.synonym_net_cloze_service import synonym_net_cloze_service
 
 
@@ -61,6 +62,10 @@ class VocabularyTestCase(unittest.TestCase):
             headers=self.csrf_headers(),
         )
 
+    def login_basic_second_user(self):
+        self.login_second_user()
+        self.set_user_category("anna", "basic")
+
     def login_existing_second_user(self):
         self.client.post(
             "/login",
@@ -80,6 +85,10 @@ class VocabularyTestCase(unittest.TestCase):
                 """,
                 [account_category, username],
             )
+
+    def set_auto_trust_new_users(self, enabled):
+        with self.app.app_context():
+            app_settings_service.set_auto_trust_new_users_enabled(enabled)
 
     def invite_creator_id(self):
         with self.app.app_context():
@@ -1099,7 +1108,7 @@ class VocabularyTestCase(unittest.TestCase):
     def test_basic_user_cannot_create_vocabulary(self):
         self.login_user()
         self.logout_user()
-        self.login_second_user()
+        self.login_basic_second_user()
 
         response = self.create_entry()
 
@@ -1109,7 +1118,7 @@ class VocabularyTestCase(unittest.TestCase):
     def test_basic_user_cannot_open_new_vocabulary_page(self):
         self.login_user()
         self.logout_user()
-        self.login_second_user()
+        self.login_basic_second_user()
 
         response = self.client.get("/vocabulary/new", follow_redirects=True)
 
@@ -1283,7 +1292,7 @@ class VocabularyTestCase(unittest.TestCase):
     def test_basic_user_cannot_generate_vocabulary_with_ai(self):
         self.login_user()
         self.logout_user()
-        self.login_second_user()
+        self.login_basic_second_user()
 
         response = self.generate_entry("operation")
 
@@ -1302,7 +1311,7 @@ class VocabularyTestCase(unittest.TestCase):
     def test_basic_user_cannot_check_ai_status(self):
         self.login_user()
         self.logout_user()
-        self.login_second_user()
+        self.login_basic_second_user()
 
         response = self.client.get("/vocabulary/generate/status")
 
@@ -1408,7 +1417,7 @@ class VocabularyTestCase(unittest.TestCase):
         create_response = self.create_entry()
         vocabulary_id = create_response.get_json()["id"]
         self.logout_user()
-        self.login_second_user()
+        self.login_basic_second_user()
 
         response = self.client.get(f"/vocabulary/{vocabulary_id}/page")
 
@@ -1528,7 +1537,7 @@ class VocabularyTestCase(unittest.TestCase):
         create_response = self.create_entry()
         vocabulary_id = create_response.get_json()["id"]
         self.logout_user()
-        self.login_second_user()
+        self.login_basic_second_user()
 
         response = self.practice_usage(vocabulary_id, "The operation was careful.")
 
@@ -1710,7 +1719,7 @@ class VocabularyTestCase(unittest.TestCase):
         create_response = self.create_entry()
         vocabulary_id = create_response.get_json()["id"]
         self.logout_user()
-        self.login_second_user()
+        self.login_basic_second_user()
         data = self.valid_entry()
         data["definition"] = "Updated global definition"
 
@@ -1724,7 +1733,7 @@ class VocabularyTestCase(unittest.TestCase):
         create_response = self.create_entry()
         vocabulary_id = create_response.get_json()["id"]
         self.logout_user()
-        self.login_second_user()
+        self.login_basic_second_user()
 
         response = self.client.get(
             f"/vocabulary/{vocabulary_id}/edit",

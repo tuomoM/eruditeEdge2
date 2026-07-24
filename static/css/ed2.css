@@ -803,6 +803,45 @@ button:hover,
     margin-bottom: 0;
 }
 
+.admin-users-details {
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--color-border);
+}
+
+.admin-users-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm) var(--space-lg);
+    align-items: end;
+    justify-content: space-between;
+    cursor: pointer;
+    list-style: none;
+}
+
+.admin-users-summary::-webkit-details-marker {
+    display: none;
+}
+
+.admin-users-summary h2 {
+    margin-bottom: 0;
+}
+
+.admin-users-details[open] .admin-users-toggle {
+    color: var(--color-muted);
+}
+
+.admin-users-details[open] .admin-users-toggle::before {
+    content: "Hide users";
+}
+
+.admin-users-details[open] .admin-users-toggle {
+    font-size: 0;
+}
+
+.admin-users-details[open] .admin-users-toggle::before {
+    font-size: 1rem;
+}
+
 .admin-row-actions {
     align-items: flex-start;
 }

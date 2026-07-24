@@ -93,8 +93,8 @@ class CliTestCase(unittest.TestCase):
                 ORDER BY filename
                 """
             )
-        self.assertEqual(len(rows), 19)
-        self.assertEqual(rows[-1]["filename"], "019_relax_vocabulary_domain_catalog.sql")
+        self.assertEqual(len(rows), 20)
+        self.assertEqual(rows[-1]["filename"], "020_app_settings.sql")
 
     def test_migrate_skips_recorded_migrations(self):
         app = self.create_test_app()

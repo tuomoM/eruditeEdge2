@@ -9,6 +9,7 @@ import db
 from app import create_app
 from csrf import CSRF_SESSION_KEY
 from db import init_db
+from Services.app_settings_service import app_settings_service
 from Services.vocabulary_domains import active_vocabulary_domains
 
 
@@ -93,6 +94,10 @@ class AdminTestCase(unittest.TestCase):
                 [code, creator_id, expires_at.isoformat()],
             )
         return code
+
+    def set_auto_trust_new_users(self, enabled):
+        with self.app.app_context():
+            app_settings_service.set_auto_trust_new_users_enabled(enabled)
 
     def logout(self):
         self.client.post("/logout", json={})
@@ -209,7 +214,7 @@ class AdminTestCase(unittest.TestCase):
         self.assertIn(b"7 / 20", response.data)
         self.assertIn(b"0 / unlimited", response.data)
 
-    def test_admin_page_shows_invite_codes(self):
+    def test_admin_page_hides_legacy_invite_code_panel(self):
         self.create_admin("tuomo")
         self.logout()
         self.login("tuomo")
@@ -222,8 +227,8 @@ class AdminTestCase(unittest.TestCase):
         response = self.client.get("/admin")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Invite codes", response.data)
-        self.assertIn(self.invite_codes()[0]["code"].encode(), response.data)
+        self.assertNotIn(b"Invite codes", response.data)
+        self.assertNotIn(self.invite_codes()[0]["code"].encode(), response.data)
 
     def test_admin_page_shows_new_user_and_vocab_summary(self):
         self.create_admin("tuomo")
@@ -276,13 +281,74 @@ class AdminTestCase(unittest.TestCase):
         self.assertIn(b"New users last 7 days", response.data)
         self.assertIn(b"New vocabulary entries today", response.data)
         self.assertIn(b"New vocabulary entries last 7 days", response.data)
-        self.assertIn(b"Pending requests", response.data)
-        self.assertIn(b"Active invite codes", response.data)
         self.assertIn(b"Users at AI quota", response.data)
+        self.assertIn(b"Show 4 users", response.data)
+        self.assertIn(b"1 new today", response.data)
+        self.assertIn(b"2 new in the last 7 days", response.data)
         self.assertIn(b"<strong>1</strong>", response.data)
         self.assertIn(b"<strong>2</strong>", response.data)
         self.assertIn(b"<strong>3</strong>", response.data)
         self.assertIn(b"<strong>4</strong>", response.data)
+
+    def test_admin_page_shows_auto_trust_setting(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Registration", response.data)
+        self.assertIn(b"New users become trusted automatically.", response.data)
+        self.assertIn(b"Switch off auto-trust", response.data)
+
+    def test_admin_can_switch_off_auto_trust_new_users(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post(
+            "/admin/settings/auto-trust-new-users",
+            json={"enabled": False},
+            headers=self.csrf_headers(),
+        )
+        registration_response = self.register("anna")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.get_json()["auto_trust_new_users"])
+        self.assertEqual(registration_response.get_json()["account_category"], "basic")
+
+    def test_admin_can_switch_on_auto_trust_new_users(self):
+        self.create_admin("tuomo")
+        self.set_auto_trust_new_users(False)
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post(
+            "/admin/settings/auto-trust-new-users",
+            json={"enabled": True},
+            headers=self.csrf_headers(),
+        )
+        registration_response = self.register("anna")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["auto_trust_new_users"])
+        self.assertEqual(registration_response.get_json()["account_category"], "trusted")
+
+    def test_auto_trust_setting_rejects_missing_csrf_token(self):
+        self.create_admin("tuomo")
+        self.logout()
+        self.login("tuomo")
+
+        response = self.client.post(
+            "/admin/settings/auto-trust-new-users",
+            json={"enabled": False},
+        )
+        registration_response = self.register("anna")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
+        self.assertEqual(registration_response.get_json()["account_category"], "trusted")
 
     def test_admin_page_shows_clean_dependency_security_report(self):
         self.write_security_report(
@@ -970,7 +1036,7 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Security report has not been generated yet.", response.data)
 
-    def test_admin_page_hides_used_invite_codes(self):
+    def test_admin_page_does_not_show_used_or_unused_invite_codes(self):
         self.create_admin("tuomo")
         used_code = self.create_invite_code()
         unused_code = self.create_invite_code()
@@ -991,9 +1057,9 @@ class AdminTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(used_code.encode(), response.data)
-        self.assertIn(unused_code.encode(), response.data)
+        self.assertNotIn(unused_code.encode(), response.data)
 
-    def test_admin_page_hides_expired_invite_codes(self):
+    def test_admin_page_does_not_show_expired_or_valid_invite_codes(self):
         self.create_admin("tuomo")
         expired_code = self.create_invite_code(
             datetime.now(timezone.utc) - timedelta(days=1)
@@ -1008,7 +1074,7 @@ class AdminTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(expired_code.encode(), response.data)
-        self.assertIn(valid_code.encode(), response.data)
+        self.assertNotIn(valid_code.encode(), response.data)
 
     def test_admin_can_generate_invite_code_valid_for_five_days(self):
         self.create_admin("tuomo")
@@ -1113,6 +1179,7 @@ class AdminTestCase(unittest.TestCase):
 
     def test_admin_cannot_promote_user_to_admin(self):
         self.create_admin("tuomo")
+        self.set_auto_trust_new_users(False)
         user_response = self.register("anna")
         self.logout()
         self.login("tuomo")
@@ -1128,6 +1195,7 @@ class AdminTestCase(unittest.TestCase):
         self.assertEqual(self.user_categories()["anna"], "basic")
 
     def test_basic_user_cannot_change_categories(self):
+        self.set_auto_trust_new_users(False)
         basic_response = self.register("anna")
         target_response = self.register("mika")
 
@@ -1162,6 +1230,7 @@ class AdminTestCase(unittest.TestCase):
 
     def test_stale_admin_session_cannot_change_categories_after_demoted_in_database(self):
         self.create_admin("tuomo")
+        self.set_auto_trust_new_users(False)
         user_response = self.register("anna")
         self.logout()
         self.login("tuomo")
@@ -1184,6 +1253,7 @@ class AdminTestCase(unittest.TestCase):
 
     def test_admin_category_change_rejects_missing_csrf_token(self):
         self.create_admin("tuomo")
+        self.set_auto_trust_new_users(False)
         user_response = self.register("anna")
         self.logout()
         self.login("tuomo")

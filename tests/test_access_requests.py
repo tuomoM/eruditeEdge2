@@ -284,7 +284,7 @@ class AccessRequestTestCase(unittest.TestCase):
         )
         self.assertEqual(len(self.access_requests()), 3)
 
-    def test_admin_page_shows_access_requests(self):
+    def test_admin_page_hides_legacy_access_requests(self):
         self.create_access_request()
         self.create_admin("tuomo")
         self.login("tuomo")
@@ -292,10 +292,10 @@ class AccessRequestTestCase(unittest.TestCase):
         response = self.client.get("/admin")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Invite code requests", response.data)
-        self.assertIn(b"Ada Lovelace", response.data)
-        self.assertIn(b"ada@example.com", response.data)
-        self.assertIn(b"I would like to practice vocabulary", response.data)
+        self.assertNotIn(b"Invite code requests", response.data)
+        self.assertNotIn(b"Ada Lovelace", response.data)
+        self.assertNotIn(b"ada@example.com", response.data)
+        self.assertNotIn(b"I would like to practice vocabulary", response.data)
 
     def test_admin_can_delete_access_request(self):
         access_request = self.create_access_request()

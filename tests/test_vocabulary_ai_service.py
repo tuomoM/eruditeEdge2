@@ -371,7 +371,9 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIn("semantic domain model", client.responses.last_request["instructions"])
         self.assertIn("must not become domain keys", client.responses.last_request["instructions"])
         self.assertIn("Reserved context labels", client.responses.last_request["input"])
-        self.assertIn("Word: contumacious", client.responses.last_request["input"])
+        self.assertIn("Corpus summary", client.responses.last_request["input"])
+        self.assertIn("contumacious", client.responses.last_request["input"])
+        self.assertIn("Representative samples by current domain", client.responses.last_request["input"])
         self.assertEqual(
             client.responses.last_request["max_output_tokens"],
             DOMAIN_MODEL_MAX_OUTPUT_TOKENS,
