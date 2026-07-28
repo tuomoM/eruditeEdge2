@@ -135,6 +135,8 @@ def form_to_entry_data(form):
         for item in form.get("domains_order", "").split(",")
         if item.strip()
     ]
+    if not selected_domains:
+        selected_domains = ordered_domain_candidates
     domains = [
         domain
         for domain in ordered_domain_candidates
@@ -202,6 +204,8 @@ def active_vocabulary_filters(filters):
 @page_login_required
 def vocabulary_list():
     filters = vocabulary_filters_from_request(request.args)
+    if not is_admin():
+        filters["domain"] = ""
     entries, error = vocabulary_service.search_entries(filters)
     if error:
         flash(error)

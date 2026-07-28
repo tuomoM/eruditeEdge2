@@ -69,15 +69,17 @@
                 <label for="context">Context</label>
                 <input id="context" name="context" value="{{ filters.context }}" placeholder="Formal">
             </div>
-            <div class="field">
-                <label for="domain">Domain</label>
-                <select id="domain" name="domain">
-                    <option value=""></option>
-                    {% for domain in filter_choices.domains %}
-                        <option value="{{ domain }}" {% if filters.domain == domain %}selected{% endif %}>{{ domain | capitalize }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+            {% if session.account_category == "admin" %}
+                <div class="field">
+                    <label for="domain">Domain</label>
+                    <select id="domain" name="domain">
+                        <option value=""></option>
+                        {% for domain in filter_choices.domains %}
+                            <option value="{{ domain }}" {% if filters.domain == domain %}selected{% endif %}>{{ domain | capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endif %}
             <div class="field">
                 <label for="part_of_speech">Part of speech</label>
                 <select id="part_of_speech" name="part_of_speech">
@@ -106,7 +108,9 @@
 {% if active_filters %}
     <div class="active-filter-list" aria-label="Active filters">
         {% for key, value in active_filters.items() %}
-            <span class="meta-chip">{{ key | replace('_', ' ') }}: {{ value | replace('_', ' ') }}</span>
+            {% if key != "domain" or session.account_category == "admin" %}
+                <span class="meta-chip">{{ key | replace('_', ' ') }}: {{ value | replace('_', ' ') }}</span>
+            {% endif %}
         {% endfor %}
     </div>
 {% endif %}
@@ -125,9 +129,11 @@
                     {% if entry.frequency_band %}
                         <span class="meta-chip">{{ entry.frequency_band | replace('_', ' ') }}</span>
                     {% endif %}
-                    {% for domain in entry.domains %}
-                        <span class="meta-chip">{{ domain }}</span>
-                    {% endfor %}
+                    {% if session.account_category == "admin" %}
+                        {% for domain in entry.domains %}
+                            <span class="meta-chip">{{ domain }}</span>
+                        {% endfor %}
+                    {% endif %}
                 </div>
                 <p class="entry-definition">{{ entry.definition }}</p>
             </div>

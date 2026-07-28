@@ -721,6 +721,7 @@ class TrainingTestCase(unittest.TestCase):
         literary_entry["domains"] = ["attitude"]
         self.client.post("/vocabulary", json=medical_entry)
         self.client.post("/vocabulary", json=literary_entry)
+        self.make_user_admin()
 
         response = self.client.get("/training/select", query_string={"domain": "body"})
 

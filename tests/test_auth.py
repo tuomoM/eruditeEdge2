@@ -146,7 +146,7 @@ class AuthTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"AI vocabulary builder for advanced English learners", response.data)
-        self.assertIn(b"semantic domains", response.data)
+        self.assertIn(b"cloze practice", response.data)
         self.assertIn(b"Anki decks", response.data)
         self.assertIn(b'name="description"', response.data)
 

@@ -11,9 +11,11 @@
         {% if entry.frequency_band %}
             <span class="meta-chip">{{ entry.frequency_band | replace('_', ' ') }}</span>
         {% endif %}
-        {% for domain in entry.domains %}
-            <span class="meta-chip">{{ domain }}</span>
-        {% endfor %}
+        {% if session.account_category == "admin" %}
+            {% for domain in entry.domains %}
+                <span class="meta-chip">{{ domain }}</span>
+            {% endfor %}
+        {% endif %}
     </div>
 </div>
 

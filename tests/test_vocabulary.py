@@ -1267,8 +1267,42 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         html = response.get_data(as_text=True)
-        self.assertIn('class="field field-wide domain-fieldset" hidden', html)
+        self.assertNotIn('class="field field-wide domain-fieldset"', html)
+        self.assertNotIn('<legend>Domains</legend>', html)
+        self.assertNotIn('No domains selected.', html)
+        self.assertNotIn('<input\n                            type="checkbox"\n                            name="domains"', html)
         self.assertIn('name="domains_order"', html)
+
+    def test_trusted_user_vocabulary_pages_hide_domain_chips(self):
+        self.login_user()
+        entry_data = self.valid_entry()
+        entry_data["domains"] = ["body"]
+        create_response = self.create_entry(entry_data)
+        entry_id = create_response.get_json()["id"]
+
+        list_response = self.client.get("/vocabulary")
+        detail_response = self.client.get(f"/vocabulary/{entry_id}/page")
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertNotIn(b'<span class="meta-chip">body</span>', list_response.data)
+        self.assertNotIn(b'<span class="meta-chip">body</span>', detail_response.data)
+
+    def test_admin_vocabulary_pages_show_domain_chips(self):
+        self.login_user()
+        entry_data = self.valid_entry()
+        entry_data["domains"] = ["body"]
+        create_response = self.create_entry(entry_data)
+        entry_id = create_response.get_json()["id"]
+        self.set_user_category("tuomo", "admin")
+
+        list_response = self.client.get("/vocabulary")
+        detail_response = self.client.get(f"/vocabulary/{entry_id}/page")
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertIn(b'<span class="meta-chip">body</span>', list_response.data)
+        self.assertIn(b'<span class="meta-chip">body</span>', detail_response.data)
 
     def test_trusted_user_new_vocabulary_page_hides_ai_setup_check(self):
         self.login_user()

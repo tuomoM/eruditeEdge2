@@ -49,8 +49,10 @@ ANKI_CARD_TYPE_BY_TRAINING_TYPE = {
 @training_bp.route("/training/select", methods=["GET"])
 @page_login_required
 def select_training_vocabs():
-    _is_admin()
+    is_admin = _is_admin()
     filters = vocabulary_filters_from_request(request.args)
+    if not is_admin:
+        filters["domain"] = ""
     entries, error = vocabulary_service.search_entries(filters)
     if error:
         entries = []

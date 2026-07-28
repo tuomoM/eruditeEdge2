@@ -64,27 +64,29 @@
         <textarea id="definition" name="definition" required>{{ entry.definition if entry else '' }}</textarea>
     </div>
 
-    <fieldset class="field field-wide domain-fieldset" {% if session.account_category != "admin" %}hidden{% endif %}>
-        <legend>Domains</legend>
-        <div class="selected-domain-panel">
-            <div class="selected-domain-list" data-domain-selection-list></div>
-            <p class="selected-domain-empty" data-domain-selection-empty>No domains selected.</p>
-        </div>
-        <div class="domain-options">
-            {% set selected_domains = entry.domains if entry and entry.domains else [] %}
-            {% for domain in available_domains %}
-                <label class="domain-option">
-                    <input
-                        type="checkbox"
-                        name="domains"
-                        value="{{ domain }}"
-                        {% if domain in selected_domains %}checked{% endif %}
-                    >
-                    <span>{{ domain | capitalize }}</span>
-                </label>
-            {% endfor %}
-        </div>
-    </fieldset>
+    {% if session.account_category == "admin" %}
+        <fieldset class="field field-wide domain-fieldset">
+            <legend>Domains</legend>
+            <div class="selected-domain-panel">
+                <div class="selected-domain-list" data-domain-selection-list></div>
+                <p class="selected-domain-empty" data-domain-selection-empty>No domains selected.</p>
+            </div>
+            <div class="domain-options">
+                {% set selected_domains = entry.domains if entry and entry.domains else [] %}
+                {% for domain in available_domains %}
+                    <label class="domain-option">
+                        <input
+                            type="checkbox"
+                            name="domains"
+                            value="{{ domain }}"
+                            {% if domain in selected_domains %}checked{% endif %}
+                        >
+                        <span>{{ domain | capitalize }}</span>
+                    </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+    {% endif %}
 
     <div class="form-grid">
         <div class="field">
@@ -305,6 +307,9 @@ function domainRole(index) {
 }
 
 function selectedDomainOrder() {
+    if (domainCheckboxes.length === 0) {
+        return getDomainOrder();
+    }
     return getDomainOrder().filter((domain) => {
         return domainCheckboxes.some((checkbox) => {
             return checkbox.value === domain && checkbox.checked;
@@ -411,13 +416,15 @@ document.querySelector("[data-domain-selection-list]")?.addEventListener("click"
     updateDomainSelection();
 });
 
-setDomainOrder(
-    getDomainOrder().filter((domain) => {
-        return domainCheckboxes.some((checkbox) => {
-            return checkbox.value === domain && checkbox.checked;
-        });
-    })
-);
+if (domainCheckboxes.length > 0) {
+    setDomainOrder(
+        getDomainOrder().filter((domain) => {
+            return domainCheckboxes.some((checkbox) => {
+                return checkbox.value === domain && checkbox.checked;
+            });
+        })
+    );
+}
 updateDomainSelection();
 </script>
 {% endblock %}
