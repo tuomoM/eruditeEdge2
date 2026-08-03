@@ -66,6 +66,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "part_of_speech": "noun",
                 "frequency_band": "common",
                 "frequency_note": "",
+                "gre_rating": "medium",
                 "domains": ["communication", "body", "cognition"],
                 "synonyms": ["procedure", "process"],
                 "examples": [
@@ -125,11 +126,16 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertIn("Never use General", client.responses.last_request["instructions"])
         self.assertIn("semicolon-separated context label", client.responses.last_request["instructions"])
         self.assertIn("frequency band", client.responses.last_request["instructions"])
+        self.assertIn("GRE study relevance rating", client.responses.last_request["instructions"])
         frequency_schema = (
             client.responses.last_request["text"]["format"]["schema"]["properties"]["frequency_band"]
         )
         self.assertIn("common", frequency_schema["enum"])
         self.assertIn("specialized", frequency_schema["enum"])
+        gre_rating_schema = (
+            client.responses.last_request["text"]["format"]["schema"]["properties"]["gre_rating"]
+        )
+        self.assertEqual(gre_rating_schema["enum"], ["high", "medium", "low", "unlikely"])
         domains_schema = (
             client.responses.last_request["text"]["format"]["schema"]["properties"]["domains"]
         )
@@ -145,6 +151,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         self.assertEqual(entry["domains"], ["communication", "body", "cognition"])
         self.assertEqual(entry["frequency_band"], "common")
         self.assertEqual(entry["frequency_note"], "")
+        self.assertEqual(entry["gre_rating"], "medium")
         self.assertIsNone(entry["needs_attention"])
 
     def test_generate_entry_uses_active_domain_model(self):
@@ -156,6 +163,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "part_of_speech": "adjective",
                 "frequency_band": "rare",
                 "frequency_note": "Mostly encountered in legal or formal prose.",
+                "gre_rating": "medium",
                 "domains": ["authority_resistance"],
                 "synonyms": ["defiant"],
                 "examples": [
@@ -508,6 +516,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "part_of_speech": "verb",
                 "frequency_band": "common",
                 "frequency_note": "",
+                "gre_rating": "medium",
                 "domains": ["movement"],
                 "synonyms": ["stagger", "wobble"],
                 "examples": [
@@ -538,6 +547,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "part_of_speech": "verb",
                 "frequency_band": "uncommon",
                 "frequency_note": "Used less often in everyday speech.",
+                "gre_rating": "medium",
                 "domains": ["change", "power", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
@@ -568,6 +578,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "part_of_speech": "verb",
                 "frequency_band": "uncommon",
                 "frequency_note": "Used less often in everyday speech.",
+                "gre_rating": "medium",
                 "domains": ["power", "change", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
@@ -598,6 +609,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "part_of_speech": "verb",
                 "frequency_band": "uncommon",
                 "frequency_note": "Used less often in everyday speech.",
+                "gre_rating": "medium",
                 "domains": ["power", "change", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
@@ -628,6 +640,7 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
                 "part_of_speech": "verb",
                 "frequency_band": "uncommon",
                 "frequency_note": "Used less often in everyday speech.",
+                "gre_rating": "medium",
                 "domains": ["power", "change", "causation"],
                 "synonyms": ["hinder"],
                 "examples": [
@@ -702,6 +715,16 @@ class VocabularyAiServiceTestCase(unittest.TestCase):
         output = json.loads(self.valid_output())
         output["needs_attention"] = "x" * 201
         output["confidence_score"] = 101
+        service = VocabularyAiService(client=FakeClient(json.dumps(output)))
+
+        entry, error = service.generate_entry("operation", "test-key", "test-model")
+
+        self.assertIsNone(entry)
+        self.assertEqual(error, "OpenAI returned invalid vocabulary data")
+
+    def test_generate_entry_rejects_invalid_gre_rating(self):
+        output = json.loads(self.valid_output())
+        output["gre_rating"] = "certain"
         service = VocabularyAiService(client=FakeClient(json.dumps(output)))
 
         entry, error = service.generate_entry("operation", "test-key", "test-model")

@@ -93,8 +93,9 @@ class CliTestCase(unittest.TestCase):
                 ORDER BY filename
                 """
             )
-        self.assertEqual(len(rows), 20)
-        self.assertEqual(rows[-1]["filename"], "020_app_settings.sql")
+        self.assertEqual(len(rows), 22)
+        self.assertEqual(rows[-1]["filename"], "022_vocabulary_gre_rating.sql")
+        self.assertIn("Synced GregMat: 1162 words", result.output)
 
     def test_migrate_skips_recorded_migrations(self):
         app = self.create_test_app()
@@ -106,6 +107,79 @@ class CliTestCase(unittest.TestCase):
         self.assertEqual(first_result.exit_code, 0)
         self.assertEqual(second_result.exit_code, 0)
         self.assertIn("No pending migrations.", second_result.output)
+
+    def test_word_list_migration_backfills_existing_vocabulary(self):
+        app = self.create_test_app()
+        init_db(app)
+
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["word-list-test", "not-used", "admin"],
+            ).lastrowid
+            db.execute(
+                """
+                INSERT INTO vocabulary_entries
+                    (word, definition, definition_key, created_by)
+                VALUES (?, ?, ?, ?)
+                """,
+                ["abound", "To exist in large numbers.", "to exist", user_id],
+            )
+            connection = db.get_connection()
+            connection.execute("DROP TABLE vocabulary_entry_word_lists")
+            connection.execute("DROP TABLE vocabulary_word_list_entries")
+            connection.execute("DROP TABLE vocabulary_word_lists")
+            connection.execute(
+                """
+                CREATE TABLE schema_migrations (
+                    filename TEXT PRIMARY KEY,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.executemany(
+                "INSERT INTO schema_migrations (filename) VALUES (?)",
+                [(f"{number:03d}_{name}.sql",) for number, name in [
+                    (1, "training_quiz"),
+                    (2, "user_account_categories"),
+                    (3, "ai_generation_usage"),
+                    (4, "invite_codes"),
+                    (5, "invite_code_usage"),
+                    (6, "google_registration"),
+                    (7, "access_requests"),
+                    (8, "access_request_guardrails"),
+                    (9, "access_request_unique_email"),
+                    (10, "cloze_training"),
+                    (11, "vocabulary_domains"),
+                    (12, "expand_vocabulary_domains"),
+                    (13, "vocabulary_ai_assessment"),
+                    (14, "vocabulary_synonym_links_and_jobs"),
+                    (15, "vocabulary_sources"),
+                    (16, "vocabulary_senses_and_frequency"),
+                    (17, "vocabulary_maintenance_runs"),
+                    (18, "vocabulary_domain_model_proposals"),
+                    (19, "relax_vocabulary_domain_catalog"),
+                    (20, "app_settings"),
+                ]],
+            )
+            connection.commit()
+
+        result = app.test_cli_runner().invoke(args=["migrate"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Applied 021_vocabulary_word_lists.sql.", result.output)
+        with app.app_context():
+            word_count = db.query(
+                "SELECT COUNT(*) AS count FROM vocabulary_word_list_entries"
+            )[0]["count"]
+            membership_count = db.query(
+                "SELECT COUNT(*) AS count FROM vocabulary_entry_word_lists"
+            )[0]["count"]
+        self.assertEqual(word_count, 1162)
+        self.assertEqual(membership_count, 1)
 
     def test_domain_expansion_migration_preserves_data_and_allows_new_values(self):
         app = self.create_test_app()

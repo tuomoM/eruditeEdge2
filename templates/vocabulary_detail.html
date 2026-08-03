@@ -11,6 +11,12 @@
         {% if entry.frequency_band %}
             <span class="meta-chip">{{ entry.frequency_band | replace('_', ' ') }}</span>
         {% endif %}
+        {% if entry.gre_rating %}
+            <span class="meta-chip">GRE: {{ entry.gre_rating }}</span>
+        {% endif %}
+        {% for word_list in entry.word_lists %}
+            <span class="meta-chip">{{ word_list.category }}: {{ word_list.name }}</span>
+        {% endfor %}
         {% if session.account_category == "admin" %}
             {% for domain in entry.domains %}
                 <span class="meta-chip">{{ domain }}</span>

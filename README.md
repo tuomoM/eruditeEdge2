@@ -149,3 +149,102 @@ flask --app app create-admin
 ```
 
 The command prompts for a user id and password. When the new admin is created, all existing admin users are moved to the `trusted` category.
+
+# Command line commands
+
+Run these commands from the project root with the virtual environment active. The Flask command names use hyphens.
+
+## Database
+
+Initialize a new database from `schema.sql`:
+
+```bash
+flask --app app init-db
+```
+
+Apply pending migration files from `migrations/`:
+
+```bash
+flask --app app migrate
+```
+
+This also applies the GRE relevance field used by AI vocabulary generation.
+
+Check which database path the app is using:
+
+```bash
+flask --app app check-database
+```
+
+## Local server
+
+Start the local development server:
+
+```bash
+flask --app app run --port 5001
+```
+
+## Admin users
+
+Create a new admin user:
+
+```bash
+flask --app app create-admin
+```
+
+Rotate the admin role to another existing trusted user:
+
+```bash
+flask --app app rotate-admin
+```
+
+## Background and AI maintenance
+
+Refresh the bundled external vocabulary-list data and re-check every existing
+entry against it. This runs automatically after `init-db` and `migrate`:
+
+```bash
+flask --app app sync-vocabulary-word-lists
+```
+
+Run pending background jobs, including synonym linking and synonym-net cloze generation jobs:
+
+```bash
+flask --app app run-background-jobs
+```
+
+Limit one run to a smaller or larger batch:
+
+```bash
+flask --app app run-background-jobs --limit 25
+```
+
+Manually regenerate synonym-specific cloze sentences for one vocabulary entry. The entry can be either the vocabulary id or an exact word. If the word has multiple matching entries, the command prints the matching ids.
+
+```bash
+flask --app app generate-synonym-cloze recalcitrant
+```
+
+Create a vocabulary maintenance run:
+
+```bash
+flask --app app create-vocabulary-maintenance-run --name domain-frequency-v2 --scope all --dry-run
+```
+
+For a real production maintenance run, add `--confirm-production`:
+
+```bash
+flask --app app create-vocabulary-maintenance-run --name domain-frequency-v2 --scope all --confirm-production
+```
+
+Generate a proposed domain model:
+
+```bash
+flask --app app generate-vocabulary-domain-model --name domain-model-v2 --scope all --dry-run
+```
+
+For a real production domain model proposal, add `--confirm-production`:
+
+```bash
+flask --app app generate-vocabulary-domain-model --name domain-model-v2 --scope all --confirm-production
+```

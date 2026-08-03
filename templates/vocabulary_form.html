@@ -133,6 +133,25 @@
             <label for="frequency_note">Frequency note</label><br>
             <input id="frequency_note" name="frequency_note" value="{{ entry.frequency_note if entry and entry.frequency_note else '' }}">
         </div>
+        {% set selected_gre_rating = entry.gre_rating if entry and entry.gre_rating else '' %}
+        {% if session.account_category == "admin" %}
+            <div class="field">
+                <label for="gre_rating">GRE relevance</label><br>
+                <select id="gre_rating" name="gre_rating">
+                    <option value="" {% if not selected_gre_rating %}selected{% endif %}></option>
+                    {% for value, label in [
+                        ('high', 'High'),
+                        ('medium', 'Medium'),
+                        ('low', 'Low'),
+                        ('unlikely', 'Unlikely')
+                    ] %}
+                        <option value="{{ value }}" {% if selected_gre_rating == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% else %}
+            <input type="hidden" id="gre_rating" name="gre_rating" value="{{ selected_gre_rating }}">
+        {% endif %}
     </div>
 
     <div class="form-grid">
@@ -252,6 +271,7 @@ document.getElementById("generate-button").addEventListener("click", async () =>
         document.getElementById("part_of_speech").value = data.part_of_speech || "other";
         document.getElementById("frequency_band").value = data.frequency_band || "";
         document.getElementById("frequency_note").value = data.frequency_note || "";
+        document.getElementById("gre_rating").value = data.gre_rating || "";
         const generatedDomains = new Set(data.domains || []);
         document.querySelectorAll('input[name="domains"]').forEach((checkbox) => {
             checkbox.checked = generatedDomains.has(checkbox.value);

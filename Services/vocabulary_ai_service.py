@@ -12,6 +12,7 @@ from Services.vocabulary_contexts import (
 )
 from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, VOCABULARY_DOMAINS
 from Services.vocabulary_domains import active_vocabulary_domains
+from Services.vocabulary_gre import GRE_RATINGS
 
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,14 @@ VOCABULARY_SCHEMA = {
                 "frequency_band is common and no note is useful."
             ),
         },
+        "gre_rating": {
+            "type": "string",
+            "enum": list(GRE_RATINGS),
+            "description": (
+                "Estimated GRE study relevance for this exact word sense, not a "
+                "claim that it has appeared on an exam."
+            ),
+        },
         "domains": {
             "type": "array",
             "items": {"type": "string", "enum": list(VOCABULARY_DOMAINS)},
@@ -112,6 +121,7 @@ VOCABULARY_SCHEMA = {
         "part_of_speech",
         "frequency_band",
         "frequency_note",
+        "gre_rating",
         "domains",
         "synonyms",
         "examples",
@@ -340,8 +350,17 @@ class VocabularyAiService:
                     "For physical motion words, prefer movement as the primary domain "
                     "over perception unless the meaning is actually about seeing or "
                     "sensing. Classify how common this exact sense is using one "
-                    f"frequency band: {', '.join(FREQUENCY_BANDS)}. Provide a short "
-                    "frequency note when the sense is not common. Provide 2-3 cloze training "
+                    f"frequency band: {', '.join(FREQUENCY_BANDS)}. Assign a "
+                    "GRE study relevance rating for this exact sense: high, medium, low, "
+                    "or unlikely. High means strong fit for GRE verbal study because the "
+                    "word is nuanced, abstract, analytical, academic, literary-critical, "
+                    "or broadly useful in educated prose. Medium means plausible but less "
+                    "central. Low means a poor GRE-study choice despite being uncommon, "
+                    "concrete, or specialized. Unlikely means everyday, too niche, historical, "
+                    "or otherwise very unlikely to be useful in GRE verbal preparation. Judge "
+                    "educated-reader usage and semantic usefulness, not model-training frequency "
+                    "and not whether it is in a published word list. "
+                    "Provide a short frequency note when the sense is not common. Provide 2-3 cloze training "
                     "sentences. Each cloze "
                     "sentence must use exactly one ____ blank where the target word "
                     "belongs, must not include the target word elsewhere, and must be "
@@ -391,6 +410,7 @@ class VocabularyAiService:
         entry["frequency_note"] = self._normalize_frequency_note(
             entry.get("frequency_note")
         )
+        entry["gre_rating"] = self._normalize_gre_rating(entry.get("gre_rating"))
         entry["domains"] = self._normalize_domains(entry.get("domains"), allowed_domains)
         entry["examples"] = self._normalize_examples(entry.get("examples"))
         entry["cloze_sentences"] = self._normalize_cloze_sentences(
@@ -405,6 +425,9 @@ class VocabularyAiService:
             return None, "OpenAI returned invalid vocabulary data"
         if not entry["frequency_band"]:
             logger.warning("Vocabulary AI generation failed: invalid frequency band")
+            return None, "OpenAI returned invalid vocabulary data"
+        if not entry["gre_rating"]:
+            logger.warning("Vocabulary AI generation failed: invalid GRE rating")
             return None, "OpenAI returned invalid vocabulary data"
         if assessment_error:
             logger.warning("Vocabulary AI generation failed: invalid AI assessment")
@@ -930,6 +953,10 @@ class VocabularyAiService:
 
     def _normalize_frequency_note(self, frequency_note):
         return str(frequency_note or "").strip()[:300]
+
+    def _normalize_gre_rating(self, gre_rating):
+        gre_rating = str(gre_rating or "").strip().lower()
+        return gre_rating if gre_rating in GRE_RATINGS else None
 
     def _normalize_examples(self, examples):
         if not isinstance(examples, list):

@@ -16,6 +16,8 @@ users
   |      |--< vocabulary_examples
   |      |--< vocabulary_cloze_sentences
   |      |--< vocabulary_domains
+  |      |--< vocabulary_entry_word_lists >-- vocabulary_word_lists
+  |      |                                  `--< vocabulary_word_list_entries
   |      `--< vocabulary_entry_sources >-- vocabulary_sources
   |
   |--< training_sessions
@@ -48,6 +50,10 @@ Vocabulary entries use three separate classification concepts:
 - `frequency_band`: How common this exact word sense is: `common`,
   `uncommon`, `rare`, `very_rare`, `archaic_or_obsolete`, or `specialized`.
 - `frequency_note`: Optional short explanation of the frequency or register.
+- `gre_rating`: AI-estimated GRE study relevance for the exact word sense:
+  `high`, `medium`, `low`, or `unlikely`. It assesses likely usefulness in
+  analytical, academic, literary-critical, and other educated prose, rather
+  than claiming that a word appeared on a GRE exam or merely measuring rarity.
 - `domains`: Semantic areas represented by the word's meaning, such as
   cognition, communication, power, or rhetoric. An entry may have zero to four
   domains.
@@ -58,6 +64,10 @@ Vocabulary entries use three separate classification concepts:
 - `sources`: Optional places where the user noticed the word, such as a book,
   article, film, or conversation. Sources are not required for vocabulary
   creation and may be omitted entirely.
+- `word lists`: Membership in externally maintained study lists. A vocabulary
+  entry may belong to multiple lists, such as a GRE collection from GregMat or
+  Magoosh. Membership is based on the entry spelling, applies to every saved
+  sense of that spelling, and is refreshed when an entry is created or edited.
 
 These fields must remain independent. For example, a word may have context
 `Formal; Academic`, part of speech `noun`, frequency `uncommon`, and domains
@@ -95,6 +105,7 @@ logic. Public list/detail views must not display creator identity.
 | `part_of_speech` | TEXT | Required; controlled grammatical value; defaults to `other` |
 | `frequency_band` | TEXT | Optional controlled frequency value |
 | `frequency_note` | TEXT | Optional frequency or register explanation |
+| `gre_rating` | TEXT | Optional controlled GRE relevance value: `high`, `medium`, `low`, or `unlikely` |
 | `needs_attention` | TEXT | Optional AI review explanation; maximum 200 characters |
 | `confidence_score` | INTEGER | Optional AI confidence score; 0 through 100 |
 | `confidence_obsolete` | INTEGER | Required boolean value; defaults to 0 |
@@ -135,6 +146,25 @@ a synonym links to another vocabulary entry, the detail page renders it as a
 navigation link and the reverse synonym is maintained where missing. When a
 synonym link is newly created, a follow-up maintenance job may generate
 contrastive cloze prompts for the linked synonym graph.
+
+### `vocabulary_word_lists`
+
+Stores the registered external study lists. Each record identifies a list by a
+stable internal key, user-facing name, category, and source URL. The initial
+registered list is the GregMat GRE vocabulary sheet. Additional GRE lists can
+be registered without changing vocabulary entries.
+
+### `vocabulary_word_list_entries`
+
+Stores the normalized words included in an external study list. A word appears
+only once in a given list, case-insensitively.
+
+### `vocabulary_entry_word_lists`
+
+Links vocabulary entries to the external lists that include their spelling.
+Every distinct sense of the same spelling may therefore appear in the same
+study list. Built-in list data is synchronized after `init-db` and `migrate`;
+creation and editing re-check membership for the affected entry.
 
 ### `background_jobs`
 

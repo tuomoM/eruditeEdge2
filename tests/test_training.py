@@ -731,6 +731,40 @@ class TrainingTestCase(unittest.TestCase):
         self.assertIn(b"Filters (1)", response.data)
         self.assertIn(b"domain: body", response.data)
 
+    def test_training_selection_filters_by_gregmat_list(self):
+        self.login_user()
+        self.client.post("/vocabulary", json=self.valid_entry("abound"))
+        self.client.post("/vocabulary", json=self.valid_entry("plainword"))
+
+        response = self.client.get(
+            "/training/select",
+            query_string={"gre_list": "gregmat"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"abound", response.data)
+        self.assertNotIn(b"plainword", response.data)
+        self.assertIn(b"GRE lists: GregMat", response.data)
+
+    def test_training_selection_filters_by_gre_rating(self):
+        self.login_user()
+        high_entry = self.valid_entry("abstruse")
+        high_entry["gre_rating"] = "high"
+        low_entry = self.valid_entry("plainword")
+        low_entry["gre_rating"] = "low"
+        self.client.post("/vocabulary", json=high_entry)
+        self.client.post("/vocabulary", json=low_entry)
+
+        response = self.client.get(
+            "/training/select",
+            query_string={"gre_rating": "high"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"abstruse", response.data)
+        self.assertNotIn(b"plainword", response.data)
+        self.assertIn(b"GRE: high", response.data)
+
     def test_five_vocabs_can_be_chosen_for_training(self):
         self.login_user()
         vocabulary_ids = self.create_sample_vocabs()

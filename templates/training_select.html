@@ -62,9 +62,36 @@
                 </select>
             </div>
             <div class="field">
+                <label for="gre_rating">GRE relevance</label>
+                <select id="gre_rating" name="gre_rating">
+                    <option value=""></option>
+                    {% for value, label in filter_choices.gre_ratings %}
+                        <option value="{{ value }}" {% if filters.gre_rating == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
                 <label for="context">Context</label>
                 <input id="context" name="context" value="{{ filters.context if filters is defined else '' }}" placeholder="Formal">
             </div>
+            {% if filter_choices.gre_lists %}
+                <div class="field">
+                    <span class="advanced-filter-label">GRE lists</span>
+                    <div class="advanced-filter-choice-list">
+                        {% for word_list in filter_choices.gre_lists %}
+                            <label class="advanced-filter-choice">
+                                <input
+                                    type="checkbox"
+                                    name="gre_list"
+                                    value="{{ word_list.list_key }}"
+                                    {% if word_list.list_key in filters.gre_lists %}checked{% endif %}
+                                >
+                                <span>{{ word_list.name }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
             {% if session.account_category == "admin" %}
                 <div class="field">
                     <label for="domain">Domain</label>
@@ -141,6 +168,12 @@
                             <span class="meta-chip">{{ context }}</span>
                         {% endfor %}
                         <span class="meta-chip">{{ entry.part_of_speech }}</span>
+                        {% if entry.gre_rating %}
+                            <span class="meta-chip">GRE: {{ entry.gre_rating }}</span>
+                        {% endif %}
+                        {% for word_list in entry.word_lists %}
+                            <span class="meta-chip">{{ word_list.category }}: {{ word_list.name }}</span>
+                        {% endfor %}
                         {% if session.account_category == "admin" %}
                             {% for domain in entry.domains %}
                                 <span class="meta-chip">{{ domain }}</span>

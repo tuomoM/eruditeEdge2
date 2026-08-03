@@ -15,6 +15,7 @@ from Services.synonym_net_cloze_service import synonym_net_cloze_service
 from Services.vocabulary_synonym_link_service import vocabulary_synonym_link_service
 from Services.vocabulary_service import vocabulary_service
 from Services.vocabulary_maintenance_service import vocabulary_maintenance_service
+from Services.vocabulary_word_list_service import vocabulary_word_list_service
 from db import get_connection, init_db
 
 
@@ -126,6 +127,20 @@ MIGRATION_MARKERS = {
     "020_app_settings.sql": {
         "tables": ["app_settings"],
     },
+    "021_vocabulary_word_lists.sql": {
+        "tables": [
+            "vocabulary_word_lists",
+            "vocabulary_word_list_entries",
+            "vocabulary_entry_word_lists",
+        ],
+        "indexes": [
+            "vocabulary_word_list_entries_word_idx",
+            "vocabulary_entry_word_lists_word_list_idx",
+        ],
+    },
+    "022_vocabulary_gre_rating.sql": {
+        "columns": {"vocabulary_entries": ["gre_rating"]},
+    },
 }
 
 
@@ -139,6 +154,7 @@ def register_cli_commands(app):
     app.cli.add_command(generate_synonym_cloze)
     app.cli.add_command(create_vocabulary_maintenance_run)
     app.cli.add_command(generate_vocabulary_domain_model)
+    app.cli.add_command(sync_vocabulary_word_lists)
 
 
 @click.command("create-admin")
@@ -228,6 +244,26 @@ def migrate_database():
     else:
         click.echo(
             f"Migration complete. Applied {applied_count}, stamped {stamped_count}."
+        )
+
+    summaries = vocabulary_word_list_service.sync_builtin_word_lists()
+    for summary in summaries:
+        click.echo(
+            "Synced {name}: {word_count} words, {matched_entries} matching vocabulary entries.".format(
+                **summary,
+            )
+        )
+
+
+@click.command("sync-vocabulary-word-lists")
+@with_appcontext
+def sync_vocabulary_word_lists():
+    summaries = vocabulary_word_list_service.sync_builtin_word_lists()
+    for summary in summaries:
+        click.echo(
+            "Synced {name}: {word_count} words, {matched_entries} matching vocabulary entries.".format(
+                **summary,
+            )
         )
 
 

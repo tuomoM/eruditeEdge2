@@ -8,6 +8,7 @@ from Services.user_service import ACCOUNT_CATEGORY_ADMIN, ACCOUNT_CATEGORY_TRUST
 from Services.vocabulary_ai_service import vocabulary_ai_service
 from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, active_vocabulary_domains
 from Services.vocabulary_service import vocabulary_service
+from Services.vocabulary_gre import GRE_RATING_FILTERS
 
 
 vocabulary_bp = Blueprint("vocabulary", __name__)
@@ -154,6 +155,7 @@ def form_to_entry_data(form):
         "part_of_speech": form.get("part_of_speech"),
         "frequency_band": form.get("frequency_band"),
         "frequency_note": form.get("frequency_note"),
+        "gre_rating": form.get("gre_rating"),
         "domains": domains,
         "synonyms": synonyms,
         "examples": examples,
@@ -181,6 +183,8 @@ def vocabulary_filter_choices():
         "domains": active_vocabulary_domains(),
         "parts_of_speech": PART_OF_SPEECH_FILTERS,
         "frequency_bands": FREQUENCY_BAND_FILTERS,
+        "gre_ratings": GRE_RATING_FILTERS,
+        "gre_lists": vocabulary_service.list_gre_word_lists(),
     }
 
 
@@ -193,11 +197,28 @@ def vocabulary_filters_from_request(args):
         "domain": args.get("domain", "").strip(),
         "part_of_speech": args.get("part_of_speech", "").strip(),
         "frequency_band": args.get("frequency_band", "").strip(),
+        "gre_rating": args.get("gre_rating", "").strip(),
+        "gre_lists": args.getlist("gre_list"),
     }
 
 
-def active_vocabulary_filters(filters):
-    return {key: value for key, value in filters.items() if value}
+def active_vocabulary_filters(filters, filter_choices=None):
+    active_filters = {
+        key: value
+        for key, value in filters.items()
+        if value and key != "gre_lists"
+    }
+    gre_lists = filters.get("gre_lists", [])
+    if gre_lists:
+        names_by_key = {
+            word_list["list_key"]: word_list["name"]
+            for word_list in (filter_choices or {}).get("gre_lists", [])
+        }
+        active_filters["GRE lists"] = ", ".join(
+            names_by_key.get(list_key, list_key)
+            for list_key in gre_lists
+        )
+    return active_filters
 
 
 @vocabulary_bp.route("/vocabulary", methods=["GET"])
@@ -206,6 +227,7 @@ def vocabulary_list():
     filters = vocabulary_filters_from_request(request.args)
     if not is_admin():
         filters["domain"] = ""
+    filter_choices = vocabulary_filter_choices()
     entries, error = vocabulary_service.search_entries(filters)
     if error:
         flash(error)
@@ -214,8 +236,8 @@ def vocabulary_list():
         "vocabulary_list.html",
         entries=entries_with_ownership(entries, session["user_id"]),
         filters=filters,
-        active_filters=active_vocabulary_filters(filters),
-        filter_choices=vocabulary_filter_choices(),
+        active_filters=active_vocabulary_filters(filters, filter_choices),
+        filter_choices=filter_choices,
         search_word=filters["word"],
     )
 

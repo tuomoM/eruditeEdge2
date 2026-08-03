@@ -14,6 +14,7 @@ class VocabularyRepository:
         part_of_speech,
         frequency_band,
         frequency_note,
+        gre_rating,
         domains,
         synonyms,
         examples,
@@ -35,12 +36,13 @@ class VocabularyRepository:
                         part_of_speech,
                         frequency_band,
                         frequency_note,
+                        gre_rating,
                         needs_attention,
                         confidence_score,
                         confidence_obsolete,
                         created_by
                     )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                 """,
                 [
                     word,
@@ -50,11 +52,49 @@ class VocabularyRepository:
                     part_of_speech,
                     frequency_band,
                     frequency_note,
+                    gre_rating,
                     needs_attention,
                     confidence_score,
                     user_id,
                 ],
             )
+        except OperationalError as error:
+            if "no column named gre_rating" not in str(error):
+                raise
+            try:
+                cursor = db.execute(
+                    """
+                    INSERT INTO vocabulary_entries
+                        (
+                            word,
+                            definition,
+                            definition_key,
+                            context,
+                            part_of_speech,
+                            frequency_band,
+                            frequency_note,
+                            needs_attention,
+                            confidence_score,
+                            confidence_obsolete,
+                            created_by
+                        )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                    """,
+                    [
+                        word,
+                        definition,
+                        definition_key,
+                        context,
+                        part_of_speech,
+                        frequency_band,
+                        frequency_note,
+                        needs_attention,
+                        confidence_score,
+                        user_id,
+                    ],
+                )
+            except IntegrityError:
+                return None
         except IntegrityError:
             return None
 
@@ -64,6 +104,7 @@ class VocabularyRepository:
         self._save_cloze_sentences(vocabulary_id, cloze_sentences)
         self._save_domains(vocabulary_id, domains)
         self._save_sources(vocabulary_id, sources)
+        self.sync_word_list_memberships_for_vocabulary(vocabulary_id, word)
         return vocabulary_id
 
     def update_entry(
@@ -76,6 +117,7 @@ class VocabularyRepository:
         part_of_speech,
         frequency_band,
         frequency_note,
+        gre_rating,
         domains,
         synonyms,
         examples,
@@ -94,6 +136,7 @@ class VocabularyRepository:
                     part_of_speech = ?,
                     frequency_band = ?,
                     frequency_note = ?,
+                    gre_rating = ?,
                     confidence_obsolete = CASE
                         WHEN confidence_score IS NULL THEN 0
                         ELSE 1
@@ -109,9 +152,45 @@ class VocabularyRepository:
                     part_of_speech,
                     frequency_band,
                     frequency_note,
+                    gre_rating,
                     vocabulary_id,
                 ],
             )
+        except OperationalError as error:
+            if "no such column: gre_rating" not in str(error):
+                raise
+            try:
+                cursor = db.execute(
+                    """
+                    UPDATE vocabulary_entries
+                    SET
+                        word = ?,
+                        definition = ?,
+                        definition_key = ?,
+                        context = ?,
+                        part_of_speech = ?,
+                        frequency_band = ?,
+                        frequency_note = ?,
+                        confidence_obsolete = CASE
+                            WHEN confidence_score IS NULL THEN 0
+                            ELSE 1
+                        END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    [
+                        word,
+                        definition,
+                        definition_key,
+                        context,
+                        part_of_speech,
+                        frequency_band,
+                        frequency_note,
+                        vocabulary_id,
+                    ],
+                )
+            except IntegrityError:
+                return False
         except IntegrityError:
             return False
 
@@ -128,6 +207,7 @@ class VocabularyRepository:
         self._save_cloze_sentences(vocabulary_id, cloze_sentences)
         self._save_domains(vocabulary_id, domains)
         self._save_sources(vocabulary_id, sources)
+        self.sync_word_list_memberships_for_vocabulary(vocabulary_id, word)
         return True
 
     def update_cloze_data(self, vocabulary_id, part_of_speech, cloze_sentences, domains):
@@ -210,32 +290,60 @@ class VocabularyRepository:
         return [row["vocabulary_id"] for row in rows]
 
     def get_entry(self, vocabulary_id):
-        rows = db.query(
-            """
-            SELECT
-                id,
-                word,
-                definition,
-                definition_key,
-                context,
-                part_of_speech,
-                frequency_band,
-                frequency_note,
-                needs_attention,
-                confidence_score,
-                confidence_obsolete,
-                created_by,
-                created_at,
-                updated_at
-            FROM vocabulary_entries
-            WHERE id = ?
-            """,
-            [vocabulary_id],
-        )
+        try:
+            rows = db.query(
+                """
+                SELECT
+                    id,
+                    word,
+                    definition,
+                    definition_key,
+                    context,
+                    part_of_speech,
+                    frequency_band,
+                    frequency_note,
+                    gre_rating,
+                    needs_attention,
+                    confidence_score,
+                    confidence_obsolete,
+                    created_by,
+                    created_at,
+                    updated_at
+                FROM vocabulary_entries
+                WHERE id = ?
+                """,
+                [vocabulary_id],
+            )
+        except OperationalError as error:
+            if "no such column: gre_rating" not in str(error):
+                raise
+            rows = db.query(
+                """
+                SELECT
+                    id,
+                    word,
+                    definition,
+                    definition_key,
+                    context,
+                    part_of_speech,
+                    frequency_band,
+                    frequency_note,
+                    needs_attention,
+                    confidence_score,
+                    confidence_obsolete,
+                    created_by,
+                    created_at,
+                    updated_at
+                FROM vocabulary_entries
+                WHERE id = ?
+                """,
+                [vocabulary_id],
+            )
         if not rows:
             return None
 
         entry = dict(rows[0])
+        entry.setdefault("gre_rating", None)
         entry.pop("definition_key", None)
         entry["contexts"] = normalize_contexts(entry.get("context"))
         synonym_rows = self._entry_synonym_rows(vocabulary_id)
@@ -282,9 +390,10 @@ class VocabularyRepository:
                 WHERE vocabulary_id = ?
                 ORDER BY domain_order
                 """,
-                [vocabulary_id],
-            )
+            [vocabulary_id],
+        )
         ]
+        entry["word_lists"] = self._entry_word_list_rows(vocabulary_id)
         entry["sources"] = [
             {
                 "id": row["source_id"],
@@ -296,6 +405,28 @@ class VocabularyRepository:
             for row in self._entry_source_rows(vocabulary_id)
         ]
         return entry
+
+    def _entry_word_list_rows(self, vocabulary_id):
+        try:
+            rows = db.query(
+                """
+                SELECT
+                    vocabulary_word_lists.list_key,
+                    vocabulary_word_lists.name,
+                    vocabulary_word_lists.category
+                FROM vocabulary_entry_word_lists
+                JOIN vocabulary_word_lists
+                    ON vocabulary_word_lists.id = vocabulary_entry_word_lists.word_list_id
+                WHERE vocabulary_entry_word_lists.vocabulary_id = ?
+                ORDER BY vocabulary_word_lists.category, vocabulary_word_lists.name
+                """,
+                [vocabulary_id],
+            )
+        except OperationalError as error:
+            if "no such table" not in str(error):
+                raise
+            return []
+        return [dict(row) for row in rows]
 
     def _entry_source_rows(self, vocabulary_id):
         try:
@@ -409,6 +540,25 @@ class VocabularyRepository:
         if filters.get("frequency_band"):
             where.append("vocabulary_entries.frequency_band = ?")
             params.append(filters["frequency_band"])
+        if filters.get("gre_rating"):
+            where.append("vocabulary_entries.gre_rating = ?")
+            params.append(filters["gre_rating"])
+        if filters.get("gre_lists"):
+            placeholders = ", ".join("?" for _ in filters["gre_lists"])
+            where.append(
+                f"""
+                EXISTS (
+                    SELECT 1
+                    FROM vocabulary_entry_word_lists
+                    JOIN vocabulary_word_lists
+                        ON vocabulary_word_lists.id = vocabulary_entry_word_lists.word_list_id
+                    WHERE vocabulary_entry_word_lists.vocabulary_id = vocabulary_entries.id
+                        AND vocabulary_word_lists.category = 'GRE'
+                        AND vocabulary_word_lists.list_key IN ({placeholders})
+                )
+                """
+            )
+            params.extend(filters["gre_lists"])
         if filters.get("domain"):
             where.append(
                 """
@@ -514,6 +664,113 @@ class VocabularyRepository:
             """
         )
         return result[0]["count"]
+
+    def list_word_lists(self, category=None):
+        params = []
+        where_sql = ""
+        if category:
+            where_sql = "WHERE category = ?"
+            params.append(category)
+        try:
+            rows = db.query(
+                f"""
+                SELECT list_key, name, category, source_url
+                FROM vocabulary_word_lists
+                {where_sql}
+                ORDER BY name COLLATE NOCASE
+                """,
+                params,
+            )
+        except OperationalError as error:
+            if "no such table" not in str(error):
+                raise
+            return []
+        return [dict(row) for row in rows]
+
+    def ensure_word_list(self, list_key, name, category, source_url):
+        db.execute(
+            """
+            INSERT INTO vocabulary_word_lists (list_key, name, category, source_url)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(list_key) DO UPDATE SET
+                name = excluded.name,
+                category = excluded.category,
+                source_url = excluded.source_url,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            [list_key, name, category, source_url],
+        )
+        return db.query(
+            "SELECT id FROM vocabulary_word_lists WHERE list_key = ?",
+            [list_key],
+        )[0]["id"]
+
+    def replace_word_list_entries(self, word_list_id, words):
+        connection = db.get_connection()
+        try:
+            connection.execute(
+                "DELETE FROM vocabulary_word_list_entries WHERE word_list_id = ?",
+                [word_list_id],
+            )
+            connection.executemany(
+                """
+                INSERT INTO vocabulary_word_list_entries (word_list_id, word)
+                VALUES (?, ?)
+                """,
+                [(word_list_id, word) for word in words],
+            )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+
+    def sync_word_list_memberships(self, word_list_id):
+        connection = db.get_connection()
+        try:
+            connection.execute(
+                "DELETE FROM vocabulary_entry_word_lists WHERE word_list_id = ?",
+                [word_list_id],
+            )
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO vocabulary_entry_word_lists
+                    (vocabulary_id, word_list_id)
+                SELECT vocabulary_entries.id, vocabulary_word_list_entries.word_list_id
+                FROM vocabulary_entries
+                JOIN vocabulary_word_list_entries
+                    ON vocabulary_word_list_entries.word = vocabulary_entries.word COLLATE NOCASE
+                WHERE vocabulary_word_list_entries.word_list_id = ?
+                """,
+                [word_list_id],
+            )
+            connection.commit()
+            return cursor.rowcount
+        except Exception:
+            connection.rollback()
+            raise
+
+    def sync_word_list_memberships_for_vocabulary(self, vocabulary_id, word):
+        connection = db.get_connection()
+        try:
+            connection.execute(
+                "DELETE FROM vocabulary_entry_word_lists WHERE vocabulary_id = ?",
+                [vocabulary_id],
+            )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO vocabulary_entry_word_lists
+                    (vocabulary_id, word_list_id)
+                SELECT ?, vocabulary_word_list_entries.word_list_id
+                FROM vocabulary_word_list_entries
+                WHERE vocabulary_word_list_entries.word = ? COLLATE NOCASE
+                """,
+                [vocabulary_id, word],
+            )
+            connection.commit()
+        except OperationalError as error:
+            connection.rollback()
+            if "no such table" not in str(error):
+                raise
 
     def list_synonym_rows(self, vocabulary_id):
         rows = db.query(

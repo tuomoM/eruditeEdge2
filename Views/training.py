@@ -53,6 +53,7 @@ def select_training_vocabs():
     filters = vocabulary_filters_from_request(request.args)
     if not is_admin:
         filters["domain"] = ""
+    filter_choices = vocabulary_filter_choices()
     entries, error = vocabulary_service.search_entries(filters)
     if error:
         entries = []
@@ -61,8 +62,8 @@ def select_training_vocabs():
         entries=entries_with_ownership(entries, session["user_id"]),
         error=error,
         filters=filters,
-        active_filters=active_vocabulary_filters(filters),
-        filter_choices=vocabulary_filter_choices(),
+        active_filters=active_vocabulary_filters(filters, filter_choices),
+        filter_choices=filter_choices,
         selected_vocabulary_ids=set(
             training_service.get_latest_training_vocabulary_ids(session["user_id"])
         ),

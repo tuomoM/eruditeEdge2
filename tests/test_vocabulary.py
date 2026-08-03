@@ -225,6 +225,55 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.get_json()["context"], "Formal; Literary")
         self.assertEqual(response.get_json()["contexts"], ["Formal", "Literary"])
 
+    def test_create_vocabulary_marks_gregmat_membership(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["word"] = "abound"
+        data["definition"] = "To exist in large numbers."
+        data["examples"] = ["Wildflowers abound in the meadow."]
+
+        response = self.create_entry(data)
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.get_json()["word_lists"],
+            [{"list_key": "gregmat", "name": "GregMat", "category": "GRE"}],
+        )
+
+    def test_vocabulary_page_filters_by_gregmat_list(self):
+        self.login_user()
+        gregmat_data = self.valid_entry()
+        gregmat_data["word"] = "abound"
+        gregmat_data["definition"] = "To exist in large numbers."
+        gregmat_data["examples"] = ["Wildflowers abound in the meadow."]
+        other_data = self.valid_entry()
+        other_data["word"] = "plainword"
+        other_data["definition"] = "An ordinary test word."
+        other_data["examples"] = ["This is a plainword example."]
+        self.create_entry(gregmat_data)
+        self.create_entry(other_data)
+
+        response = self.client.get("/vocabulary", query_string={"gre_list": "gregmat"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"abound", response.data)
+        self.assertNotIn(b"plainword", response.data)
+        self.assertIn(b"GRE lists: GregMat", response.data)
+        self.assertIn(b"GRE: GregMat", response.data)
+
+    def test_update_vocabulary_refreshes_gregmat_membership(self):
+        self.login_user()
+        vocabulary_id = self.create_entry().get_json()["id"]
+        data = self.valid_entry()
+        data["word"] = "abound"
+        data["definition"] = "To exist in large numbers."
+        data["examples"] = ["Wildflowers abound in the meadow."]
+
+        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["word_lists"][0]["name"], "GregMat")
+
     def test_context_filter_matches_entry_with_multiple_contexts(self):
         self.login_user()
         data = self.valid_entry()
@@ -744,6 +793,7 @@ class VocabularyTestCase(unittest.TestCase):
                 "domains": ["cognition", "communication", "reasoning"],
                 "needs_attention": "The context label may need review.",
                 "confidence_score": 81,
+                "gre_rating": "high",
             }
         )
 
@@ -753,7 +803,30 @@ class VocabularyTestCase(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(body["needs_attention"], "The context label may need review.")
         self.assertEqual(body["confidence_score"], 81)
+        self.assertEqual(body["gre_rating"], "high")
         self.assertEqual(body["confidence_obsolete"], 0)
+
+    def test_vocabulary_page_filters_by_gre_rating(self):
+        self.login_user()
+        high_data = self.valid_entry()
+        high_data["word"] = "abstruse"
+        high_data["definition"] = "Difficult to understand."
+        high_data["examples"] = ["The lecture was abstruse."]
+        high_data["gre_rating"] = "high"
+        low_data = self.valid_entry()
+        low_data["word"] = "plainword"
+        low_data["definition"] = "An ordinary test word."
+        low_data["examples"] = ["This is a plainword example."]
+        low_data["gre_rating"] = "low"
+        self.create_entry(high_data)
+        self.create_entry(low_data)
+
+        response = self.client.get("/vocabulary", query_string={"gre_rating": "high"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"abstruse", response.data)
+        self.assertNotIn(b"plainword", response.data)
+        self.assertIn(b"GRE: high", response.data)
 
     def test_create_vocabulary_rejects_invalid_ai_assessment(self):
         self.login_user()
@@ -901,6 +974,7 @@ class VocabularyTestCase(unittest.TestCase):
                 "part_of_speech": "other",
                 "frequency_band": None,
                 "frequency_note": None,
+                "gre_rating": None,
                 "domains": [],
                 "cloze_sentences": [],
                 "needs_attention": None,
@@ -939,6 +1013,7 @@ class VocabularyTestCase(unittest.TestCase):
                 "part_of_speech": "other",
                 "frequency_band": None,
                 "frequency_note": None,
+                "gre_rating": None,
                 "domains": [],
                 "cloze_sentences": [],
                 "needs_attention": None,
@@ -999,6 +1074,7 @@ class VocabularyTestCase(unittest.TestCase):
                 "part_of_speech": "other",
                 "frequency_band": None,
                 "frequency_note": None,
+                "gre_rating": None,
                 "domains": [],
                 "cloze_sentences": [],
                 "needs_attention": None,
@@ -1684,7 +1760,9 @@ class VocabularyTestCase(unittest.TestCase):
 
     def test_update_vocabulary_succeeds_when_logged_in(self):
         self.login_user()
-        create_response = self.create_entry()
+        create_data = self.valid_entry()
+        create_data["gre_rating"] = "high"
+        create_response = self.create_entry(create_data)
         vocabulary_id = create_response.get_json()["id"]
         data = self.valid_entry()
         data["definition"] = "A controlled activity"
@@ -1698,6 +1776,7 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(body["definition"], "A controlled activity")
         self.assertEqual(body["synonyms"], ["activity"])
         self.assertEqual(body["examples"], ["The operation was successful."])
+        self.assertEqual(body["gre_rating"], "high")
 
     def test_update_vocabulary_replaces_domains(self):
         self.login_user()

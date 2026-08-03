@@ -46,3 +46,6 @@ def init_db(app):
         with app.open_resource("schema.sql") as schema_file:
             connection.executescript(schema_file.read().decode("utf-8"))
         connection.commit()
+        from Services.vocabulary_word_list_service import vocabulary_word_list_service
+
+        vocabulary_word_list_service.sync_builtin_word_lists()

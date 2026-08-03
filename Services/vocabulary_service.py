@@ -11,6 +11,7 @@ from Services.vocabulary_domains import (
     MAX_VOCABULARY_DOMAINS,
     active_vocabulary_domains,
 )
+from Services.vocabulary_gre import GRE_RATINGS
 
 
 HTML_PATTERN = re.compile(r"<[^>]+>")
@@ -71,6 +72,7 @@ class VocabularyService:
             values["part_of_speech"],
             values["frequency_band"],
             values["frequency_note"],
+            values["gre_rating"],
             values["domains"],
             values["synonyms"],
             values["examples"],
@@ -86,6 +88,11 @@ class VocabularyService:
         return self._vocabulary_repository.get_entry(vocabulary_id), None
 
     def update_entry(self, vocabulary_id, data):
+        if "gre_rating" not in data:
+            existing_entry = self.get_entry(vocabulary_id)
+            if existing_entry:
+                data = dict(data)
+                data["gre_rating"] = existing_entry.get("gre_rating")
         values, error = self._validate_data(data)
         if error:
             return None, error
@@ -99,6 +106,7 @@ class VocabularyService:
             values["part_of_speech"],
             values["frequency_band"],
             values["frequency_note"],
+            values["gre_rating"],
             values["domains"],
             values["synonyms"],
             values["examples"],
@@ -133,6 +141,9 @@ class VocabularyService:
         if error:
             return None, error
         return self._vocabulary_repository.list_filtered_entries(values), None
+
+    def list_gre_word_lists(self):
+        return self._vocabulary_repository.list_word_lists("GRE")
 
     def list_entries(self):
         return self._vocabulary_repository.list_entries()
@@ -272,6 +283,7 @@ class VocabularyService:
         part_of_speech = self._clean_part_of_speech(data.get("part_of_speech"))
         frequency_band = self._clean_frequency_band(data.get("frequency_band"))
         frequency_note = self._clean_optional_text(data.get("frequency_note"))
+        gre_rating = self._clean_gre_rating(data.get("gre_rating"))
         domains = self._clean_list(data.get("domains", []))
         synonyms = self._clean_list(data.get("synonyms", []))
         examples = self._clean_list(data.get("examples", []))
@@ -288,6 +300,7 @@ class VocabularyService:
                 part_of_speech,
                 frequency_band or "",
                 frequency_note or "",
+                gre_rating or "",
             ]
             + domains
             + synonyms
@@ -317,6 +330,8 @@ class VocabularyService:
             return None, "Part of speech is invalid"
         if frequency_band and frequency_band not in ALLOWED_FREQUENCY_BANDS:
             return None, "Frequency band is invalid"
+        if gre_rating is False:
+            return None, "GRE rating is invalid"
         if len(frequency_note or "") > MAX_FREQUENCY_NOTE_LENGTH:
             return None, (
                 f"Frequency note must be {MAX_FREQUENCY_NOTE_LENGTH} characters or fewer"
@@ -357,6 +372,7 @@ class VocabularyService:
             "part_of_speech": part_of_speech,
             "frequency_band": frequency_band,
             "frequency_note": frequency_note,
+            "gre_rating": gre_rating,
             "domains": domains,
             "synonyms": synonyms,
             "examples": examples,
@@ -378,6 +394,12 @@ class VocabularyService:
     def _clean_frequency_band(self, value):
         value = self._clean_text(value).lower().replace("-", "_").replace(" ", "_")
         return value or None
+
+    def _clean_gre_rating(self, value):
+        value = self._clean_text(value).lower()
+        if not value:
+            return None
+        return value if value in GRE_RATINGS else False
 
     def _definition_key(self, definition):
         return re.sub(r"[^a-z0-9]+", " ", definition.lower()).strip()
@@ -497,6 +519,12 @@ class VocabularyService:
         domain = self._clean_text(filters.get("domain")).lower()
         part_of_speech = self._clean_text(filters.get("part_of_speech")).lower()
         frequency_band = self._clean_frequency_band(filters.get("frequency_band"))
+        gre_rating = self._clean_gre_rating(filters.get("gre_rating"))
+        gre_lists = [
+            self._clean_text(value).lower()
+            for value in filters.get("gre_lists", [])
+            if self._clean_text(value)
+        ]
 
         fields = [word, raw_context, source_name, source_author]
         unsafe_field = self._find_unsafe_field(fields)
@@ -513,6 +541,14 @@ class VocabularyService:
             return None, "Part of speech is invalid"
         if frequency_band and frequency_band not in ALLOWED_FREQUENCY_BANDS:
             return None, "Frequency band is invalid"
+        if gre_rating is False:
+            return None, "GRE rating is invalid"
+        valid_gre_lists = {
+            word_list["list_key"]
+            for word_list in self.list_gre_word_lists()
+        }
+        if any(list_key not in valid_gre_lists for list_key in gre_lists):
+            return None, "GRE vocabulary list is invalid"
 
         return {
             "word": word,
@@ -522,6 +558,8 @@ class VocabularyService:
             "domain": domain,
             "part_of_speech": part_of_speech,
             "frequency_band": frequency_band,
+            "gre_rating": gre_rating,
+            "gre_lists": gre_lists,
         }, None
 
     def _validate_search_value(self, search_value):
