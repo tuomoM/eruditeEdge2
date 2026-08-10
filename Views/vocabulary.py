@@ -36,6 +36,41 @@ FREQUENCY_BAND_FILTERS = [
     ("specialized", "Specialized"),
 ]
 WORD_SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
+PUBLIC_WORD_LETTERS = tuple("abcdefghijklmnopqrstuvwxyz")
+PUBLIC_WORD_COLLECTIONS = {
+    "gre-vocabulary": {
+        "title": "GRE Vocabulary Meanings and Definitions | eruditeEdge",
+        "heading": "GRE Vocabulary",
+        "description": (
+            "Browse GRE vocabulary meanings, definitions, synonyms, and example "
+            "sentences from eruditeEdge."
+        ),
+    },
+    "rare-words": {
+        "title": "Rare English Words and Meanings | eruditeEdge",
+        "heading": "Rare Words",
+        "description": (
+            "Browse rare English words with meanings, definitions, synonyms, and "
+            "example sentences from eruditeEdge."
+        ),
+    },
+    "formal-words": {
+        "title": "Formal English Words and Meanings | eruditeEdge",
+        "heading": "Formal Words",
+        "description": (
+            "Browse formal English vocabulary with meanings, definitions, synonyms, "
+            "and example sentences from eruditeEdge."
+        ),
+    },
+    "literary-words": {
+        "title": "Literary Words and Meanings | eruditeEdge",
+        "heading": "Literary Words",
+        "description": (
+            "Browse literary English words with meanings, definitions, synonyms, "
+            "and example sentences from eruditeEdge."
+        ),
+    },
+}
 
 
 def vocabulary_word_slug(word):
@@ -91,6 +126,100 @@ def public_entry(entry):
 
 def public_entries(entries):
     return [public_entry(entry) for entry in entries]
+
+
+def public_indexable_entries(entries):
+    return [
+        public_entry(entry)
+        for entry in entries
+        if is_public_indexable_entry(entry)
+    ]
+
+
+def public_word_letter_links(entries):
+    populated_letters = {
+        vocabulary_word_slug(entry["word"])[:1]
+        for entry in entries
+        if is_public_indexable_entry(entry) and vocabulary_word_slug(entry["word"])
+    }
+    return [
+        {
+            "letter": letter,
+            "path": url_for("vocabulary.public_word", word_slug=letter),
+            "populated": letter in populated_letters,
+        }
+        for letter in PUBLIC_WORD_LETTERS
+    ]
+
+
+def public_word_collection_links(entries):
+    return [
+        {
+            **metadata,
+            "slug": collection_slug,
+            "path": url_for("vocabulary.public_word", word_slug=collection_slug),
+            "count": len(public_word_collection_entries(collection_slug, entries)),
+        }
+        for collection_slug, metadata in PUBLIC_WORD_COLLECTIONS.items()
+    ]
+
+
+def public_word_collection_entries(collection_slug, entries):
+    return [
+        entry
+        for entry in entries
+        if is_public_indexable_entry(entry)
+        and public_word_entry_matches_collection(entry, collection_slug)
+    ]
+
+
+def public_word_entry_matches_collection(entry, collection_slug):
+    if collection_slug == "gre-vocabulary":
+        return bool(entry.get("gre_rating")) or any(
+            word_list.get("category") == "GRE"
+            for word_list in entry.get("word_lists", [])
+        )
+    if collection_slug == "rare-words":
+        return entry.get("frequency_band") in {
+            "rare",
+            "very_rare",
+            "archaic_or_obsolete",
+        }
+    if collection_slug == "formal-words":
+        return public_word_entry_has_context(entry, "formal")
+    if collection_slug == "literary-words":
+        return public_word_entry_has_context(entry, "literary")
+    return False
+
+
+def public_word_entry_has_context(entry, context):
+    return context.lower() in {
+        entry_context.lower()
+        for entry_context in entry.get("contexts", [])
+    }
+
+
+def public_word_index_metadata():
+    return {
+        "title": "Vocabulary Meanings and Definitions | eruditeEdge",
+        "heading": "Vocabulary Meanings",
+        "description": (
+            "Browse eruditeEdge vocabulary meanings, definitions, examples, "
+            "synonyms, and usage notes for advanced English learners."
+        ),
+    }
+
+
+def public_word_letter_metadata(letter):
+    upper_letter = letter.upper()
+    return {
+        "title": f"Vocabulary Words Starting With {upper_letter} | eruditeEdge",
+        "heading": f"Words Starting With {upper_letter}",
+        "description": (
+            f"Browse vocabulary words starting with {upper_letter}, including "
+            "meanings, definitions, synonyms, and example sentences."
+        ),
+    }
 
 
 def find_public_entries_by_slug(slug):
@@ -337,15 +466,65 @@ def active_vocabulary_filters(filters, filter_choices=None):
 
 @vocabulary_bp.route("/words", methods=["GET"])
 def public_words():
-    entries = public_entries(vocabulary_service.list_entries())
+    all_entries = vocabulary_service.list_entries()
+    entries = public_indexable_entries(all_entries)[:50]
     return render_template(
         "public_words.html",
         entries=entries,
+        metadata=public_word_index_metadata(),
+        canonical_url=url_for("vocabulary.public_words", _external=True),
+        letter_links=public_word_letter_links(all_entries),
+        collection_links=public_word_collection_links(all_entries),
+        listing_description="Featured vocabulary pages ready for public indexing.",
     )
 
 
 @vocabulary_bp.route("/words/<word_slug>", methods=["GET"])
 def public_word(word_slug):
+    if word_slug in PUBLIC_WORD_LETTERS:
+        all_entries = vocabulary_service.list_entries()
+        entries = public_indexable_entries(
+            [
+                entry
+                for entry in all_entries
+                if vocabulary_word_slug(entry["word"]).startswith(word_slug)
+            ]
+        )
+        return render_template(
+            "public_words.html",
+            entries=entries,
+            metadata=public_word_letter_metadata(word_slug),
+            canonical_url=url_for(
+                "vocabulary.public_word",
+                word_slug=word_slug,
+                _external=True,
+            ),
+            letter_links=public_word_letter_links(all_entries),
+            collection_links=public_word_collection_links(all_entries),
+            listing_description=(
+                f"Vocabulary words beginning with {word_slug.upper()}."
+            ),
+        )
+
+    if word_slug in PUBLIC_WORD_COLLECTIONS:
+        all_entries = vocabulary_service.list_entries()
+        entries = public_entries(
+            public_word_collection_entries(word_slug, all_entries)
+        )
+        return render_template(
+            "public_words.html",
+            entries=entries,
+            metadata=PUBLIC_WORD_COLLECTIONS[word_slug],
+            canonical_url=url_for(
+                "vocabulary.public_word",
+                word_slug=word_slug,
+                _external=True,
+            ),
+            letter_links=public_word_letter_links(all_entries),
+            collection_links=public_word_collection_links(all_entries),
+            listing_description=PUBLIC_WORD_COLLECTIONS[word_slug]["description"],
+        )
+
     if word_slug.endswith("-meaning"):
         meaning_base_slug = word_slug[: -len("-meaning")]
         entries = find_public_entries_by_slug(meaning_base_slug)
@@ -375,11 +554,26 @@ def public_word(word_slug):
 @vocabulary_bp.route("/sitemap.xml", methods=["GET"])
 def sitemap():
     word_urls = []
+    letter_urls = set()
+    collection_urls = set()
     seen_slugs = set()
     for entry in vocabulary_service.list_entries():
         if not is_public_indexable_entry(entry):
             continue
         slug = vocabulary_word_slug(entry["word"])
+        if slug:
+            letter_urls.add(
+                url_for("vocabulary.public_word", word_slug=slug[:1], _external=True)
+            )
+        for collection_slug in PUBLIC_WORD_COLLECTIONS:
+            if public_word_entry_matches_collection(entry, collection_slug):
+                collection_urls.add(
+                    url_for(
+                        "vocabulary.public_word",
+                        word_slug=collection_slug,
+                        _external=True,
+                    )
+                )
         if slug in seen_slugs:
             continue
         seen_slugs.add(slug)
@@ -389,6 +583,8 @@ def sitemap():
     urls = [
         url_for("index", _external=True),
         url_for("vocabulary.public_words", _external=True),
+        *sorted(letter_urls),
+        *sorted(collection_urls),
         *word_urls,
     ]
     body = "\n".join(

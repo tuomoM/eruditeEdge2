@@ -1,16 +1,45 @@
 {% extends "base.html" %}
 
-{% block title %}Vocabulary Meanings and Definitions | eruditeEdge{% endblock %}
-{% block meta_description %}Browse eruditeEdge vocabulary meanings, definitions, examples, synonyms, and usage notes for advanced English learners.{% endblock %}
-{% block canonical %}<link rel="canonical" href="{{ url_for('vocabulary.public_words', _external=True) }}">{% endblock %}
+{% block title %}{{ metadata.title }}{% endblock %}
+{% block meta_description %}{{ metadata.description }}{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ canonical_url }}">{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Vocabulary Meanings</h1>
+        <h1>{{ metadata.heading }}</h1>
         <div class="result-count">{{ entries | length }} entries</div>
     </div>
 </div>
+
+{% if letter_links %}
+    <section class="public-hub-section" aria-label="Alphabetical vocabulary">
+        <h2>Browse By Letter</h2>
+        <div class="letter-link-list">
+            {% for link in letter_links %}
+                <a class="letter-link{% if not link.populated %} letter-link-muted{% endif %}" href="{{ link.path }}">{{ link.letter | upper }}</a>
+            {% endfor %}
+        </div>
+    </section>
+{% endif %}
+
+{% if collection_links %}
+    <section class="public-hub-section" aria-label="Vocabulary collections">
+        <h2>Vocabulary Collections</h2>
+        <div class="collection-link-list">
+            {% for collection in collection_links %}
+                <a class="collection-link" href="{{ collection.path }}">
+                    <span>{{ collection.heading }}</span>
+                    <span>{{ collection.count }} words</span>
+                </a>
+            {% endfor %}
+        </div>
+    </section>
+{% endif %}
+
+{% if listing_description %}
+    <p class="muted">{{ listing_description }}</p>
+{% endif %}
 
 {% if entries %}
     <div class="entry-list">

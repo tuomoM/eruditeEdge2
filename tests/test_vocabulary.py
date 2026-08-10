@@ -795,15 +795,57 @@ class VocabularyTestCase(unittest.TestCase):
 
     def test_public_words_page_lists_vocabulary_without_login(self):
         self.login_user()
-        self.create_entry_with_word("recalcitrant")
+        self.create_indexable_entry_with_word("recalcitrant")
         self.logout_user()
 
         response = self.client.get("/words")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Vocabulary Meanings", response.data)
+        self.assertIn(b"Browse By Letter", response.data)
+        self.assertIn(b'href="/words/r"', response.data)
+        self.assertIn(b"Vocabulary Collections", response.data)
         self.assertIn(b'href="/words/recalcitrant"', response.data)
         self.assertNotIn(b"Add word", response.data)
+
+    def test_public_letter_page_lists_indexable_words(self):
+        self.login_user()
+        self.create_indexable_entry_with_word("recalcitrant")
+        self.create_indexable_entry_with_word("abound")
+        self.logout_user()
+
+        response = self.client.get("/words/r")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Words Starting With R", response.data)
+        self.assertIn(b'href="/words/recalcitrant"', response.data)
+        self.assertNotIn(b'href="/words/abound"', response.data)
+        self.assertIn(b'<link rel="canonical" href="http://localhost/words/r">', response.data)
+
+    def test_public_collection_page_lists_matching_words(self):
+        self.login_user()
+        rare = self.valid_entry()
+        rare["word"] = "recalcitrant"
+        rare["definition"] = "Stubbornly resistant."
+        rare["part_of_speech"] = "adjective"
+        rare["frequency_band"] = "rare"
+        self.create_entry(rare)
+        common = self.valid_entry()
+        common["word"] = "operation"
+        common["part_of_speech"] = "noun"
+        self.create_entry(common)
+        self.logout_user()
+
+        response = self.client.get("/words/rare-words")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Rare Words", response.data)
+        self.assertIn(b'href="/words/recalcitrant"', response.data)
+        self.assertNotIn(b'href="/words/operation"', response.data)
+        self.assertIn(
+            b'<link rel="canonical" href="http://localhost/words/rare-words">',
+            response.data,
+        )
 
     def test_sitemap_lists_public_word_pages(self):
         self.login_user()
@@ -815,6 +857,22 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.mimetype, "application/xml")
         self.assertIn(b"https://example.com/words/recalcitrant", response.data)
+
+    def test_sitemap_lists_public_letter_and_collection_hubs(self):
+        self.login_user()
+        rare = self.valid_entry()
+        rare["word"] = "recalcitrant"
+        rare["definition"] = "Stubbornly resistant."
+        rare["part_of_speech"] = "adjective"
+        rare["frequency_band"] = "rare"
+        self.create_entry(rare)
+        self.logout_user()
+
+        response = self.client.get("/sitemap.xml", base_url="https://example.com")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"https://example.com/words/r", response.data)
+        self.assertIn(b"https://example.com/words/rare-words", response.data)
 
     def test_sitemap_omits_thin_public_word_pages(self):
         self.login_user()
