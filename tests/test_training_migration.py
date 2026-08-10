@@ -155,6 +155,11 @@ class TrainingMigrationTestCase(unittest.TestCase):
             session[CSRF_SESSION_KEY] = "test-registration-csrf-token"
         return {"X-CSRF-Token": "test-registration-csrf-token"}
 
+    def csrf_headers(self):
+        with self.client.session_transaction() as session:
+            session[CSRF_SESSION_KEY] = "test-csrf-token"
+        return {"X-CSRF-Token": "test-csrf-token"}
+
     def _create_vocab(self, word):
         response = self.client.post(
             "/vocabulary",
@@ -165,6 +170,7 @@ class TrainingMigrationTestCase(unittest.TestCase):
                 "synonyms": [f"{word} synonym"],
                 "examples": [f"{word} appears in this sentence."],
             },
+            headers=self.csrf_headers(),
         )
         return response.get_json()["id"]
 

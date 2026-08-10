@@ -11,4 +11,5 @@ Technical setup.md
 agents/HANDOFF.md
 security-report.json
 security_audit.json
+securitylog.md
 deploy-production.sh

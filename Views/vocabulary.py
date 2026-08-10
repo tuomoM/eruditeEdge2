@@ -1,6 +1,9 @@
 from functools import wraps
 
-from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session
+import re
+from xml.sax.saxutils import escape
+
+from flask import Blueprint, Response, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 
 from csrf import csrf_required
 from Services.ai_quota_service import ai_quota_service
@@ -28,6 +31,61 @@ FREQUENCY_BAND_FILTERS = [
     ("archaic_or_obsolete", "Archaic or obsolete"),
     ("specialized", "Specialized"),
 ]
+WORD_SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
+
+
+def vocabulary_word_slug(word):
+    return WORD_SLUG_PATTERN.sub("-", (word or "").lower()).strip("-")
+
+
+def public_entry(entry):
+    visible_entry = dict(entry)
+    visible_entry["slug"] = vocabulary_word_slug(visible_entry["word"])
+    visible_entry["linked_synonyms"] = [
+        {
+            **synonym,
+            "linked_slug": vocabulary_word_slug(synonym["linked_word"])
+            if synonym.get("linked_word")
+            else None,
+        }
+        for synonym in visible_entry.get("linked_synonyms", [])
+    ]
+    return visible_entry
+
+
+def public_entries(entries):
+    return [public_entry(entry) for entry in entries]
+
+
+def find_public_entries_by_slug(slug):
+    slug = (slug or "").strip().lower()
+    if not slug:
+        return []
+    return [
+        public_entry(entry)
+        for entry in vocabulary_service.list_entries()
+        if vocabulary_word_slug(entry["word"]) == slug
+    ]
+
+
+def public_word_page_metadata(entries):
+    word = entries[0]["word"]
+    word_title = word[:1].upper() + word[1:]
+    first_definition = entries[0]["definition"]
+    return {
+        "title": f"{word_title} Meaning, Definition, Synonyms, and Examples | eruditeEdge",
+        "description": (
+            f"Learn the meaning of {word} with a clear definition, examples, "
+            "synonyms, and usage notes."
+        ),
+        "heading": f"{word_title} Meaning",
+        "structured_data": {
+            "@context": "https://schema.org",
+            "@type": "DefinedTerm",
+            "name": word,
+            "description": first_definition,
+        },
+    }
 
 
 def login_required(route_function):
@@ -221,6 +279,87 @@ def active_vocabulary_filters(filters, filter_choices=None):
     return active_filters
 
 
+@vocabulary_bp.route("/words", methods=["GET"])
+def public_words():
+    entries = public_entries(vocabulary_service.list_entries())
+    return render_template(
+        "public_words.html",
+        entries=entries,
+    )
+
+
+@vocabulary_bp.route("/words/<word_slug>", methods=["GET"])
+def public_word(word_slug):
+    if word_slug.endswith("-meaning"):
+        meaning_base_slug = word_slug[: -len("-meaning")]
+        entries = find_public_entries_by_slug(meaning_base_slug)
+        if entries:
+            return redirect(
+                url_for("vocabulary.public_word", word_slug=entries[0]["slug"]),
+                code=301,
+            )
+
+    entries = find_public_entries_by_slug(word_slug)
+    if not entries:
+        return render_template("public_word_not_found.html", word_slug=word_slug), 404
+
+    canonical_slug = entries[0]["slug"]
+    if word_slug != canonical_slug:
+        return redirect(url_for("vocabulary.public_word", word_slug=canonical_slug), code=301)
+
+    return render_template(
+        "public_word.html",
+        entries=entries,
+        metadata=public_word_page_metadata(entries),
+        canonical_url=url_for(
+            "vocabulary.public_word",
+            word_slug=canonical_slug,
+            _external=True,
+        ),
+    )
+
+
+@vocabulary_bp.route("/sitemap.xml", methods=["GET"])
+def sitemap():
+    word_urls = []
+    seen_slugs = set()
+    for entry in vocabulary_service.list_entries():
+        slug = vocabulary_word_slug(entry["word"])
+        if slug in seen_slugs:
+            continue
+        seen_slugs.add(slug)
+        word_urls.append(
+            url_for("vocabulary.public_word", word_slug=slug, _external=True)
+        )
+    urls = [
+        url_for("index", _external=True),
+        url_for("vocabulary.public_words", _external=True),
+        *word_urls,
+    ]
+    body = "\n".join(
+        [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+            *[f"  <url><loc>{escape(url)}</loc></url>" for url in urls],
+            "</urlset>",
+        ]
+    )
+    return Response(body, mimetype="application/xml")
+
+
+@vocabulary_bp.route("/robots.txt", methods=["GET"])
+def robots_txt():
+    body = "\n".join(
+        [
+            "User-agent: *",
+            "Allow: /",
+            f"Sitemap: {url_for('vocabulary.sitemap', _external=True)}",
+            "",
+        ]
+    )
+    return Response(body, mimetype="text/plain")
+
+
 @vocabulary_bp.route("/vocabulary", methods=["GET"])
 @page_login_required
 def vocabulary_list():
@@ -242,18 +381,22 @@ def vocabulary_list():
     )
 
 
-@vocabulary_bp.route("/vocabulary/new", methods=["GET", "POST"])
+@vocabulary_bp.route("/vocabulary/new", methods=["GET"])
 @page_vocabulary_manager_required
 def new_vocabulary():
-    if request.method == "GET":
-        return render_template(
-            "vocabulary_form.html",
-            entry=None,
-            prefill_word=request.args.get("word", "").strip(),
-            available_domains=active_vocabulary_domains(),
-            max_domains=MAX_VOCABULARY_DOMAINS,
-        )
+    return render_template(
+        "vocabulary_form.html",
+        entry=None,
+        prefill_word=request.args.get("word", "").strip(),
+        available_domains=active_vocabulary_domains(),
+        max_domains=MAX_VOCABULARY_DOMAINS,
+    )
 
+
+@vocabulary_bp.route("/vocabulary/new", methods=["POST"])
+@page_vocabulary_manager_required
+@csrf_required
+def create_new_vocabulary_page():
     entry, error = vocabulary_service.create_entry(
         form_to_entry_data(request.form),
         session["user_id"],
@@ -274,6 +417,7 @@ def new_vocabulary():
 
 @vocabulary_bp.route("/vocabulary", methods=["POST"])
 @vocabulary_manager_required
+@csrf_required
 def create_vocabulary():
     data = request.get_json(silent=True) or request.form
     entry, error = vocabulary_service.create_entry(data, session["user_id"])
@@ -401,7 +545,7 @@ def practice_vocabulary_usage(vocabulary_id):
     return jsonify(result)
 
 
-@vocabulary_bp.route("/vocabulary/<int:vocabulary_id>/edit", methods=["GET", "POST"])
+@vocabulary_bp.route("/vocabulary/<int:vocabulary_id>/edit", methods=["GET"])
 @page_vocabulary_manager_required
 def edit_vocabulary(vocabulary_id):
     entry = vocabulary_service.get_entry(vocabulary_id)
@@ -409,16 +553,25 @@ def edit_vocabulary(vocabulary_id):
         flash("Vocabulary entry was not found")
         return redirect("/vocabulary")
 
-    if request.method == "GET":
-        return render_template(
-            "vocabulary_form.html",
-            entry=entry,
-            examples_text="\n".join(entry["examples"]),
-            cloze_sentences_text="\n".join(entry["cloze_sentences"]),
-            sources_text=sources_to_text(entry.get("sources", [])),
-            available_domains=active_vocabulary_domains(),
-            max_domains=MAX_VOCABULARY_DOMAINS,
-        )
+    return render_template(
+        "vocabulary_form.html",
+        entry=entry,
+        examples_text="\n".join(entry["examples"]),
+        cloze_sentences_text="\n".join(entry["cloze_sentences"]),
+        sources_text=sources_to_text(entry.get("sources", [])),
+        available_domains=active_vocabulary_domains(),
+        max_domains=MAX_VOCABULARY_DOMAINS,
+    )
+
+
+@vocabulary_bp.route("/vocabulary/<int:vocabulary_id>/edit", methods=["POST"])
+@page_vocabulary_manager_required
+@csrf_required
+def update_vocabulary_page(vocabulary_id):
+    entry = vocabulary_service.get_entry(vocabulary_id)
+    if not entry:
+        flash("Vocabulary entry was not found")
+        return redirect("/vocabulary")
 
     updated_entry, error = vocabulary_service.update_entry(
         vocabulary_id,
@@ -442,6 +595,7 @@ def edit_vocabulary(vocabulary_id):
 
 @vocabulary_bp.route("/vocabulary/<int:vocabulary_id>", methods=["PUT"])
 @vocabulary_manager_required
+@csrf_required
 def update_vocabulary(vocabulary_id):
     data = request.get_json(silent=True) or request.form
     entry, error = vocabulary_service.update_entry(vocabulary_id, data)

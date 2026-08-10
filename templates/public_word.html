@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}{{ metadata.title }}{% endblock %}
+{% block meta_description %}{{ metadata.description }}{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ canonical_url }}">{% endblock %}
+{% block structured_data %}
+<script type="application/ld+json">
+{{ metadata.structured_data | tojson }}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="word-title">{{ metadata.heading }}</h1>
+        {% for entry in entries %}
+            {% for context in entry.contexts %}
+                <span class="meta-chip">{{ context }}</span>
+            {% endfor %}
+            <span class="meta-chip">{{ entry.part_of_speech }}</span>
+            {% if entry.frequency_band %}
+                <span class="meta-chip">{{ entry.frequency_band | replace('_', ' ') }}</span>
+            {% endif %}
+            {% if entry.gre_rating %}
+                <span class="meta-chip">GRE: {{ entry.gre_rating }}</span>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+{% for entry in entries %}
+    <section class="detail-section">
+        <h2>{{ entry.word }} Definition</h2>
+        <p>{{ entry.definition }}</p>
+        {% if entry.frequency_note %}
+            <p class="muted">{{ entry.frequency_note }}</p>
+        {% endif %}
+    </section>
+
+    {% if entry.synonyms %}
+        <section class="detail-section">
+            <h2>Synonyms</h2>
+            <p>
+                {% for synonym in entry.linked_synonyms %}
+                    {% if synonym.linked_slug %}
+                        <a href="{{ url_for('vocabulary.public_word', word_slug=synonym.linked_slug) }}">{{ synonym.synonym }}</a>
+                    {% else %}
+                        {{ synonym.synonym }}
+                    {% endif %}
+                    {% if not loop.last %}, {% endif %}
+                {% endfor %}
+            </p>
+        </section>
+    {% endif %}
+
+    {% if entry.examples %}
+        <section class="detail-section">
+            <h2>Examples</h2>
+            <ol>
+                {% for example in entry.examples %}
+                    <li>{{ example }}</li>
+                {% endfor %}
+            </ol>
+        </section>
+    {% endif %}
+{% endfor %}
+
+<div class="actions">
+    <a class="button button-secondary" href="{{ url_for('vocabulary.public_words') }}">Browse vocabulary</a>
+</div>
+{% endblock %}

@@ -124,14 +124,22 @@ class AdminTestCase(unittest.TestCase):
         return entry
 
     def create_vocab(self, word):
-        return self.client.post("/vocabulary", json=self.valid_entry(word))
+        return self.client.post(
+            "/vocabulary",
+            json=self.valid_entry(word),
+            headers=self.csrf_headers(),
+        )
 
     def create_cloze_vocab(self, word):
-        return self.client.post("/vocabulary", json=self.valid_cloze_entry(word))
+        return self.client.post(
+            "/vocabulary",
+            json=self.valid_cloze_entry(word),
+            headers=self.csrf_headers(),
+        )
 
     def csrf_token(self):
-        self.client.get("/admin")
         with self.client.session_transaction() as session:
+            session.setdefault(CSRF_SESSION_KEY, "test-csrf-token")
             return session["_csrf_token"]
 
     def csrf_headers(self):
@@ -616,9 +624,9 @@ class AdminTestCase(unittest.TestCase):
         third = self.valid_entry("operation")
         third["context"] = "Technical; Science"
         third["domains"] = []
-        self.client.post("/vocabulary", json=first)
-        self.client.post("/vocabulary", json=second)
-        self.client.post("/vocabulary", json=third)
+        self.client.post("/vocabulary", json=first, headers=self.csrf_headers())
+        self.client.post("/vocabulary", json=second, headers=self.csrf_headers())
+        self.client.post("/vocabulary", json=third, headers=self.csrf_headers())
 
         response = self.client.get("/admin/vocabulary-statistics")
 
@@ -652,7 +660,7 @@ class AdminTestCase(unittest.TestCase):
         self.login("tuomo")
         entry = self.valid_cloze_entry("tenuous")
         entry["domains"] = []
-        self.client.post("/vocabulary", json=entry)
+        self.client.post("/vocabulary", json=entry, headers=self.csrf_headers())
 
         response = self.client.get("/admin/vocabulary-maintenance")
 
@@ -716,7 +724,11 @@ class AdminTestCase(unittest.TestCase):
         self.login("tuomo")
         entry = self.valid_cloze_entry("tenuous")
         entry["domains"] = []
-        vocabulary_id = self.client.post("/vocabulary", json=entry).get_json()["id"]
+        vocabulary_id = self.client.post(
+            "/vocabulary",
+            json=entry,
+            headers=self.csrf_headers(),
+        ).get_json()["id"]
 
         response = self.client.post(
             f"/admin/vocabulary/{vocabulary_id}/cloze-data?view=all",
@@ -912,10 +924,18 @@ class AdminTestCase(unittest.TestCase):
         self.login("tuomo")
         stagger_data = self.valid_entry("stagger")
         stagger_data["synonyms"] = []
-        stagger_id = self.client.post("/vocabulary", json=stagger_data).get_json()["id"]
+        stagger_id = self.client.post(
+            "/vocabulary",
+            json=stagger_data,
+            headers=self.csrf_headers(),
+        ).get_json()["id"]
         totter_data = self.valid_entry("totter")
         totter_data["synonyms"] = ["stagger"]
-        totter_id = self.client.post("/vocabulary", json=totter_data).get_json()["id"]
+        totter_id = self.client.post(
+            "/vocabulary",
+            json=totter_data,
+            headers=self.csrf_headers(),
+        ).get_json()["id"]
 
         response = self.client.post(
             f"/admin/vocabulary/{totter_id}/analyze-synonym-links",

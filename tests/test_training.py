@@ -94,6 +94,11 @@ class TrainingTestCase(unittest.TestCase):
             session[CSRF_SESSION_KEY] = "test-registration-csrf-token"
         return {"X-CSRF-Token": "test-registration-csrf-token"}
 
+    def csrf_headers(self):
+        with self.client.session_transaction() as session:
+            session[CSRF_SESSION_KEY] = "test-csrf-token"
+        return {"X-CSRF-Token": "test-csrf-token"}
+
     def invite_creator_id(self):
         with self.app.app_context():
             rows = db.query("SELECT id FROM users ORDER BY id LIMIT 1")
@@ -153,14 +158,21 @@ class TrainingTestCase(unittest.TestCase):
     def create_sample_vocabs(self):
         vocabulary_ids = []
         for word in self.sample_words():
-            response = self.client.post("/vocabulary", json=self.valid_entry(word))
+            response = self.create_vocab(self.valid_entry(word))
             vocabulary_ids.append(response.get_json()["id"])
         return vocabulary_ids
 
     def create_vocab_with_unique_word(self, index):
         word = f"word{index}"
-        response = self.client.post("/vocabulary", json=self.valid_entry(word))
+        response = self.create_vocab(self.valid_entry(word))
         return response.get_json()["id"]
+
+    def create_vocab(self, entry):
+        return self.client.post(
+            "/vocabulary",
+            json=entry,
+            headers=self.csrf_headers(),
+        )
 
     def definitions_by_id(self, vocabulary_ids):
         return {
@@ -532,7 +544,7 @@ class TrainingTestCase(unittest.TestCase):
         self.login_user()
         self.make_user_admin()
         entry = self.valid_cloze_entry("tenuous", "adjective")
-        vocabulary_id = self.client.post("/vocabulary", json=entry).get_json()["id"]
+        vocabulary_id = self.create_vocab(entry).get_json()["id"]
 
         response = self.client.get(
             "/training/export-anki",
@@ -665,7 +677,7 @@ class TrainingTestCase(unittest.TestCase):
 
     def test_training_selection_marks_own_entries_without_usernames(self):
         self.login_user()
-        self.client.post("/vocabulary", json=self.valid_entry("firstword"))
+        self.create_vocab(self.valid_entry("firstword"))
         self.logout_user()
         self.login_second_user()
         with self.app.app_context():
@@ -677,7 +689,7 @@ class TrainingTestCase(unittest.TestCase):
                 """,
                 ["trusted", "anna"],
             )
-        self.client.post("/vocabulary", json=self.valid_entry("secondword"))
+        self.create_vocab(self.valid_entry("secondword"))
 
         response = self.client.get("/training/select")
         html = response.get_data(as_text=True)
@@ -690,7 +702,7 @@ class TrainingTestCase(unittest.TestCase):
 
     def test_training_selection_marks_own_entries_when_session_user_id_is_string(self):
         self.login_user()
-        self.client.post("/vocabulary", json=self.valid_entry("firstword"))
+        self.create_vocab(self.valid_entry("firstword"))
         with self.client.session_transaction() as session:
             session["user_id"] = str(session["user_id"])
 
@@ -702,7 +714,7 @@ class TrainingTestCase(unittest.TestCase):
 
     def test_training_selection_hides_ownership_filter_when_user_has_no_own_entries(self):
         self.login_user()
-        self.client.post("/vocabulary", json=self.valid_entry("firstword"))
+        self.create_vocab(self.valid_entry("firstword"))
         self.logout_user()
         self.login_second_user()
 
@@ -719,8 +731,8 @@ class TrainingTestCase(unittest.TestCase):
         medical_entry["domains"] = ["body"]
         literary_entry = self.valid_entry("contumacious")
         literary_entry["domains"] = ["attitude"]
-        self.client.post("/vocabulary", json=medical_entry)
-        self.client.post("/vocabulary", json=literary_entry)
+        self.create_vocab(medical_entry)
+        self.create_vocab(literary_entry)
         self.make_user_admin()
 
         response = self.client.get("/training/select", query_string={"domain": "body"})
@@ -733,8 +745,8 @@ class TrainingTestCase(unittest.TestCase):
 
     def test_training_selection_filters_by_gregmat_list(self):
         self.login_user()
-        self.client.post("/vocabulary", json=self.valid_entry("abound"))
-        self.client.post("/vocabulary", json=self.valid_entry("plainword"))
+        self.create_vocab(self.valid_entry("abound"))
+        self.create_vocab(self.valid_entry("plainword"))
 
         response = self.client.get(
             "/training/select",
@@ -752,8 +764,8 @@ class TrainingTestCase(unittest.TestCase):
         high_entry["gre_rating"] = "high"
         low_entry = self.valid_entry("plainword")
         low_entry["gre_rating"] = "low"
-        self.client.post("/vocabulary", json=high_entry)
-        self.client.post("/vocabulary", json=low_entry)
+        self.create_vocab(high_entry)
+        self.create_vocab(low_entry)
 
         response = self.client.get(
             "/training/select",
@@ -843,7 +855,7 @@ class TrainingTestCase(unittest.TestCase):
             self.valid_cloze_entry("premise", "noun"),
         ]
         vocabulary_ids = [
-            self.client.post("/vocabulary", json=entry).get_json()["id"]
+            self.create_vocab(entry).get_json()["id"]
             for entry in entries
         ]
 
@@ -866,18 +878,11 @@ class TrainingTestCase(unittest.TestCase):
 
     def test_cloze_training_uses_unselected_vocabulary_as_option_pool(self):
         self.login_user()
-        selected_id = self.client.post(
-            "/vocabulary",
-            json=self.valid_cloze_entry("tenuous", "adjective"),
+        selected_id = self.create_vocab(
+            self.valid_cloze_entry("tenuous", "adjective")
         ).get_json()["id"]
-        self.client.post(
-            "/vocabulary",
-            json=self.valid_cloze_entry("jubilant", "adjective"),
-        )
-        self.client.post(
-            "/vocabulary",
-            json=self.valid_cloze_entry("premise", "noun"),
-        )
+        self.create_vocab(self.valid_cloze_entry("jubilant", "adjective"))
+        self.create_vocab(self.valid_cloze_entry("premise", "noun"))
 
         response = self.create_cloze_training([selected_id])
 
@@ -916,14 +921,10 @@ class TrainingTestCase(unittest.TestCase):
 
     def test_cloze_training_rejects_unclassified_entries(self):
         self.login_user()
-        first_id = self.client.post(
-            "/vocabulary",
-            json=self.valid_cloze_entry("tenuous", "adjective"),
+        first_id = self.create_vocab(
+            self.valid_cloze_entry("tenuous", "adjective")
         ).get_json()["id"]
-        second_id = self.client.post(
-            "/vocabulary",
-            json=self.valid_entry("jubilant"),
-        ).get_json()["id"]
+        second_id = self.create_vocab(self.valid_entry("jubilant")).get_json()["id"]
 
         response = self.create_cloze_training([first_id, second_id])
 
@@ -1190,8 +1191,8 @@ class TrainingTestCase(unittest.TestCase):
         second = self.valid_entry("duplicatetwo")
         first["definition"] = "Shared definition"
         second["definition"] = "Shared definition"
-        first_id = self.client.post("/vocabulary", json=first).get_json()["id"]
-        second_id = self.client.post("/vocabulary", json=second).get_json()["id"]
+        first_id = self.create_vocab(first).get_json()["id"]
+        second_id = self.create_vocab(second).get_json()["id"]
 
         response = self.create_training([first_id, second_id])
 
@@ -1240,7 +1241,11 @@ class TrainingTestCase(unittest.TestCase):
         updated_entry = self.valid_entry(self.sample_words()[0])
         updated_entry["definition"] = "Changed after training creation"
 
-        self.client.put(f"/vocabulary/{vocabulary_ids[0]}", json=updated_entry)
+        self.client.put(
+            f"/vocabulary/{vocabulary_ids[0]}",
+            json=updated_entry,
+            headers=self.csrf_headers(),
+        )
         refreshed_training = self.client.get(f"/training/{training['id']}")
 
         self.assertEqual(refreshed_training.status_code, 200)
@@ -1270,7 +1275,11 @@ class TrainingTestCase(unittest.TestCase):
         self.submit_training(training["id"], answers)
         updated_entry = self.valid_entry("changedword")
         updated_entry["definition"] = "Changed after training result"
-        self.client.put(f"/vocabulary/{vocabulary_ids[1]}", json=updated_entry)
+        self.client.put(
+            f"/vocabulary/{vocabulary_ids[1]}",
+            json=updated_entry,
+            headers=self.csrf_headers(),
+        )
         result_page = self.client.get(f"/training/{training['id']}")
 
         self.assertEqual(result_page.status_code, 200)

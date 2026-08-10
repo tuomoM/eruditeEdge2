@@ -164,8 +164,13 @@ class VocabularyTestCase(unittest.TestCase):
             ],
         }
 
-    def create_entry(self, data=None):
-        return self.client.post("/vocabulary", json=data or self.valid_entry())
+    def create_entry(self, data=None, include_csrf=True):
+        headers = self.csrf_headers() if include_csrf else {}
+        return self.client.post(
+            "/vocabulary",
+            json=data or self.valid_entry(),
+            headers=headers,
+        )
 
     def create_entry_with_word(self, word):
         data = self.valid_entry()
@@ -193,6 +198,14 @@ class VocabularyTestCase(unittest.TestCase):
             headers=headers,
         )
 
+    def update_entry(self, vocabulary_id, data=None, include_csrf=True):
+        headers = self.csrf_headers() if include_csrf else {}
+        return self.client.put(
+            f"/vocabulary/{vocabulary_id}",
+            json=data or self.valid_entry(),
+            headers=headers,
+        )
+
     def search_entries(self, word):
         return self.client.get("/vocabulary/search", query_string={"word": word})
 
@@ -200,6 +213,14 @@ class VocabularyTestCase(unittest.TestCase):
         response = self.create_entry()
 
         self.assertEqual(response.status_code, 401)
+
+    def test_create_vocabulary_rejects_missing_csrf_token(self):
+        self.login_user()
+
+        response = self.create_entry(include_csrf=False)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
 
     def test_create_vocabulary_succeeds_when_logged_in(self):
         self.login_user()
@@ -269,7 +290,7 @@ class VocabularyTestCase(unittest.TestCase):
         data["definition"] = "To exist in large numbers."
         data["examples"] = ["Wildflowers abound in the meadow."]
 
-        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+        response = self.update_entry(vocabulary_id, data)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["word_lists"][0]["name"], "GregMat")
@@ -690,6 +711,74 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertIn(b"chapter 1", response.data)
         self.assertNotIn(b"tuomo", response.data)
 
+    def test_public_word_page_is_visible_without_login(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["word"] = "recalcitrant"
+        data["definition"] = "Stubbornly resistant to authority or guidance."
+        data["synonyms"] = ["stubborn", "defiant"]
+        data["examples"] = ["The recalcitrant student refused to revise the essay."]
+        self.create_entry(data)
+        self.logout_user()
+
+        response = self.client.get("/words/recalcitrant")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Recalcitrant Meaning", response.data)
+        self.assertIn(b"Stubbornly resistant to authority or guidance.", response.data)
+        self.assertIn(b"recalcitrant student", response.data)
+        self.assertIn(b"Recalcitrant Meaning, Definition, Synonyms, and Examples", response.data)
+        self.assertIn(b'rel="canonical"', response.data)
+        self.assertIn(b'application/ld+json', response.data)
+        self.assertNotIn(b"Edit", response.data)
+
+    def test_public_word_meaning_url_redirects_to_canonical_word_page(self):
+        self.login_user()
+        self.create_entry_with_word("recalcitrant")
+        self.logout_user()
+
+        response = self.client.get("/words/recalcitrant-meaning")
+
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response.headers["Location"], "/words/recalcitrant")
+
+    def test_public_words_page_lists_vocabulary_without_login(self):
+        self.login_user()
+        self.create_entry_with_word("recalcitrant")
+        self.logout_user()
+
+        response = self.client.get("/words")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Vocabulary Meanings", response.data)
+        self.assertIn(b'href="/words/recalcitrant"', response.data)
+        self.assertNotIn(b"Add word", response.data)
+
+    def test_sitemap_lists_public_word_pages(self):
+        self.login_user()
+        self.create_entry_with_word("recalcitrant")
+        self.logout_user()
+
+        response = self.client.get("/sitemap.xml", base_url="https://example.com")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/xml")
+        self.assertIn(b"https://example.com/words/recalcitrant", response.data)
+
+    def test_robots_txt_points_to_sitemap(self):
+        response = self.client.get("/robots.txt", base_url="https://example.com")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "text/plain")
+        self.assertIn(b"User-agent: *", response.data)
+        self.assertIn(b"Sitemap: https://example.com/sitemap.xml", response.data)
+
+    def test_vocabulary_page_stays_login_gated_during_public_words_mvp(self):
+        response = self.client.get("/vocabulary")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/login")
+
     def test_create_vocabulary_persists_up_to_four_domains_in_order(self):
         self.login_user()
         data = self.valid_entry()
@@ -717,6 +806,7 @@ class VocabularyTestCase(unittest.TestCase):
                 "examples": "He stepped gingerly over the stones.",
                 "sources": "The Crossing; Cormac McCarthy; chapter 1",
             },
+            headers=self.csrf_headers(),
             follow_redirects=True,
         )
 
@@ -724,6 +814,23 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertIn(b"The Crossing", response.data)
         self.assertIn(b"Cormac McCarthy", response.data)
         self.assertIn(b"chapter 1", response.data)
+
+    def test_new_vocabulary_form_rejects_missing_csrf_token(self):
+        self.login_user()
+
+        response = self.client.post(
+            "/vocabulary/new",
+            data={
+                "word": "gingerly",
+                "definition": "In a careful or cautious manner.",
+                "context": "Literary",
+                "part_of_speech": "adverb",
+                "examples": "He stepped gingerly over the stones.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
 
     def test_source_parser_keeps_pipe_separator_compatibility(self):
         self.login_user()
@@ -763,6 +870,7 @@ class VocabularyTestCase(unittest.TestCase):
                     ]
                 ),
             },
+            headers=self.csrf_headers(),
         )
 
         self.assertEqual(response.status_code, 302)
@@ -1264,6 +1372,14 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'id="word" name="word" value="stultify"', response.data)
 
+    def test_new_vocabulary_page_includes_csrf_token(self):
+        self.login_user()
+
+        response = self.client.get("/vocabulary/new")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'name="csrf_token"', response.data)
+
     def test_new_vocabulary_page_collapses_optional_ai_example_sentence(self):
         self.login_user()
 
@@ -1758,6 +1874,20 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
 
+    def test_update_vocabulary_rejects_missing_csrf_token(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+
+        response = self.update_entry(
+            vocabulary_id,
+            self.valid_entry(),
+            include_csrf=False,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
+
     def test_update_vocabulary_succeeds_when_logged_in(self):
         self.login_user()
         create_data = self.valid_entry()
@@ -1769,7 +1899,7 @@ class VocabularyTestCase(unittest.TestCase):
         data["synonyms"] = ["activity"]
         data["examples"] = ["The operation was successful."]
 
-        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+        response = self.update_entry(vocabulary_id, data)
 
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
@@ -1785,7 +1915,7 @@ class VocabularyTestCase(unittest.TestCase):
         vocabulary_id = self.create_entry(data).get_json()["id"]
         data["domains"] = ["communication", "society"]
 
-        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+        response = self.update_entry(vocabulary_id, data)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["domains"], ["communication", "society"])
@@ -1803,7 +1933,7 @@ class VocabularyTestCase(unittest.TestCase):
         vocabulary_id = self.create_entry(data).get_json()["id"]
         data["definition"] = "An updated definition"
 
-        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+        response = self.update_entry(vocabulary_id, data)
 
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
@@ -1822,7 +1952,7 @@ class VocabularyTestCase(unittest.TestCase):
         data = self.valid_entry()
         data["definition"] = "Updated global definition"
 
-        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+        response = self.update_entry(vocabulary_id, data)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["definition"], "Updated global definition")
@@ -1836,7 +1966,7 @@ class VocabularyTestCase(unittest.TestCase):
         data = self.valid_entry()
         data["definition"] = "Updated global definition"
 
-        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+        response = self.update_entry(vocabulary_id, data)
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.get_json()["error"], "Trusted account is required")
@@ -1856,6 +1986,46 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Trusted account is required", response.data)
 
+    def test_edit_vocabulary_form_rejects_missing_csrf_token(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+
+        response = self.client.post(
+            f"/vocabulary/{vocabulary_id}/edit",
+            data={
+                "word": "operation",
+                "definition": "Updated by forged form",
+                "context": "Technical",
+                "part_of_speech": "other",
+                "examples": "The operation was carefully planned.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.get_json()["error"], "Invalid CSRF token")
+
+    def test_edit_vocabulary_form_succeeds_with_csrf_token(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+
+        response = self.client.post(
+            f"/vocabulary/{vocabulary_id}/edit",
+            data={
+                "word": "operation",
+                "definition": "Updated from the edit form.",
+                "context": "Technical",
+                "part_of_speech": "other",
+                "examples": "The operation was carefully planned.",
+            },
+            headers=self.csrf_headers(),
+            follow_redirects=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Updated from the edit form.", response.data)
+
     def test_update_vocabulary_allows_sql_statement_text(self):
         self.login_user()
         create_response = self.create_entry()
@@ -1863,7 +2033,7 @@ class VocabularyTestCase(unittest.TestCase):
         data = self.valid_entry()
         data["context"] = "Medical'; DROP TABLE users; --"
 
-        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+        response = self.update_entry(vocabulary_id, data)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["context"], "")
@@ -1875,7 +2045,7 @@ class VocabularyTestCase(unittest.TestCase):
         data = self.valid_entry()
         data["examples"] = ["<script>alert('x')</script>"]
 
-        response = self.client.put(f"/vocabulary/{vocabulary_id}", json=data)
+        response = self.update_entry(vocabulary_id, data)
 
         self.assertEqual(response.status_code, 400)
 

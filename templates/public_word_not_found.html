@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Vocabulary Word Not Found | eruditeEdge{% endblock %}
+{% block meta_description %}The requested eruditeEdge vocabulary word could not be found.{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Vocabulary word not found</h1>
+    </div>
+</div>
+<p>No public vocabulary entry matched {{ word_slug | replace('-', ' ') }}.</p>
+<div class="actions">
+    <a class="button button-secondary" href="{{ url_for('vocabulary.public_words') }}">Browse vocabulary</a>
+</div>
+{% endblock %}

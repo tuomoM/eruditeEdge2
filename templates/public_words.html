@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Vocabulary Meanings and Definitions | eruditeEdge{% endblock %}
+{% block meta_description %}Browse eruditeEdge vocabulary meanings, definitions, examples, synonyms, and usage notes for advanced English learners.{% endblock %}
+{% block canonical %}<link rel="canonical" href="{{ url_for('vocabulary.public_words', _external=True) }}">{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Vocabulary Meanings</h1>
+        <div class="result-count">{{ entries | length }} entries</div>
+    </div>
+</div>
+
+{% if entries %}
+    <div class="entry-list">
+    {% for entry in entries %}
+        <div class="entry-row">
+            <div class="entry-main">
+                <div class="entry-heading">
+                    <a class="entry-word" href="{{ url_for('vocabulary.public_word', word_slug=entry.slug) }}">{{ entry.word }}</a>
+                    {% for context in entry.contexts %}
+                        <span class="meta-chip">{{ context }}</span>
+                    {% endfor %}
+                    <span class="meta-chip">{{ entry.part_of_speech }}</span>
+                    {% if entry.frequency_band %}
+                        <span class="meta-chip">{{ entry.frequency_band | replace('_', ' ') }}</span>
+                    {% endif %}
+                    {% if entry.gre_rating %}
+                        <span class="meta-chip">GRE: {{ entry.gre_rating }}</span>
+                    {% endif %}
+                </div>
+                <p class="entry-definition">{{ entry.definition }}</p>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+{% else %}
+    <p>No vocabulary entries found.</p>
+{% endif %}
+{% endblock %}

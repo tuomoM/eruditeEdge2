@@ -5,6 +5,7 @@
 <h1>{% if is_edit %}Edit vocabulary{% else %}Add vocabulary{% endif %}</h1>
 
 <form method="post" id="vocabulary-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input
         type="hidden"
         id="needs_attention"
