@@ -891,6 +891,70 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertIn(b"https://example.com/words/r", response.data)
         self.assertIn(b"https://example.com/words/rare-words", response.data)
 
+    def test_public_base_url_controls_word_machine_urls(self):
+        self.app.config["PUBLIC_BASE_URL"] = "https://erudite-edge.com/"
+        self.login_user()
+        self.create_indexable_entry_with_word("recalcitrant")
+        self.logout_user()
+
+        response = self.client.get(
+            "/words/recalcitrant",
+            base_url="http://localhost:5000",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            b'<link rel="canonical" href="https://erudite-edge.com/words/recalcitrant">',
+            response.data,
+        )
+        self.assertIn(
+            b'<meta property="og:url" content="https://erudite-edge.com/words/recalcitrant">',
+            response.data,
+        )
+        self.assertIn(b"https://erudite-edge.com/words/recalcitrant", response.data)
+        self.assertNotIn(b"http://localhost:5000/words/recalcitrant", response.data)
+
+    def test_public_base_url_controls_words_hub_machine_urls(self):
+        self.app.config["PUBLIC_BASE_URL"] = "https://erudite-edge.com"
+        response = self.client.get("/words", base_url="http://localhost:5000")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            b'<link rel="canonical" href="https://erudite-edge.com/words">',
+            response.data,
+        )
+        self.assertIn(
+            b'<meta property="og:url" content="https://erudite-edge.com/words">',
+            response.data,
+        )
+        self.assertNotIn(b"http://localhost:5000/words", response.data)
+
+    def test_public_base_url_controls_sitemap_and_robots(self):
+        self.app.config["PUBLIC_BASE_URL"] = "https://erudite-edge.com"
+        self.login_user()
+        self.create_indexable_entry_with_word("recalcitrant")
+        self.logout_user()
+
+        sitemap_response = self.client.get(
+            "/sitemap.xml",
+            base_url="http://preview.internal",
+        )
+        robots_response = self.client.get(
+            "/robots.txt",
+            base_url="http://preview.internal",
+        )
+
+        self.assertEqual(sitemap_response.status_code, 200)
+        self.assertIn(b"https://erudite-edge.com/words/recalcitrant", sitemap_response.data)
+        self.assertIn(b"https://erudite-edge.com/words", sitemap_response.data)
+        self.assertNotIn(b"http://preview.internal", sitemap_response.data)
+        self.assertEqual(robots_response.status_code, 200)
+        self.assertIn(
+            b"Sitemap: https://erudite-edge.com/sitemap.xml",
+            robots_response.data,
+        )
+        self.assertNotIn(b"http://preview.internal", robots_response.data)
+
     def test_sitemap_omits_thin_public_word_pages(self):
         self.login_user()
         self.create_entry_with_word("thinword")

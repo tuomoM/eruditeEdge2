@@ -81,11 +81,21 @@ def public_word_path_for_entry(entry):
     return url_for("vocabulary.public_word", word_slug=vocabulary_word_slug(entry["word"]))
 
 
+def public_base_url():
+    return (current_app.config.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+
+
+def public_url_for(endpoint, **values):
+    base_url = public_base_url()
+    if base_url:
+        return f"{base_url}{url_for(endpoint, **values)}"
+    return url_for(endpoint, _external=True, **values)
+
+
 def canonical_word_url_for_entry(entry):
-    return url_for(
+    return public_url_for(
         "vocabulary.public_word",
         word_slug=vocabulary_word_slug(entry["word"]),
-        _external=True,
     )
 
 
@@ -233,7 +243,7 @@ def find_public_entries_by_slug(slug):
     ]
 
 
-def public_word_page_metadata(entries):
+def public_word_page_metadata(entries, canonical_url=None):
     word = entries[0]["word"]
     word_title = word[:1].upper() + word[1:]
     first_definition = entries[0]["definition"]
@@ -243,6 +253,14 @@ def public_word_page_metadata(entries):
     answer_sentence = f"{word_title} means {definition_fragment}"
     if part_of_speech_label:
         answer_sentence = f"{word_title} is {part_of_speech_label} that means {definition_fragment}"
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "DefinedTerm",
+        "name": word,
+        "description": first_definition,
+    }
+    if canonical_url:
+        structured_data["url"] = canonical_url
     return {
         "title": f"{word_title} Meaning, Definition, Synonyms, and Examples | eruditeEdge",
         "description": (
@@ -252,12 +270,7 @@ def public_word_page_metadata(entries):
         "heading": word_title,
         "answer_sentence": answer_sentence,
         "word_title": word_title,
-        "structured_data": {
-            "@context": "https://schema.org",
-            "@type": "DefinedTerm",
-            "name": word,
-            "description": first_definition,
-        },
+        "structured_data": structured_data,
     }
 
 
@@ -473,7 +486,7 @@ def public_words():
         entries=entries,
         total_count=len(all_entries),
         metadata=public_word_index_metadata(),
-        canonical_url=url_for("vocabulary.public_words", _external=True),
+        canonical_url=public_url_for("vocabulary.public_words"),
         letter_links=public_word_letter_links(all_entries),
         collection_links=public_word_collection_links(all_entries),
         listing_description="Public vocabulary pages available to browse.",
@@ -496,10 +509,9 @@ def public_word(word_slug):
             entries=entries,
             total_count=len(all_entries),
             metadata=public_word_letter_metadata(word_slug),
-            canonical_url=url_for(
+            canonical_url=public_url_for(
                 "vocabulary.public_word",
                 word_slug=word_slug,
-                _external=True,
             ),
             letter_links=public_word_letter_links(all_entries),
             collection_links=public_word_collection_links(all_entries),
@@ -518,10 +530,9 @@ def public_word(word_slug):
             entries=entries,
             total_count=len(all_entries),
             metadata=PUBLIC_WORD_COLLECTIONS[word_slug],
-            canonical_url=url_for(
+            canonical_url=public_url_for(
                 "vocabulary.public_word",
                 word_slug=word_slug,
-                _external=True,
             ),
             letter_links=public_word_letter_links(all_entries),
             collection_links=public_word_collection_links(all_entries),
@@ -545,11 +556,12 @@ def public_word(word_slug):
     if word_slug != canonical_slug:
         return redirect(url_for("vocabulary.public_word", word_slug=canonical_slug), code=301)
 
+    canonical_url = canonical_word_url_for_entry(entries[0])
     return render_template(
         "public_word.html",
         entries=entries,
-        metadata=public_word_page_metadata(entries),
-        canonical_url=canonical_word_url_for_entry(entries[0]),
+        metadata=public_word_page_metadata(entries, canonical_url),
+        canonical_url=canonical_url,
         robots_content=None if is_public_indexable_word(entries) else "noindex,follow",
     )
 
@@ -566,26 +578,25 @@ def sitemap():
         slug = vocabulary_word_slug(entry["word"])
         if slug:
             letter_urls.add(
-                url_for("vocabulary.public_word", word_slug=slug[:1], _external=True)
+                public_url_for("vocabulary.public_word", word_slug=slug[:1])
             )
         for collection_slug in PUBLIC_WORD_COLLECTIONS:
             if public_word_entry_matches_collection(entry, collection_slug):
                 collection_urls.add(
-                    url_for(
+                    public_url_for(
                         "vocabulary.public_word",
                         word_slug=collection_slug,
-                        _external=True,
                     )
                 )
         if slug in seen_slugs:
             continue
         seen_slugs.add(slug)
         word_urls.append(
-            url_for("vocabulary.public_word", word_slug=slug, _external=True)
+            public_url_for("vocabulary.public_word", word_slug=slug)
         )
     urls = [
-        url_for("index", _external=True),
-        url_for("vocabulary.public_words", _external=True),
+        public_url_for("index"),
+        public_url_for("vocabulary.public_words"),
         *sorted(letter_urls),
         *sorted(collection_urls),
         *word_urls,
@@ -607,7 +618,7 @@ def robots_txt():
         [
             "User-agent: *",
             "Allow: /",
-            f"Sitemap: {url_for('vocabulary.sitemap', _external=True)}",
+            f"Sitemap: {public_url_for('vocabulary.sitemap')}",
             "",
         ]
     )

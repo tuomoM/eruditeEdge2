@@ -6,6 +6,12 @@
     {% if robots_content %}<meta name="robots" content="{{ robots_content }}">{% endif %}
 {% endblock %}
 {% block canonical %}<link rel="canonical" href="{{ canonical_url }}">{% endblock %}
+{% block open_graph %}
+<meta property="og:type" content="article">
+<meta property="og:title" content="{{ metadata.title }}">
+<meta property="og:description" content="{{ metadata.description }}">
+<meta property="og:url" content="{{ canonical_url }}">
+{% endblock %}
 {% block structured_data %}
 <script type="application/ld+json">
 {{ metadata.structured_data | tojson }}
