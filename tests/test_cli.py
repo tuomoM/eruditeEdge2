@@ -77,6 +77,39 @@ class CliTestCase(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("using the local database path", result.output)
 
+    def test_report_vocabulary_indexing_lists_excluded_entries(self):
+        app = self.create_test_app()
+        init_db(app)
+        with app.app_context():
+            user_id = db.execute(
+                """
+                INSERT INTO users (username, password_hash, account_category)
+                VALUES (?, ?, ?)
+                """,
+                ["cli-admin", "not-used", "admin"],
+            ).lastrowid
+            vocabulary_service.create_entry(
+                self.valid_cloze_entry("recalcitrant", "Stubbornly resistant.", []),
+                user_id,
+            )
+            vocabulary_service.create_entry(
+                self.valid_cloze_entry(
+                    "thinword",
+                    "A placeholder definition.",
+                    [],
+                    part_of_speech="other",
+                ),
+                user_id,
+            )
+
+        result = app.test_cli_runner().invoke(args=["report-vocabulary-indexing"])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Vocabulary entries: 2", result.output)
+        self.assertIn("Indexable entries: 1", result.output)
+        self.assertIn("Excluded entries: 1", result.output)
+        self.assertIn("thinword: missing specific part of speech", result.output)
+
     def test_migrate_stamps_current_schema(self):
         app = self.create_test_app()
         init_db(app)

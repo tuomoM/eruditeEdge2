@@ -12,6 +12,10 @@ from Services.vocabulary_ai_service import vocabulary_ai_service
 from Services.vocabulary_domains import MAX_VOCABULARY_DOMAINS, active_vocabulary_domains
 from Services.vocabulary_service import vocabulary_service
 from Services.vocabulary_gre import GRE_RATING_FILTERS
+from Services.vocabulary_publication_service import (
+    is_public_indexable_entry,
+    is_public_indexable_word,
+)
 
 
 vocabulary_bp = Blueprint("vocabulary", __name__)
@@ -364,6 +368,7 @@ def public_word(word_slug):
         entries=entries,
         metadata=public_word_page_metadata(entries),
         canonical_url=canonical_word_url_for_entry(entries[0]),
+        robots_content=None if is_public_indexable_word(entries) else "noindex,follow",
     )
 
 
@@ -372,6 +377,8 @@ def sitemap():
     word_urls = []
     seen_slugs = set()
     for entry in vocabulary_service.list_entries():
+        if not is_public_indexable_entry(entry):
+            continue
         slug = vocabulary_word_slug(entry["word"])
         if slug in seen_slugs:
             continue

@@ -15,6 +15,7 @@ from Services.synonym_net_cloze_service import synonym_net_cloze_service
 from Services.vocabulary_synonym_link_service import vocabulary_synonym_link_service
 from Services.vocabulary_service import vocabulary_service
 from Services.vocabulary_maintenance_service import vocabulary_maintenance_service
+from Services.vocabulary_publication_service import public_index_exclusion_reasons
 from Services.vocabulary_word_list_service import vocabulary_word_list_service
 from db import get_connection, init_db
 
@@ -155,6 +156,7 @@ def register_cli_commands(app):
     app.cli.add_command(create_vocabulary_maintenance_run)
     app.cli.add_command(generate_vocabulary_domain_model)
     app.cli.add_command(sync_vocabulary_word_lists)
+    app.cli.add_command(report_vocabulary_indexing)
 
 
 @click.command("create-admin")
@@ -265,6 +267,33 @@ def sync_vocabulary_word_lists():
                 **summary,
             )
         )
+
+
+@click.command("report-vocabulary-indexing")
+@click.option("--limit", default=50, show_default=True, type=click.IntRange(1))
+@with_appcontext
+def report_vocabulary_indexing(limit):
+    entries = vocabulary_service.list_entries()
+    excluded_entries = []
+    for entry in entries:
+        reasons = public_index_exclusion_reasons(entry)
+        if reasons:
+            excluded_entries.append((entry, reasons))
+    indexable_count = len(entries) - len(excluded_entries)
+
+    click.echo(f"Vocabulary entries: {len(entries)}")
+    click.echo(f"Indexable entries: {indexable_count}")
+    click.echo(f"Excluded entries: {len(excluded_entries)}")
+    for entry, reasons in excluded_entries[:limit]:
+        click.echo(
+            "#{id} {word}: {reasons}".format(
+                id=entry["id"],
+                word=entry["word"],
+                reasons=", ".join(reasons),
+            )
+        )
+    if len(excluded_entries) > limit:
+        click.echo(f"... {len(excluded_entries) - limit} more excluded entries.")
 
 
 @click.command("check-database")

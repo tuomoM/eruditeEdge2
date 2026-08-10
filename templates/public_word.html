@@ -2,6 +2,9 @@
 
 {% block title %}{{ metadata.title }}{% endblock %}
 {% block meta_description %}{{ metadata.description }}{% endblock %}
+{% block robots %}
+    {% if robots_content %}<meta name="robots" content="{{ robots_content }}">{% endif %}
+{% endblock %}
 {% block canonical %}<link rel="canonical" href="{{ canonical_url }}">{% endblock %}
 {% block structured_data %}
 <script type="application/ld+json">

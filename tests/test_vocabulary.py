@@ -179,6 +179,14 @@ class VocabularyTestCase(unittest.TestCase):
         data["examples"] = [f"{word} appears in this sentence."]
         return self.create_entry(data)
 
+    def create_indexable_entry_with_word(self, word):
+        data = self.valid_entry()
+        data["word"] = word
+        data["definition"] = f"Definition for {word}."
+        data["part_of_speech"] = "noun"
+        data["examples"] = [f"{word} appears in this sentence."]
+        return self.create_entry(data)
+
     def generate_entry(self, word, include_csrf=True, usage_clue=None):
         headers = self.csrf_headers() if include_csrf else {}
         payload = {"word": word}
@@ -799,7 +807,7 @@ class VocabularyTestCase(unittest.TestCase):
 
     def test_sitemap_lists_public_word_pages(self):
         self.login_user()
-        self.create_entry_with_word("recalcitrant")
+        self.create_indexable_entry_with_word("recalcitrant")
         self.logout_user()
 
         response = self.client.get("/sitemap.xml", base_url="https://example.com")
@@ -807,6 +815,37 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.mimetype, "application/xml")
         self.assertIn(b"https://example.com/words/recalcitrant", response.data)
+
+    def test_sitemap_omits_thin_public_word_pages(self):
+        self.login_user()
+        self.create_entry_with_word("thinword")
+        self.logout_user()
+
+        response = self.client.get("/sitemap.xml", base_url="https://example.com")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"https://example.com/words/thinword", response.data)
+
+    def test_thin_public_word_page_is_viewable_but_noindexed(self):
+        self.login_user()
+        self.create_entry_with_word("thinword")
+        self.logout_user()
+
+        response = self.client.get("/words/thinword")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'<meta name="robots" content="noindex,follow">', response.data)
+        self.assertIn(b"Definition for thinword", response.data)
+
+    def test_indexable_public_word_page_has_no_noindex(self):
+        self.login_user()
+        self.create_indexable_entry_with_word("recalcitrant")
+        self.logout_user()
+
+        response = self.client.get("/words/recalcitrant")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b'<meta name="robots" content="noindex,follow">', response.data)
 
     def test_robots_txt_points_to_sitemap(self):
         response = self.client.get("/robots.txt", base_url="https://example.com")
