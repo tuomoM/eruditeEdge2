@@ -201,7 +201,7 @@ def public_word_entry_has_context(entry, context):
 
 def public_word_index_metadata():
     return {
-        "title": "Vocabulary Meanings and Definitions | eruditeEdge",
+        "title": "Vocabulary | eruditeEdge",
         "heading": "Vocabulary",
         "description": (
             "Browse eruditeEdge vocabulary meanings, definitions, examples, "
@@ -471,6 +471,7 @@ def public_words():
     return render_template(
         "public_words.html",
         entries=entries,
+        total_count=len(all_entries),
         metadata=public_word_index_metadata(),
         canonical_url=url_for("vocabulary.public_words", _external=True),
         letter_links=public_word_letter_links(all_entries),
@@ -493,6 +494,7 @@ def public_word(word_slug):
         return render_template(
             "public_words.html",
             entries=entries,
+            total_count=len(all_entries),
             metadata=public_word_letter_metadata(word_slug),
             canonical_url=url_for(
                 "vocabulary.public_word",
@@ -514,6 +516,7 @@ def public_word(word_slug):
         return render_template(
             "public_words.html",
             entries=entries,
+            total_count=len(all_entries),
             metadata=PUBLIC_WORD_COLLECTIONS[word_slug],
             canonical_url=url_for(
                 "vocabulary.public_word",

@@ -802,9 +802,12 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"<h1>Vocabulary</h1>", response.data)
+        self.assertIn(b"<title>Vocabulary | eruditeEdge</title>", response.data)
+        self.assertNotIn(b"Vocabulary Meanings", response.data)
         self.assertIn(b"Browse By Letter", response.data)
         self.assertIn(b'href="/words/r"', response.data)
         self.assertIn(b"Vocabulary Collections", response.data)
+        self.assertIn(b"Browse collection", response.data)
         self.assertIn(b'href="/words/recalcitrant"', response.data)
         self.assertNotIn(b"Add word", response.data)
 
@@ -819,6 +822,7 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"60 words", response.data)
         self.assertIn(b'href="/words/word59"', response.data)
+        self.assertNotIn(b"50 entries", response.data)
 
     def test_public_letter_page_lists_indexable_words(self):
         self.login_user()
@@ -830,6 +834,7 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Words Starting With R", response.data)
+        self.assertIn(b"2 words", response.data)
         self.assertIn(b'href="/words/recalcitrant"', response.data)
         self.assertNotIn(b'href="/words/abound"', response.data)
         self.assertIn(b'<link rel="canonical" href="http://localhost/words/r">', response.data)
