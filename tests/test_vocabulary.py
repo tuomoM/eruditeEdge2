@@ -773,11 +773,19 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertIn(b"User-agent: *", response.data)
         self.assertIn(b"Sitemap: https://example.com/sitemap.xml", response.data)
 
-    def test_vocabulary_page_stays_login_gated_during_public_words_mvp(self):
+    def test_vocabulary_page_lists_entries_without_login(self):
+        self.login_user()
+        vocabulary_id = self.create_entry_with_word("recalcitrant").get_json()["id"]
+        self.logout_user()
+
         response = self.client.get("/vocabulary")
 
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["Location"], "/login")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"recalcitrant", response.data)
+        self.assertIn(f'href="/vocabulary/{vocabulary_id}/page"'.encode(), response.data)
+        self.assertNotIn(b"Add word", response.data)
+        self.assertNotIn(b"Edit", response.data)
+        self.assertNotIn(b'data-filter-toggle', response.data)
 
     def test_create_vocabulary_persists_up_to_four_domains_in_order(self):
         self.login_user()
@@ -1595,10 +1603,18 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    def test_view_vocabulary_requires_login(self):
-        response = self.client.get("/vocabulary/1")
+    def test_view_vocabulary_succeeds_without_login(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+        self.logout_user()
 
-        self.assertEqual(response.status_code, 401)
+        response = self.client.get(f"/vocabulary/{vocabulary_id}")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["word"], "operation")
+        self.assertNotIn("created_by", body)
 
     def test_view_vocabulary_succeeds_when_logged_in(self):
         self.login_user()
@@ -1651,6 +1667,20 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertNotIn(b"Practice usage", response.data)
         self.assertNotIn(b'id="practice-sentence"', response.data)
 
+    def test_vocabulary_page_hides_usage_practice_for_anonymous_user(self):
+        self.login_user()
+        create_response = self.create_entry()
+        vocabulary_id = create_response.get_json()["id"]
+        self.logout_user()
+
+        response = self.client.get(f"/vocabulary/{vocabulary_id}/page")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"operation", response.data)
+        self.assertNotIn(b"Practice usage", response.data)
+        self.assertNotIn(b'id="practice-sentence"', response.data)
+        self.assertNotIn(b"Edit", response.data)
+
     def test_view_vocabulary_does_not_allow_sql_injection(self):
         self.login_user()
 
@@ -1658,10 +1688,17 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_search_vocabulary_requires_login(self):
+    def test_search_vocabulary_succeeds_without_login(self):
+        self.login_user()
+        self.create_entry_with_word("operation")
+        self.logout_user()
+
         response = self.search_entries("oper*")
 
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual([entry["word"] for entry in body], ["operation"])
+        self.assertNotIn("created_by", body[0])
 
     def test_search_vocabulary_supports_wildcard_at_end(self):
         self.login_user()

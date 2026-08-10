@@ -134,6 +134,16 @@ def entries_with_ownership(entries, user_id):
     return owned_entries
 
 
+def vocabulary_read_entry(entry):
+    readable_entry = dict(entry)
+    readable_entry.pop("created_by", None)
+    return readable_entry
+
+
+def vocabulary_read_entries(entries):
+    return [vocabulary_read_entry(entry) for entry in entries]
+
+
 def is_admin():
     user_id = session.get("user_id")
     if not user_id:
@@ -361,7 +371,6 @@ def robots_txt():
 
 
 @vocabulary_bp.route("/vocabulary", methods=["GET"])
-@page_login_required
 def vocabulary_list():
     filters = vocabulary_filters_from_request(request.args)
     if not is_admin():
@@ -371,9 +380,10 @@ def vocabulary_list():
     if error:
         flash(error)
         entries = []
+    user_id = session.get("user_id")
     return render_template(
         "vocabulary_list.html",
-        entries=entries_with_ownership(entries, session["user_id"]),
+        entries=entries_with_ownership(entries, user_id),
         filters=filters,
         active_filters=active_vocabulary_filters(filters, filter_choices),
         filter_choices=filter_choices,
@@ -480,25 +490,22 @@ def generate_vocabulary_status():
 
 
 @vocabulary_bp.route("/vocabulary/search", methods=["GET"])
-@login_required
 def search_vocabulary():
     entries, error = vocabulary_service.search_by_word(request.args.get("word"))
     if error:
         return jsonify({"error": error}), 400
-    return jsonify(entries)
+    return jsonify(vocabulary_read_entries(entries))
 
 
 @vocabulary_bp.route("/vocabulary/<int:vocabulary_id>", methods=["GET"])
-@login_required
 def view_vocabulary(vocabulary_id):
     entry = vocabulary_service.get_entry(vocabulary_id)
     if not entry:
         return jsonify({"error": "Vocabulary entry was not found"}), 404
-    return jsonify(entry)
+    return jsonify(vocabulary_read_entry(entry))
 
 
 @vocabulary_bp.route("/vocabulary/<int:vocabulary_id>/page", methods=["GET"])
-@page_login_required
 def vocabulary_page(vocabulary_id):
     entry = vocabulary_service.get_entry(vocabulary_id)
     if not entry:
