@@ -32,6 +32,7 @@ def create_app(test_config=None):
     @app.context_processor
     def inject_csrf_token():
         return {
+            "asset_version": app.config["ASSET_VERSION"],
             "available_domains": active_vocabulary_domains(),
             "csrf_token": get_csrf_token,
             "max_domains": MAX_VOCABULARY_DOMAINS,

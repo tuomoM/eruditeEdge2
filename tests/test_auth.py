@@ -158,6 +158,7 @@ class AuthTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'rel="icon"', response.data)
         self.assertIn(b"EE%20icon.png", response.data)
+        self.assertIn(b"ed2.css?v=", response.data)
 
     def test_account_page_for_logged_in_user_shows_logout(self):
         self.register("tuomo", "AdminSafe12!")

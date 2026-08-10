@@ -801,12 +801,24 @@ class VocabularyTestCase(unittest.TestCase):
         response = self.client.get("/words")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Vocabulary Meanings", response.data)
+        self.assertIn(b"<h1>Vocabulary</h1>", response.data)
         self.assertIn(b"Browse By Letter", response.data)
         self.assertIn(b'href="/words/r"', response.data)
         self.assertIn(b"Vocabulary Collections", response.data)
         self.assertIn(b'href="/words/recalcitrant"', response.data)
         self.assertNotIn(b"Add word", response.data)
+
+    def test_public_words_page_lists_all_public_entries(self):
+        self.login_user()
+        for index in range(60):
+            self.create_indexable_entry_with_word(f"word{index}")
+        self.logout_user()
+
+        response = self.client.get("/words")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"60 words", response.data)
+        self.assertIn(b'href="/words/word59"', response.data)
 
     def test_public_letter_page_lists_indexable_words(self):
         self.login_user()

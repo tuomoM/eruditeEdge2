@@ -58,6 +58,7 @@ DATABASE = _default_database_path()
 SECURITY_REPORT_PATH = _default_security_report_path()
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
 APP_ENV = _environment()
+ASSET_VERSION = os.environ.get("ASSET_VERSION", "20260810-seo-hubs")
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_SECURE = _env_bool(

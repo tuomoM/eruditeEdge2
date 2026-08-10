@@ -202,7 +202,7 @@ def public_word_entry_has_context(entry, context):
 def public_word_index_metadata():
     return {
         "title": "Vocabulary Meanings and Definitions | eruditeEdge",
-        "heading": "Vocabulary Meanings",
+        "heading": "Vocabulary",
         "description": (
             "Browse eruditeEdge vocabulary meanings, definitions, examples, "
             "synonyms, and usage notes for advanced English learners."
@@ -467,7 +467,7 @@ def active_vocabulary_filters(filters, filter_choices=None):
 @vocabulary_bp.route("/words", methods=["GET"])
 def public_words():
     all_entries = vocabulary_service.list_entries()
-    entries = public_indexable_entries(all_entries)[:50]
+    entries = public_entries(all_entries)
     return render_template(
         "public_words.html",
         entries=entries,
@@ -475,7 +475,7 @@ def public_words():
         canonical_url=url_for("vocabulary.public_words", _external=True),
         letter_links=public_word_letter_links(all_entries),
         collection_links=public_word_collection_links(all_entries),
-        listing_description="Featured vocabulary pages ready for public indexing.",
+        listing_description="Public vocabulary pages available to browse.",
     )
 
 

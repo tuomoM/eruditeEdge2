@@ -10,7 +10,7 @@
     {% block structured_data %}{% endblock %}
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='EE icon.png') }}">
     <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='EE icon.png') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/ed2.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ed2.css', v=asset_version) }}">
 </head>
 <body>
     <header class="site-header">
