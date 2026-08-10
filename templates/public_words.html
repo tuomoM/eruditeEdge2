@@ -26,14 +26,16 @@
 {% if collection_links %}
     <section class="public-hub-section" aria-label="Vocabulary collections">
         <h2>Vocabulary Collections</h2>
-        <div class="collection-link-list">
+        <ul class="collection-link-list">
             {% for collection in collection_links %}
-                <a class="collection-link" href="{{ collection.path }}">
-                    <span>{{ collection.heading }}</span>
-                    <span>{{ collection.count }} words</span>
-                </a>
+                <li>
+                    <a class="collection-link" href="{{ collection.path }}">
+                        <span>{{ collection.heading }}</span>
+                        <span>{{ collection.count }} words</span>
+                    </a>
+                </li>
             {% endfor %}
-        </div>
+        </ul>
     </section>
 {% endif %}
 
