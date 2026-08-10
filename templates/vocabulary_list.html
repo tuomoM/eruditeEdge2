@@ -148,7 +148,10 @@
         <div class="entry-row" data-owned="{{ 'true' if entry.owned else 'false' }}">
             <div class="entry-main">
                 <div class="entry-heading">
-                    <a class="entry-word" href="/vocabulary/{{ entry.id }}/page">{{ entry.word }}</a>
+                    <a
+                        class="entry-word"
+                        href="{% if session.user_id %}/vocabulary/{{ entry.id }}/page{% else %}{{ entry.public_word_path }}{% endif %}"
+                    >{{ entry.word }}</a>
                     {% for context in entry.contexts %}
                         <span class="meta-chip">{{ context }}</span>
                     {% endfor %}

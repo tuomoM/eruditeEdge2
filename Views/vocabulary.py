@@ -38,9 +38,22 @@ def vocabulary_word_slug(word):
     return WORD_SLUG_PATTERN.sub("-", (word or "").lower()).strip("-")
 
 
+def public_word_path_for_entry(entry):
+    return url_for("vocabulary.public_word", word_slug=vocabulary_word_slug(entry["word"]))
+
+
+def canonical_word_url_for_entry(entry):
+    return url_for(
+        "vocabulary.public_word",
+        word_slug=vocabulary_word_slug(entry["word"]),
+        _external=True,
+    )
+
+
 def public_entry(entry):
     visible_entry = dict(entry)
     visible_entry["slug"] = vocabulary_word_slug(visible_entry["word"])
+    visible_entry["public_word_path"] = public_word_path_for_entry(visible_entry)
     visible_entry["linked_synonyms"] = [
         {
             **synonym,
@@ -129,6 +142,8 @@ def entries_with_ownership(entries, user_id):
     for entry in entries:
         owned_entry = dict(entry)
         owned_entry["owned"] = str(owned_entry.get("created_by")) == current_user_id
+        owned_entry["slug"] = vocabulary_word_slug(owned_entry["word"])
+        owned_entry["public_word_path"] = public_word_path_for_entry(owned_entry)
         owned_entry.pop("created_by", None)
         owned_entries.append(owned_entry)
     return owned_entries
@@ -321,11 +336,7 @@ def public_word(word_slug):
         "public_word.html",
         entries=entries,
         metadata=public_word_page_metadata(entries),
-        canonical_url=url_for(
-            "vocabulary.public_word",
-            word_slug=canonical_slug,
-            _external=True,
-        ),
+        canonical_url=canonical_word_url_for_entry(entries[0]),
     )
 
 
@@ -514,6 +525,8 @@ def vocabulary_page(vocabulary_id):
     return render_template(
         "vocabulary_detail.html",
         entry=entry,
+        canonical_url=canonical_word_url_for_entry(entry),
+        robots_content=None if session.get("user_id") else "noindex,follow",
         can_practice_usage=can_manage_vocabulary(),
     )
 

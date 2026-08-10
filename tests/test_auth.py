@@ -135,6 +135,7 @@ class AuthTestCase(unittest.TestCase):
         response = self.client.get("/account")
 
         self.assertEqual(response.status_code, 200)
+        self.assertIn(b'href="/words">Vocabulary</a>', response.data)
         self.assertIn(b"Log in or create an account", response.data)
         self.assertIn(b"Log in with Google", response.data)
         self.assertIn(b"Create account", response.data)
@@ -148,6 +149,7 @@ class AuthTestCase(unittest.TestCase):
         self.assertIn(b"AI vocabulary builder for advanced English learners", response.data)
         self.assertIn(b"cloze practice", response.data)
         self.assertIn(b"Anki decks", response.data)
+        self.assertIn(b'href="/words">Browse vocabulary</a>', response.data)
         self.assertIn(b'name="description"', response.data)
 
     def test_base_template_includes_browser_tab_icon(self):

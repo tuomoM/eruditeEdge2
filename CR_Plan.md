@@ -1,543 +1,459 @@
-# Major Change Plan: Versioned Vocabulary Categorization Maintenance
+# Search Engine Visibility Plan For Vocabulary Pages
 
 ## Goal
 
-Build an admin-only maintenance workflow that can reassess vocabulary categorization in batches without touching production values until review and explicit promotion.
-
-The first target is better domain, context, and frequency classification. The workflow must support stronger AI models than normal vocabulary generation, preserve production safety, and make it possible to compare, accept, reject, promote, and roll back proposed changes.
-
-## Core Principle
-
-Do not overwrite production vocabulary during AI generation.
-
-AI maintenance creates versioned proposals. Production values change only through an explicit promotion step that is validated, conflict-aware, auditable, and reversible.
-
-## Key Problems To Solve
-
-- Current domains and contexts may not categorize vocabulary well enough.
-- AI currently overuses broad categories and may mark rare words as common because they are common in model training data.
-- Some words need categorization by sense, not just spelling.
-- Admin needs a safe way to run stronger, slower, more expensive reassessment jobs in batches.
-- Production data must remain stable while experiments are reviewed.
-
-## Revised Architecture
-
-Use versioned maintenance runs rather than a full copied production database as the first implementation.
-
-Each run materializes a set of vocabulary ids and stores proposed values separately from production. A run acts like a candidate classification layer over the current vocabulary.
-
-This gives most of the benefit of a versioned vocabulary database while avoiding the complexity of forking all vocabulary, examples, sources, synonyms, training data, and user ownership.
-
-## Data Model
-
-### `vocabulary_maintenance_runs`
-
-Stores immutable run-level configuration and status.
-
-Suggested fields:
-
-- `id`
-- `name`
-- `status`
-  - `draft`
-  - `ready`
-  - `running`
-  - `completed`
-  - `partially_failed`
-  - `promoted`
-  - `rolled_back`
-  - `failed`
-- `selection_filter_json`
-- `selected_count`
-- `taxonomy_snapshot_json`
-- `frequency_rubric_snapshot_json`
-- `prompt_template_version`
-- `prompt_template_hash`
-- `response_schema_version`
-- `validator_version`
-- `ai_model`
-- `max_items`
-- `max_estimated_cost`
-- `estimated_input_tokens`
-- `estimated_output_tokens`
-- `actual_input_tokens`
-- `actual_output_tokens`
-- `actual_cost`
-- `created_by`
-- `created_at`
-- `started_at`
-- `completed_at`
-- `promoted_at`
-- `error_summary`
-
-Important: freeze run configuration at creation. Do not allow a run to silently continue under a different taxonomy, prompt, schema, or model.
-
-### `vocabulary_maintenance_items`
-
-Stores one materialized vocabulary entry in a run.
-
-Suggested fields:
-
-- `id`
-- `run_id`
-- `vocabulary_id`
-- `item_status`
-  - `pending`
-  - `claimed`
-  - `generated`
-  - `validated`
-  - `accepted`
-  - `rejected`
-  - `stale_conflict`
-  - `promoted`
-  - `failed`
-- `source_snapshot_json`
-- `source_snapshot_hash`
-- `source_updated_at`
-- `proposed_context`
-- `proposed_frequency_band`
-- `proposed_frequency_note`
-- `proposed_domains_json`
-  - ordered array matching production domain order
-  - first item is primary domain
-- `proposed_needs_attention`
-- `model_confidence`
-- `review_priority`
-- `rationale`
-- `alternate_domains_json`
-- `needs_sense_review`
-- `sense_note`
-- `raw_response_excerpt`
-- `parsed_response_json`
-- `validation_errors_json`
-- `failure_type`
-  - `api_transient`
-  - `api_permanent`
-  - `invalid_json`
-  - `validation_failed`
-  - `conflict`
-  - `budget_exceeded`
-- `attempts`
-- `claimed_by`
-- `claimed_at`
-- `lease_expires_at`
-- `generated_at`
-- `reviewed_by`
-- `reviewed_at`
-- `rejection_note`
-- `promoted_at`
+Make eruditeEdge vocabulary content discoverable, crawlable, indexable, and competitive for word-meaning searches such as `recalcitrant meaning`.
 
-### `vocabulary_maintenance_promotions`
+The product goal is:
 
-Stores promotion audit and rollback data.
+- Anonymous visitors can browse vocabulary and view word pages.
+- Search engines find canonical, content-rich `/words/<slug>` pages.
+- Logged-in-only features and AI usage remain protected.
+- Thin, duplicate, or internal app pages do not dilute the public vocabulary section.
 
-Suggested fields:
+## Adversarial Review Summary
 
-- `id`
-- `run_id`
-- `item_id`
-- `vocabulary_id`
-- `before_json`
-- `after_json`
-- `promoted_by`
-- `promoted_at`
-- `rolled_back_by`
-- `rolled_back_at`
+Two review lenses were applied:
 
-## Taxonomy Snapshot
+- Agent A: crawler and technical SEO. Routes, auth, status codes, robots, sitemap, canonical tags, metadata, rendering, and internal links.
+- Agent B: content and query intent. Duplicate/thin content, page structure, schema, word-meaning search fit, and off-site discovery.
 
-A maintenance run must store the taxonomy it used, not only a version label.
+Current positives:
 
-Snapshot should include:
+- Public word index exists at `/words` in `Views/vocabulary.py`.
+- Public word pages exist at `/words/<word_slug>` in `Views/vocabulary.py`.
+- `-meaning` URLs redirect to canonical word URLs in `Views/vocabulary.py`.
+- Sitemap exists at `/sitemap.xml` in `Views/vocabulary.py`.
+- Robots file exists at `/robots.txt` in `Views/vocabulary.py`.
+- Public word pages have custom title, description, canonical, and JSON-LD hooks in `templates/public_word.html`.
+- Anonymous `/vocabulary` and `/vocabulary/<id>/page` read access exists in `Views/vocabulary.py`.
+- AI write/use routes remain auth and CSRF protected in `Views/vocabulary.py`.
 
-- allowed domains in order
-- max domain count
-- domain definitions
-- inclusion rules
-- exclusion rules
-- examples
-- counterexamples
-- tie-breakers
+## Reference Baseline
 
-Primary domain definition:
+This plan follows current Google/Search Central guidance:
 
-> The domain in which an educated learner is most likely to need contextual help recognizing this word today.
+- Use unique, descriptive title text and useful snippets/meta descriptions.
+- Make links crawlable with normal `<a href="...">` links.
+- Make canonical URLs explicit and keep sitemap URLs aligned with canonical URLs.
+- Keep important content available in the initial HTML where possible.
+- Submit and monitor the sitemap in Google Search Console.
+- Use structured data only when it truthfully represents visible page content.
+- Prioritize helpful, original, people-first content over pages created only to manipulate rankings.
 
-Secondary domains:
+Primary references:
 
-> Meaningful alternate learning contexts, not every possible association.
+- Google SEO Starter Guide: `https://developers.google.com/search/docs/fundamentals/seo-starter-guide`
+- Google helpful content guidance: `https://developers.google.com/search/docs/fundamentals/creating-helpful-content`
+- Google sitemap guidance: `https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap`
+- Google canonical guidance: `https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls`
+- Google link crawlability guidance: `https://developers.google.com/search/docs/crawling-indexing/links-crawlable`
+- Google structured data guidelines: `https://developers.google.com/search/docs/appearance/structured-data/sd-policies`
+- Schema.org `DefinedTerm`: `https://schema.org/DefinedTerm`
 
-## Frequency Rubric
+## Priority Findings
 
-The model must not classify frequency by model familiarity or training-data exposure.
+### P0: Main Anonymous Vocabulary UI Links To ID Pages Instead Of Canonical Word Pages
 
-Frequency should estimate educated-reader encounter likelihood.
+Evidence:
 
-Suggested bands:
+- `/vocabulary` is now public in `Views/vocabulary.py`.
+- The public app list links to `/vocabulary/{{ entry.id }}/page` in `templates/vocabulary_list.html`.
+- The ID detail page has no canonical block or SEO metadata in `templates/vocabulary_detail.html`.
+- The canonical public SEO route is `/words/<slug>` in `Views/vocabulary.py`.
 
-- `common`: ordinary adult-reader vocabulary
-- `occasional`: known to many educated readers, but not everyday
-- `specialized`: common inside a domain, uncommon generally
-- `literary`: encountered mainly in literature or serious prose
-- `rare`: low encounter likelihood even for educated readers
-- `archaic_or_obsolete`: primarily historical, obsolete, or archaic use
+Risk:
 
-The AI must provide a short frequency rationale naming the likely encounter context, such as newspapers, serious nonfiction, classic literature, legal writing, medical writing, theology, or technical manuals.
+Search engines can discover and index internal ID pages before or alongside `/words/<slug>`. This splits ranking signals, creates duplicate content, and makes search snippets worse because ID pages use the default site metadata from `templates/base.html:6`.
 
-Examples:
+Remediation:
 
-- `awning` should not automatically be `common`; it may be `occasional`.
-- `loam` should not automatically be `common`; it may be `specialized` or `literary` depending on intended learner context.
+- For anonymous users, link vocabulary list rows to `/words/<slug>` instead of `/vocabulary/<id>/page`.
+- For signed-in users, either keep current app links or also prefer `/words/<slug>` with an edit action shown separately.
+- Add a canonical tag to `/vocabulary/<id>/page` pointing to `/words/<slug>`.
+- Consider adding `noindex,follow` on `/vocabulary/<id>/page` for anonymous responses once `/words/<slug>` is fully feature-complete.
 
-## Semantic Guardrails
+Tests:
 
-Structured JSON validation is necessary but not enough.
+- Anonymous `/vocabulary` contains `href="/words/recalcitrant"` and not the ID detail link for the entry.
+- `/vocabulary/<id>/page` includes canonical `/words/recalcitrant`.
+- `/words/recalcitrant` remains 200 and canonical to itself.
 
-Add semantic validators:
+### P0: Landing/Header Does Not Link To The Canonical `/words` Index
 
-- proposed domains must be 1 to max domain count
-- domains must be allowed values
-- domains must be unique and ordered
-- primary domain must be present
-- context must not be vague filler
-- context length must be bounded
-- frequency band must be allowed
-- frequency note must be bounded
-- rationale is required
-- obvious all-default outputs are flagged
-- changed primary domain increases review priority
-- low confidence increases review priority
-- multiple plausible domains increases review priority
-- suspected polysemy sets `needs_sense_review`
+Evidence:
 
-Store `model_confidence`, but do not trust it as review priority.
+- Anonymous nav links to `/vocabulary` in `templates/base.html`.
+- Landing page is rendered for anonymous users at `app.py:40`, but current review found no direct `/words` crawl path in the main anonymous navigation.
+- `/words` exists and has canonical metadata in `templates/public_words.html`.
 
-Compute separate `review_priority` from risk signals.
+Risk:
 
-## Sense Handling
+The canonical SEO section is discoverable through sitemap, but weaker through normal internal navigation. Search engines use internal links to discover, prioritize, and understand site architecture.
 
-Categorization belongs to a word sense, not merely a spelling.
+Remediation:
 
-The model should be allowed to flag:
+- Change anonymous nav from `Vocabulary` -> `/vocabulary` to `Words` or `Vocabulary` -> `/words`.
+- Add a visible landing-page link to `/words`.
+- Add a footer or secondary link from `/words` back to `/vocabulary` only if the app browsing UI remains useful.
 
-- `needs_sense_review`
-- `sense_note`
-- possible alternate senses
+Tests:
 
-If a vocabulary entry appears to represent multiple learner-relevant senses, the maintenance item should not be auto-promoted.
+- Anonymous `/` contains `href="/words"`.
+- Anonymous base nav contains `href="/words"`.
+- Logged-in nav can keep `/vocabulary` for app workflow.
 
-Examples:
+### P1: `/words` Has No Pagination Or Alphabetical Crawl Hubs
 
-- `hobble` as noun: riding restraint
-- `hobble` as verb: impaired movement
-- `canon` as church law, accepted literature, music form, or standard
+Evidence:
 
-## AI Model Configuration
+- `/words` renders every entry from `vocabulary_service.list_entries()` in `Views/vocabulary.py`.
+- Repository list ordering is by word, part of speech, context in `Repositories/vocabulary_repository.py`.
+- Template lists all entries in one page at `templates/public_words.html`.
 
-Add a separate maintenance model setting:
+Risk:
 
-```bash
-OPENAI_MAINTENANCE_MODEL=gpt-5.1
-```
+As the vocabulary grows, `/words` becomes too large and shallow. Search engines may crawl less efficiently, and users get a heavy page. Large all-entry pages can also look low quality.
 
-Fallback may be `OPENAI_MODEL`, but the fallback must be explicit in command output and admin status.
+Remediation:
 
-Maintenance commands should print:
+- Add `/words/a`, `/words/b`, etc. alphabetical hubs.
+- Add paginated `/words?page=2` or preferably crawlable letter pages.
+- Keep `/words` as a concise hub linking to letter pages and a curated set of important words.
+- Include letter pages in sitemap.
 
-- app environment
-- database path
-- selected item count
-- AI model
-- prompt version
-- estimated cost
-- dry-run or production mode
+Tests:
 
-In production, require an explicit confirmation flag for expensive or promotive actions.
+- `/words/r` lists `recalcitrant`.
+- `/words` links to `/words/r`.
+- Sitemap includes `/words/r`.
 
-## Batch Processing
+### P1: Sitemap Includes Every Entry Without Content Quality Gating
 
-Commands should be resumable and small.
+Evidence:
 
-Suggested commands:
+- Sitemap loops over all `vocabulary_service.list_entries()` in `Views/vocabulary.py`.
+- Public word pages render entries even if they have only a definition and no examples or synonyms in `templates/public_word.html`.
+- `needs_attention` exists in the model and is selected in `Repositories/vocabulary_repository.py`, but sitemap does not filter by it.
 
-```bash
-flask --app app create-vocabulary-maintenance-run \
-  --name domain-frequency-v2 \
-  --scope all \
-  --max-items 500 \
-  --max-estimated-cost 10.00 \
-  --dry-run
-```
+Risk:
 
-```bash
-flask --app app process-vocabulary-maintenance-run RUN_ID --limit 25
-```
+Indexing thin, uncertain, duplicate, or maintenance-needed entries can reduce perceived quality of the vocabulary section. A word-meaning page should answer the query immediately and substantively.
 
-```bash
-flask --app app promote-vocabulary-maintenance-run RUN_ID --dry-run
-```
+Remediation:
 
-```bash
-flask --app app rollback-vocabulary-maintenance-run RUN_ID
-```
+- Define `is_public_indexable_entry(entry)`:
+  - has word, definition, and valid part of speech
+  - has at least one example or at least two synonyms
+  - `needs_attention` is empty
+  - confidence is not obsolete if confidence data is present
+- Use this gate in sitemap and optionally add `<meta name="robots" content="noindex,follow">` to public pages that do not pass.
+- Keep non-indexable pages accessible to users if desired, but do not push them to search engines.
 
-Possible scopes:
+Tests:
 
-- all vocabulary
-- missing domains
-- selected domain
-- selected context
-- selected frequency band
-- entries created after date
-- explicit vocabulary ids
-- source name/author
+- Thin entry is viewable but omitted from sitemap.
+- Thin entry includes `noindex,follow`.
+- Complete entry is included in sitemap and has no noindex tag.
 
-At run creation, materialize the exact vocabulary ids into `vocabulary_maintenance_items`.
+### P1: Word Pages Need Stronger Search-Intent Content Above The Fold
 
-## Locking And Idempotency
+Evidence:
 
-Prevent concurrent processing of the same run.
+- Metadata is generated in `Views/vocabulary.py`.
+- Page heading is `{{ Word }} Meaning` in `templates/public_word.html`.
+- Definition section starts in `templates/public_word.html`.
+- There is no direct first-sentence answer pattern like `Recalcitrant means ...` before the first section heading.
 
-Use a DB-backed lease:
+Risk:
 
-- `claimed_by`
-- `claimed_at`
-- `lease_expires_at`
+For queries like `recalcitrant meaning`, the page should immediately provide the answer in a snippet-friendly sentence. The current page is understandable, but not maximally optimized for definition snippets.
 
-Processing flow:
+Remediation:
 
-1. Claim pending item in a short transaction.
-2. Release DB transaction.
-3. Call AI.
-4. Save raw response excerpt and parsed proposal in a short transaction.
-5. Validate proposal.
-6. Mark item `validated` or `failed`.
+- Add an answer paragraph directly under the H1:
+  - `Recalcitrant means stubbornly resistant to authority, control, or guidance.`
+- Use consistent section names:
+  - `Recalcitrant definition`
+  - `How to use recalcitrant in a sentence`
+  - `Recalcitrant synonyms`
+  - `Is recalcitrant a GRE word?` when applicable
+- For multiple senses, show one compact sense list near the top.
 
-AI calls must not happen inside DB transactions.
+Tests:
 
-Promotion should be per-item transactional.
+- `/words/recalcitrant` contains `Recalcitrant means`.
+- Examples section heading includes the word.
+- Synonyms section heading includes the word.
 
-## Cost Controls
+### P1: Structured Data Is Too Minimal
 
-Before creating or processing a run:
+Evidence:
 
-- estimate item count
-- estimate token usage
-- estimate cost
-- require `--max-estimated-cost`
-- stop when actual or estimated budget is exceeded
+- JSON-LD is emitted in `templates/public_word.html`.
+- Structured data contains only `@context`, `@type`, `name`, and `description` in `Views/vocabulary.py`.
 
-Persist actual usage when API returns it.
+Risk:
 
-Failure should be fail-closed.
+Minimal schema is acceptable, but it leaves helpful signals unused. Search engines can better understand a definition page if schema aligns with the visible content and canonical URL.
 
-## Promotion Rules
+Remediation:
 
-Promotion must be explicit and conflict-aware.
+- Expand JSON-LD to include:
+  - `@type: DefinedTerm`
+  - `name`
+  - `description`
+  - `url`
+  - `inDefinedTermSet` for eruditeEdge vocabulary
+  - `termCode` or additional fields only if semantically correct
+- Add a surrounding `WebPage` object if needed:
+  - page name
+  - description
+  - mainEntity as the `DefinedTerm`
+- Keep JSON-LD truthful and matched to visible content.
 
-Before promotion:
+Tests:
 
-- item must be accepted or otherwise eligible
-- production snapshot hash must still match
-- production `updated_at` must not conflict
-- proposed values must still validate against current production rules
+- JSON-LD parses as valid JSON.
+- JSON-LD includes canonical URL and word definition.
 
-If production has changed since snapshot:
+### P2: Canonical URL Generation Depends On Request Host Configuration
 
-- mark item `stale_conflict`
-- do not promote
-- require manual review
+Evidence:
 
-Promotion updates only intended fields:
+- Sitemap and canonical URLs use `url_for(..., _external=True)` in `Views/vocabulary.py`.
+- No `SERVER_NAME`, `PREFERRED_URL_SCHEME`, `BASE_URL`, or proxy handling was found in `config.py`.
+- App creation has no `ProxyFix` or external URL configuration in `app.py`.
 
-- ordered domains
-- context
-- frequency band
-- frequency note
+Risk:
 
-It must preserve:
+Behind a production proxy, canonical and sitemap URLs may be generated with the wrong scheme or host unless the platform forwards headers in a way Flask trusts. Wrong canonical hosts can badly hurt indexing.
 
-- word
-- definition
-- examples
-- cloze sentences
-- sources
-- synonyms
-- created_by
+Remediation:
 
-Promotion must write an audit row with before/after JSON.
+- Add explicit `PUBLIC_BASE_URL` config.
+- Build canonical and sitemap URLs from `PUBLIC_BASE_URL` rather than request host.
+- Alternatively configure `ProxyFix`, `PREFERRED_URL_SCHEME`, and `SERVER_NAME` carefully for the deployment environment.
+- Add a production smoke check that `/sitemap.xml` contains the production domain and `https`.
 
-## Rollback
+Tests:
 
-Provide rollback by run or item.
+- With `PUBLIC_BASE_URL=https://eruditeedge.example`, sitemap uses that host.
+- Word canonical uses that host even under a localhost test request.
 
-Rollback should:
+### P2: Public Word Slugs Need Collision And Change Strategy
 
-- read `vocabulary_maintenance_promotions`
-- restore before snapshot
-- only proceed if the target entry still exists
-- optionally detect if the entry changed after promotion and mark rollback conflict
+Evidence:
 
-## Admin UI
+- Slug generation lowercases and replaces non-alphanumerics in `Views/vocabulary.py`.
+- Slug lookup scans all entries and matches slug equality in `Views/vocabulary.py`.
+- Sitemap deduplicates by slug and keeps only one URL in `Views/vocabulary.py`.
+- Multiple entries for the same word are rendered on one page in `templates/public_word.html`.
 
-Implement after CLI flow is stable.
+Risk:
 
-Pages:
+This works for same-word multiple senses, but collisions such as punctuation variants can merge unrelated entries. If a word changes spelling, old URLs 404 unless redirects are added.
 
-- run list
-- run detail summary
-- item review list
-- item diff page
-- promotion preview
+Remediation:
 
-Run detail should show:
+- Keep one canonical page per spelling when senses are genuinely related.
+- Add slug collision tests for punctuation, phrases, and duplicate senses.
+- Consider storing a stable `public_slug` in the database later if URLs become important enough to preserve across edits.
+- Add manual redirect support for changed slugs if production content changes.
 
-- status counts
-- selected item count
-- processed count
-- failed count
-- conflict count
-- estimated and actual cost
-- model and prompt version
-- taxonomy version/snapshot label
+Tests:
 
-Item review should show:
+- `pro forma` resolves to `/words/pro-forma`.
+- Duplicate senses render on one canonical page.
+- Non-canonical casing or punctuation redirects correctly.
 
-- current vs proposed domains
-- current vs proposed context
-- current vs proposed frequency
-- rationale collapsed by default
-- alternate plausible domains
-- review priority
-- validation errors
-- accept/reject controls
+### P2: Public List And Public Word Pages Have No Social/Open Graph Metadata
 
-Promotion preview should show aggregate deltas:
+Evidence:
 
-- domain distribution before/after
-- primary domain changes
-- frequency distribution before/after
-- top changed domains
-- low-confidence count
-- `needs_attention` count
-- conflict count
+- `templates/base.html` provides meta description and title blocks.
+- No Open Graph or Twitter metadata blocks were found.
 
-Bulk promotion should exclude:
+Risk:
 
-- conflicts
-- failed validation
-- rejected items
-- low-confidence or high-review-priority items
-- items with `needs_attention`
+This is not a direct ranking factor, but better previews improve sharing, click-through, and off-site discovery.
 
-Large bulk promotions should require typed confirmation.
+Remediation:
 
-## Evaluation Set
+- Add base template blocks for `og:title`, `og:description`, `og:url`, `og:type`.
+- Populate word pages with word-specific values.
+- Use a simple static brand image unless a better asset is created.
 
-Before trusting a new taxonomy/prompt/model, create a locked challenge set.
+Tests:
 
-Include:
+- `/words/recalcitrant` includes word-specific `og:title` and `og:url`.
 
-- polysemous words
-- archaic words
-- technical words
-- religious vocabulary
-- philosophical vocabulary
-- legal vocabulary
-- literary vocabulary
-- false friends
-- etymologically misleading words
-- words whose modern use differs from historical origin
+## Codebase Action Plan
 
-Use this set to compare prompt/model versions before broad runs.
+### Phase 1: Consolidate Canonical Crawl Paths
 
-## Railway Operations
+1. Add `canonical_word_url_for_entry(entry)` helper.
+2. Add slug to entries used by `/vocabulary`.
+3. Change anonymous `/vocabulary` links to `/words/<slug>`.
+4. Add canonical tag to `/vocabulary/<id>/page` pointing to `/words/<slug>`.
+5. Add optional `robots` block support in `base.html`.
+6. Decide whether anonymous ID detail pages should be `noindex,follow`.
 
-Expected production flow:
+Acceptance checks:
 
-1. Deploy code.
-2. Run migrations.
-3. Confirm database path/volume.
-4. Create maintenance run with dry-run first.
-5. Create real run with budget and scope.
-6. Process in small batches:
+- Anonymous users naturally navigate to `/words/<slug>`.
+- ID pages no longer compete with canonical word pages.
+- AI/practice buttons remain absent for anonymous users.
 
-```bash
-flask --app app process-vocabulary-maintenance-run RUN_ID --limit 25
-```
+### Phase 2: Improve Word Page Content For Meaning Queries
 
-7. Review admin dashboard.
-8. Promote eligible items with dry-run first.
-9. Promote real run/items with production confirmation.
-10. Monitor conflicts and failures.
+1. Add a direct answer sentence below H1.
+2. Include the word in section headings.
+3. Add part-of-speech specific copy where natural:
+   - `Recalcitrant is an adjective.`
+4. Include GRE list/relevance when present.
+5. Render cloze sentences only if they are useful and do not expose internal training-only content.
+6. Add related-word links from linked synonyms.
 
-Never require one giant long-running command.
+Acceptance checks:
 
-## Suggested Implementation Phases
+- A word page answers `<word> meaning` in the first visible paragraph.
+- Page remains readable without login.
+- No AI interaction is available anonymously.
 
-### Phase 1: Foundations
+### Phase 3: Add Index Quality Controls
 
-- Add migration for maintenance run/item/promotion tables.
-- Add config for `OPENAI_MAINTENANCE_MODEL`.
-- Add taxonomy snapshot and frequency rubric constants.
-- Add repository/service for run creation.
-- Add CLI dry-run creation command.
+1. Implement `is_public_indexable_entry(entry)`.
+2. Use it in sitemap.
+3. Add `noindex,follow` to non-indexable public word pages.
+4. Add admin/reporting view or CLI command for entries excluded from indexing.
+5. Fix excluded entries by adding examples, synonyms, and confidence cleanup.
 
-### Phase 2: Batch AI Processing
+Acceptance checks:
 
-- Add AI reassessment method with strict schema.
-- Add item claiming and leasing.
-- Add process-batch command.
-- Add validation and failure classification.
-- Add token/cost tracking where available.
+- Thin pages are not in sitemap.
+- High-quality pages are in sitemap.
+- The number of indexed pages is intentional, not accidental.
 
-### Phase 3: Review
+### Phase 4: Build Crawl Hubs
 
-- Add admin run list and run detail.
-- Add item diff/review UI.
-- Add accept/reject item actions.
-- Add aggregate distribution comparison.
+1. Add `/words/<letter>` alphabetical pages.
+2. Change `/words` into a hub page linking to letters and featured collections.
+3. Add collection pages for durable query classes:
+   - `/words/gre-vocabulary`
+   - `/words/rare-words`
+   - `/words/formal-words`
+   - `/words/literary-words`
+4. Include hubs in sitemap.
+5. Link from word pages back to relevant hubs.
 
-### Phase 4: Promotion
+Acceptance checks:
 
-- Add promotion service.
-- Add optimistic concurrency checks.
-- Add promotion audit rows.
-- Add dry-run promotion command.
-- Add real promotion command with confirmation.
+- No crawl path requires search forms or JavaScript.
+- Every indexable word is reachable through static links.
 
-### Phase 5: Rollback And Refinement
+### Phase 5: Harden Production URL Generation
 
-- Add rollback command.
-- Add rollback UI if needed.
-- Build evaluation set.
-- Iterate taxonomy and frequency rubric.
+1. Add `PUBLIC_BASE_URL`.
+2. Generate sitemap, canonical, robots sitemap URL, and Open Graph URL from it.
+3. Add tests for production absolute URLs.
+4. Add deployment smoke check:
+   - `/robots.txt`
+   - `/sitemap.xml`
+   - one known `/words/<slug>` page
 
-## Non-Goals For First Version
+Acceptance checks:
 
-- Do not fork the entire production vocabulary database.
-- Do not update production during AI generation.
-- Do not run large maintenance jobs from web request handlers.
-- Do not allow automatic promotion without admin review.
-- Do not treat AI confidence as correctness.
+- Production sitemap uses `https://` and the real domain.
+- No canonical URL points to localhost, Railway preview host, or internal host.
 
-## Open Questions
+### Phase 6: Add SEO Regression Tests
 
-- Should context become a controlled vocabulary, or remain free text?
-- Should frequency bands replace current values or extend them?
-- Should `specialized` and `literary` be separate from frequency, or part of frequency?
-- Should maintenance support comparing two AI models on the same run?
-- How large should the locked evaluation set be before first real promotion?
-- How much raw AI response should be retained for audit without storing too much user-provided text?
+Add tests for:
 
-## Success Criteria
+- Anonymous nav links to `/words`.
+- Landing page links to `/words`.
+- Anonymous `/vocabulary` links to `/words/<slug>`.
+- ID detail page canonical points to `/words/<slug>`.
+- `/words/<slug>` title contains `<Word> Meaning`.
+- `/words/<slug>` meta description contains the word.
+- `/words/<slug>` JSON-LD is valid and includes URL.
+- `/words/<slug>-meaning` 301 redirects.
+- Sitemap omits non-indexable entries.
+- Robots points to production sitemap when `PUBLIC_BASE_URL` is configured.
 
-- Admin can create a maintenance run without changing production.
-- Run materializes exact selected vocabulary ids.
-- Batch processing can be stopped and resumed.
-- Proposals are validated against taxonomy and frequency rubrics.
-- Admin can compare current vs proposed values.
-- Promotion is conflict-aware and auditable.
-- Rollback is possible for promoted items.
-- Stronger maintenance model can be configured independently from normal AI generation.
-- Aggregate statistics show whether the new categorization improves domain and frequency distribution.
+## Outside-Code Action Plan
+
+### Search Console And Indexing
+
+1. Verify the production domain in Google Search Console.
+2. Submit `/sitemap.xml`.
+3. Inspect a few representative pages:
+   - `/words/recalcitrant`
+   - `/words/contumacious`
+   - `/words/pro-forma`
+4. Use URL Inspection after each major release to confirm:
+   - page is crawlable
+   - canonical selected by Google matches `/words/<slug>`
+   - page is indexable
+   - rendered HTML includes definition/examples
+
+### Analytics
+
+1. Add privacy-conscious analytics or server log review for:
+   - organic landing pages
+   - queries where Search Console shows impressions
+   - pages crawled but not indexed
+2. Track search queries containing:
+   - `<word> meaning`
+   - `<word> definition`
+   - `<word> synonym`
+   - `GRE <word>`
+
+### Content Operations
+
+1. Pick 50 to 100 priority words first, including `recalcitrant`.
+2. Ensure each priority page has:
+   - concise definition
+   - at least two natural examples
+   - synonyms
+   - part of speech
+   - frequency/use note
+   - GRE relevance when applicable
+3. Review pages manually for snippet quality.
+4. Avoid publishing/indexing entries marked `needs_attention`.
+
+### Authority And Links
+
+1. Add public links from any personal/project pages to the vocabulary hub.
+2. Create a few durable editorial pages:
+   - `Advanced English vocabulary list`
+   - `GRE vocabulary meanings`
+   - `Rare English words with examples`
+3. Link those editorial pages to individual word pages.
+4. Share useful word collections where appropriate, without spam.
+
+### Competitive Reality
+
+Ranking for `recalcitrant meaning` is competitive. The realistic path is:
+
+1. Get pages indexed correctly.
+2. Win long-tail searches first:
+   - `recalcitrant meaning with examples`
+   - `recalcitrant GRE meaning`
+   - `recalcitrant synonyms and usage`
+3. Improve click-through and content quality over time.
+4. Build enough internal and external authority for shorter head terms.
+
+## First Implementation Batch
+
+Recommended next code batch:
+
+1. Anonymous nav and landing link to `/words`.
+2. Anonymous `/vocabulary` links to `/words/<slug>`.
+3. Canonical/noindex handling for `/vocabulary/<id>/page`.
+4. Direct answer sentence and stronger headings on `/words/<slug>`.
+5. `PUBLIC_BASE_URL` for canonical/sitemap/robots.
+6. SEO regression tests for those changes.
+
+This batch should not require a database migration.

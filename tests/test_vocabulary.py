@@ -782,10 +782,20 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"recalcitrant", response.data)
-        self.assertIn(f'href="/vocabulary/{vocabulary_id}/page"'.encode(), response.data)
+        self.assertIn(b'href="/words/recalcitrant"', response.data)
+        self.assertNotIn(f'href="/vocabulary/{vocabulary_id}/page"'.encode(), response.data)
         self.assertNotIn(b"Add word", response.data)
         self.assertNotIn(b"Edit", response.data)
         self.assertNotIn(b'data-filter-toggle', response.data)
+
+    def test_vocabulary_page_keeps_app_detail_links_for_logged_in_user(self):
+        self.login_user()
+        vocabulary_id = self.create_entry_with_word("recalcitrant").get_json()["id"]
+
+        response = self.client.get("/vocabulary")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(f'href="/vocabulary/{vocabulary_id}/page"'.encode(), response.data)
 
     def test_create_vocabulary_persists_up_to_four_domains_in_order(self):
         self.login_user()
@@ -1680,6 +1690,33 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertNotIn(b"Practice usage", response.data)
         self.assertNotIn(b'id="practice-sentence"', response.data)
         self.assertNotIn(b"Edit", response.data)
+
+    def test_vocabulary_detail_page_for_anonymous_user_canonicalizes_to_public_word(self):
+        self.login_user()
+        vocabulary_id = self.create_entry_with_word("recalcitrant").get_json()["id"]
+        self.logout_user()
+
+        response = self.client.get(f"/vocabulary/{vocabulary_id}/page")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            b'<link rel="canonical" href="http://localhost/words/recalcitrant">',
+            response.data,
+        )
+        self.assertIn(b'<meta name="robots" content="noindex,follow">', response.data)
+
+    def test_vocabulary_detail_page_for_logged_in_user_has_canonical_without_noindex(self):
+        self.login_user()
+        vocabulary_id = self.create_entry_with_word("recalcitrant").get_json()["id"]
+
+        response = self.client.get(f"/vocabulary/{vocabulary_id}/page")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            b'<link rel="canonical" href="http://localhost/words/recalcitrant">',
+            response.data,
+        )
+        self.assertNotIn(b'<meta name="robots" content="noindex,follow">', response.data)
 
     def test_view_vocabulary_does_not_allow_sql_injection(self):
         self.login_user()
