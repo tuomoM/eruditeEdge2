@@ -724,7 +724,7 @@ class VocabularyTestCase(unittest.TestCase):
         response = self.client.get("/words/recalcitrant")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Recalcitrant Meaning", response.data)
+        self.assertIn(b'<h1 class="word-title">Recalcitrant</h1>', response.data)
         self.assertIn(b"Stubbornly resistant to authority or guidance.", response.data)
         self.assertIn(b"recalcitrant student", response.data)
         self.assertIn(b"Recalcitrant Meaning, Definition, Synonyms, and Examples", response.data)

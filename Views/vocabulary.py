@@ -91,7 +91,7 @@ def public_word_page_metadata(entries):
             f"Learn the meaning of {word} with a clear definition, examples, "
             "synonyms, and usage notes."
         ),
-        "heading": f"{word_title} Meaning",
+        "heading": word_title,
         "structured_data": {
             "@context": "https://schema.org",
             "@type": "DefinedTerm",
