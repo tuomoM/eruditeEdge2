@@ -13,6 +13,7 @@
 <div class="page-header">
     <div>
         <h1 class="word-title">{{ metadata.heading }}</h1>
+        <p class="entry-definition">{{ metadata.answer_sentence }}</p>
         {% for entry in entries %}
             {% for context in entry.contexts %}
                 <span class="meta-chip">{{ context }}</span>
@@ -24,22 +25,40 @@
             {% if entry.gre_rating %}
                 <span class="meta-chip">GRE: {{ entry.gre_rating }}</span>
             {% endif %}
+            {% for word_list in entry.word_lists %}
+                <span class="meta-chip">{{ word_list.category }}: {{ word_list.name }}</span>
+            {% endfor %}
         {% endfor %}
     </div>
 </div>
 
 {% for entry in entries %}
     <section class="detail-section">
-        <h2>{{ entry.word }} Definition</h2>
+        <h2>{{ metadata.word_title }} Definition</h2>
         <p>{{ entry.definition }}</p>
         {% if entry.frequency_note %}
             <p class="muted">{{ entry.frequency_note }}</p>
+        {% endif %}
+        {% if entry.part_of_speech_label %}
+            <p>{{ metadata.word_title }} is {{ entry.part_of_speech_label }}.</p>
+        {% endif %}
+        {% if entry.gre_rating %}
+            <p>{{ metadata.word_title }} has {{ entry.gre_rating }} GRE relevance.</p>
+        {% endif %}
+        {% if entry.word_lists %}
+            <p>
+                {{ metadata.word_title }} appears in
+                {% for word_list in entry.word_lists %}
+                    {{ word_list.name }}{% if not loop.last %}, {% endif %}
+                {% endfor %}
+                vocabulary.
+            </p>
         {% endif %}
     </section>
 
     {% if entry.synonyms %}
         <section class="detail-section">
-            <h2>Synonyms</h2>
+            <h2>{{ metadata.word_title }} Synonyms</h2>
             <p>
                 {% for synonym in entry.linked_synonyms %}
                     {% if synonym.linked_slug %}
@@ -55,7 +74,7 @@
 
     {% if entry.examples %}
         <section class="detail-section">
-            <h2>Examples</h2>
+            <h2>How To Use {{ metadata.word_title }} In A Sentence</h2>
             <ol>
                 {% for example in entry.examples %}
                     <li>{{ example }}</li>

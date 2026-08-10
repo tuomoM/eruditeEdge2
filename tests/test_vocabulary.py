@@ -725,12 +725,55 @@ class VocabularyTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'<h1 class="word-title">Recalcitrant</h1>', response.data)
+        self.assertIn(
+            b"Recalcitrant means stubbornly resistant to authority or guidance.",
+            response.data,
+        )
+        self.assertIn(b"Recalcitrant Definition", response.data)
+        self.assertIn(b"Recalcitrant Synonyms", response.data)
+        self.assertIn(b"How To Use Recalcitrant In A Sentence", response.data)
         self.assertIn(b"Stubbornly resistant to authority or guidance.", response.data)
         self.assertIn(b"recalcitrant student", response.data)
         self.assertIn(b"Recalcitrant Meaning, Definition, Synonyms, and Examples", response.data)
         self.assertIn(b'rel="canonical"', response.data)
         self.assertIn(b'application/ld+json', response.data)
         self.assertNotIn(b"Edit", response.data)
+        self.assertNotIn(b"Practice usage", response.data)
+
+    def test_public_word_page_shows_gre_list_context(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["word"] = "abound"
+        data["definition"] = "To exist in large numbers."
+        data["examples"] = ["Wildflowers abound in the meadow."]
+        self.create_entry(data)
+        self.logout_user()
+
+        response = self.client.get("/words/abound")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"GRE: GregMat", response.data)
+        self.assertIn(b"Abound appears in", response.data)
+        self.assertIn(b"GregMat", response.data)
+
+    def test_public_word_page_uses_readable_part_of_speech_copy(self):
+        self.login_user()
+        data = self.valid_entry()
+        data["word"] = "recalcitrant"
+        data["definition"] = "Stubbornly resistant to authority or guidance."
+        data["part_of_speech"] = "adjective"
+        self.create_entry(data)
+        self.logout_user()
+
+        response = self.client.get("/words/recalcitrant")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            b"Recalcitrant is an adjective that means stubbornly resistant to authority or guidance.",
+            response.data,
+        )
+        self.assertIn(b"Recalcitrant is an adjective.", response.data)
+        self.assertNotIn(b"Recalcitrant is a adjective", response.data)
 
     def test_public_word_meaning_url_redirects_to_canonical_word_page(self):
         self.login_user()

@@ -50,10 +50,29 @@ def canonical_word_url_for_entry(entry):
     )
 
 
+def part_of_speech_with_article(part_of_speech):
+    if not part_of_speech or part_of_speech == "other":
+        return None
+    article = "an" if part_of_speech[0].lower() in "aeiou" else "a"
+    return f"{article} {part_of_speech}"
+
+
+def sentence_case_fragment(text):
+    text = (text or "").strip()
+    if not text:
+        return ""
+    if text[-1] not in ".!?":
+        text = f"{text}."
+    return text[:1].lower() + text[1:]
+
+
 def public_entry(entry):
     visible_entry = dict(entry)
     visible_entry["slug"] = vocabulary_word_slug(visible_entry["word"])
     visible_entry["public_word_path"] = public_word_path_for_entry(visible_entry)
+    visible_entry["part_of_speech_label"] = part_of_speech_with_article(
+        visible_entry.get("part_of_speech")
+    )
     visible_entry["linked_synonyms"] = [
         {
             **synonym,
@@ -85,6 +104,12 @@ def public_word_page_metadata(entries):
     word = entries[0]["word"]
     word_title = word[:1].upper() + word[1:]
     first_definition = entries[0]["definition"]
+    first_entry = entries[0]
+    definition_fragment = sentence_case_fragment(first_definition)
+    part_of_speech_label = part_of_speech_with_article(first_entry.get("part_of_speech"))
+    answer_sentence = f"{word_title} means {definition_fragment}"
+    if part_of_speech_label:
+        answer_sentence = f"{word_title} is {part_of_speech_label} that means {definition_fragment}"
     return {
         "title": f"{word_title} Meaning, Definition, Synonyms, and Examples | eruditeEdge",
         "description": (
@@ -92,6 +117,8 @@ def public_word_page_metadata(entries):
             "synonyms, and usage notes."
         ),
         "heading": word_title,
+        "answer_sentence": answer_sentence,
+        "word_title": word_title,
         "structured_data": {
             "@context": "https://schema.org",
             "@type": "DefinedTerm",
