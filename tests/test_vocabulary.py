@@ -748,6 +748,40 @@ class VocabularyTestCase(unittest.TestCase):
         self.assertNotIn(b"Edit", response.data)
         self.assertNotIn(b"Practice usage", response.data)
 
+    def test_public_word_page_has_search_metadata_and_valid_json_ld(self):
+        self.app.config["PUBLIC_BASE_URL"] = "https://erudite-edge.com"
+        self.login_user()
+        data = self.valid_entry()
+        data["word"] = "recalcitrant"
+        data["definition"] = "Stubbornly resistant to authority or guidance."
+        data["part_of_speech"] = "adjective"
+        self.create_entry(data)
+        self.logout_user()
+
+        response = self.client.get("/words/recalcitrant")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            b"<title>Recalcitrant Meaning, Definition, Synonyms, and Examples | eruditeEdge</title>",
+            response.data,
+        )
+        self.assertIn(
+            b'<meta name="description" content="Learn the meaning of recalcitrant',
+            response.data,
+        )
+        html = response.data.decode()
+        json_ld = html.split('<script type="application/ld+json">', 1)[1].split(
+            "</script>",
+            1,
+        )[0]
+        structured_data = json.loads(json_ld)
+        self.assertEqual(structured_data["@type"], "DefinedTerm")
+        self.assertEqual(structured_data["name"], "recalcitrant")
+        self.assertEqual(
+            structured_data["url"],
+            "https://erudite-edge.com/words/recalcitrant",
+        )
+
     def test_public_word_page_shows_gre_list_context(self):
         self.login_user()
         data = self.valid_entry()
